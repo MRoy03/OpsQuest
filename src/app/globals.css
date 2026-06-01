@@ -5,7 +5,6 @@
   --color-bg-card: #0d1829;
   --color-bg-elevated: #101f35;
   --color-border: #1a2f4a;
-  --color-border-glow: #00d4ff33;
   --color-accent-cyan: #00d4ff;
   --color-accent-purple: #7c3aed;
   --color-accent-green: #10b981;
@@ -16,13 +15,8 @@
   --color-text-muted: #475569;
 }
 
-:root {
-  color-scheme: dark;
-}
-
-* {
-  box-sizing: border-box;
-}
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
 
 body {
   background-color: #060b18;
@@ -31,65 +25,153 @@ body {
   min-height: 100vh;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0d1829; }
+/* ── Scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #1a2f4a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #00d4ff44; }
 
-/* Glow utilities */
-.glow-cyan { box-shadow: 0 0 20px #00d4ff33, 0 0 40px #00d4ff11; }
-.glow-green { box-shadow: 0 0 20px #10b98133; }
-.glow-red { box-shadow: 0 0 20px #ef444433; }
-.glow-amber { box-shadow: 0 0 20px #f59e0b33; }
-.text-glow-cyan { text-shadow: 0 0 10px #00d4ff88; }
-
-/* Grid background */
+/* ── Grid / background ─────────────────────────── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
-/* Node pulse animation */
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-.node-pulse::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  animation: pulse-ring 2s ease-out infinite;
-}
-.node-pulse-cyan::before { background: #00d4ff44; }
-.node-pulse-green::before { background: #10b98144; }
-.node-pulse-red::before { background: #ef444444; }
-.node-pulse-amber::before { background: #f59e0b44; }
+/* ── Glow utilities ────────────────────────────── */
+.glow-cyan  { box-shadow: 0 0 24px #00d4ff33, 0 0 48px #00d4ff11; }
+.glow-green { box-shadow: 0 0 24px #10b98133; }
+.glow-red   { box-shadow: 0 0 24px #ef444433; }
+.glow-amber { box-shadow: 0 0 24px #f59e0b33; }
+.text-glow-cyan   { text-shadow: 0 0 12px #00d4ffaa; }
+.text-glow-purple { text-shadow: 0 0 12px #a78bfaaa; }
 
-/* Scanline effect */
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
-}
-
-/* Typing cursor */
-@keyframes blink { 50% { opacity: 0; } }
-.cursor-blink { animation: blink 1s step-end infinite; }
-
-/* Card hover glow */
+/* ── Card hover ────────────────────────────────── */
 .card-hover {
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .card-hover:hover {
   border-color: #00d4ff44;
-  box-shadow: 0 0 20px #00d4ff18;
+  box-shadow: 0 0 24px #00d4ff15;
+  transform: translateY(-1px);
 }
 
-/* Status badge */
-.status-online { color: #10b981; }
-.status-warning { color: #f59e0b; }
+/* ── Animations ────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); opacity: 0.05; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@keyframes data-stream {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px #00d4ff33; }
+  50%       { box-shadow: 0 0 24px #00d4ff88, 0 0 48px #00d4ff22; }
+}
+
+@keyframes status-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes particle-rise {
+  0%   { transform: translateY(0) scale(1); opacity: 0.6; }
+  100% { transform: translateY(-120px) scale(0); opacity: 0; }
+}
+
+@keyframes counter-tick {
+  0%   { transform: translateY(4px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* utility classes */
+.animate-float      { animation: float 3s ease-in-out infinite; }
+.animate-spin-slow  { animation: spin-slow 8s linear infinite; }
+.animate-gradient-x { animation: gradient-x 4s ease infinite; background-size: 200% 200%; }
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+.animate-status-blink { animation: status-blink 1.2s ease-in-out infinite; }
+.cursor-blink       { animation: blink 1s step-end infinite; }
+
+/* node pulse rings */
+.node-pulse { position: relative; }
+.node-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  animation: pulse-ring 2s ease-out infinite;
+}
+.node-pulse-cyan::before   { background: #00d4ff33; }
+.node-pulse-green::before  { background: #10b98133; }
+.node-pulse-red::before    { background: #ef444433; }
+.node-pulse-amber::before  { background: #f59e0b33; }
+
+/* scanline overlay — attach to a container */
+.scanline-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 50%, rgba(0,212,255,0.015) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* gradient text */
+.gradient-text-cyan {
+  background: linear-gradient(135deg, #00d4ff, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* status colors */
+.status-online   { color: #10b981; }
+.status-warning  { color: #f59e0b; }
 .status-critical { color: #ef4444; }
-.status-offline { color: #475569; }
+.status-offline  { color: #475569; }
+
+/* particles container */
+.particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.particle {
+  position: absolute;
+  bottom: -10px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #00d4ff;
+  animation: particle-rise linear infinite;
+}
