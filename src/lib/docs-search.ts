@@ -1,0 +1,102 @@
+export interface DocSearchResult {
+  id: string
+  title: string
+  section: string
+  module: string
+  moduleName: string
+  href: string
+  snippet: string
+  score: number
+}
+
+interface DocIndexEntry {
+  id: string
+  title: string
+  section: string
+  module: string
+  moduleName: string
+  href: string
+  keywords: string[]
+  text: string
+}
+
+const DOC_INDEX: DocIndexEntry[] = [
+  // ── Hardware & Network ──────────────────────────────────────
+  { id: 'hw-wifi', title: 'WiFi Troubleshooting', section: 'WiFi Not Working', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['wifi','wireless','internet','no connection','network','dns','ipconfig','adapter','not working','disconnecting','slow wifi','cannot connect'], text: 'wifi wireless internet connection troubleshooting ipconfig flushdns adapter reset driver update dhcp' },
+  { id: 'hw-ethernet', title: 'Ethernet & LAN Issues', section: 'No LAN Connection', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['ethernet','lan','cable','no connection','wired','switch','port','network'], text: 'ethernet lan cable wired connection switch port duplex mismatch vlan 802.1x' },
+  { id: 'hw-net-diag', title: 'Windows Network Diagnostics', section: 'Network Commands', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['ping','tracert','nslookup','netstat','ipconfig','network','dns','tcp','ip reset','winsock','pathping'], text: 'ping tracert nslookup netstat ipconfig flushdns tcp ip reset winsock repair network commands' },
+  { id: 'hw-perf', title: 'PC Performance Troubleshooting', section: 'Slow PC / High CPU', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['slow','pc slow','lag','freeze','cpu high','memory','task manager','startup','performance','hang'], text: 'slow pc lag freeze high cpu memory task manager startup programs power plan performance' },
+  { id: 'hw-disk', title: 'Storage & Disk Issues', section: 'Disk Problems', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['disk','storage','chkdsk','sfc','dism','full','partition','smart','defrag','trim','disk space'], text: 'disk storage chkdsk sfc scannow dism restorehealth full cleanup partition smart failure defrag trim' },
+  { id: 'hw-bsod', title: 'BSOD & Boot Issues', section: 'Blue Screen / Boot Failure', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['bsod','blue screen','crash','boot','startup','safe mode','bootrec','recovery','stop code','error'], text: 'bsod blue screen crash boot startup failure safe mode bootrec mbr recovery stop code' },
+  { id: 'hw-printer', title: 'Printer Setup & Troubleshooting', section: 'Printer Issues', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['printer','print','offline','queue','spooler','driver','cannot print','hp','epson','canon','not found'], text: 'printer print offline queue spooler reset driver install ip printer shared cannot print' },
+  { id: 'hw-driver', title: 'Driver Management', section: 'Driver Update / Rollback', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['driver','update','rollback','device manager','ddu','display driver','corrupt','uninstall'], text: 'driver update rollback device manager ddu display driver corrupt uninstall clean install' },
+  { id: 'hw-display', title: 'Display & Monitor Issues', section: 'Screen / Monitor Problems', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['display','monitor','screen','resolution','refresh rate','hdmi','displayport','black screen','flicker','scaling'], text: 'display monitor screen resolution refresh rate hdmi displayport black screen flicker scaling multiple monitors' },
+  { id: 'hw-bios', title: 'BIOS/UEFI Settings', section: 'BIOS & Secure Boot', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['bios','uefi','secure boot','boot order','tpm','legacy','cmos','firmware'], text: 'bios uefi secure boot boot order tpm legacy cmos firmware settings access' },
+  { id: 'hw-ram', title: 'Hardware Diagnostics', section: 'RAM / Hardware Test', module: 'hardware', moduleName: 'Hardware & Network', href: '/docs/hardware', keywords: ['ram','memory test','hardware','diagnostic','temperature','cpu-z','memtest','event viewer','device manager'], text: 'ram memory test hardware diagnostic temperature cpu-z memtest event viewer device manager msinfo32' },
+
+  // ── MS365 ────────────────────────────────────────────────────
+  { id: 'm365-email', title: 'Exchange Online', section: 'Email Issues', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['email','outlook','exchange','mailbox','smtp','receive','send','not receiving','message trace','quarantine','spam','mfa','login','shared mailbox'], text: 'email outlook exchange mailbox message trace quarantine spam not receiving send shared mailbox distribution group' },
+  { id: 'm365-identity', title: 'Entra ID / Azure AD', section: 'Identity & MFA', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['mfa','azure ad','entra','login','sign in','conditional access','password reset','account locked','authentication','single sign on','sso','user access'], text: 'mfa azure ad entra id login sign in conditional access password reset account blocked authentication sso' },
+  { id: 'm365-teams', title: 'Teams Admin Center', section: 'Microsoft Teams', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['teams','meeting','call','chat','voice','phone','channel','guest','policy','live event','teams room'], text: 'microsoft teams meeting policy calling voice phone channel guest access live event teams room' },
+  { id: 'm365-sharepoint', title: 'SharePoint Admin', section: 'SharePoint Issues', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['sharepoint','onedrive','site','permission','access denied','external sharing','migration','document library'], text: 'sharepoint onedrive site collection permissions access denied external sharing migration document library hub site' },
+  { id: 'm365-intune', title: 'Intune / Endpoint Manager', section: 'Device Management', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['intune','mdm','device','enroll','compliance','autopilot','bitlocker','wipe','policy','byod','mobile'], text: 'intune mdm device enrollment compliance autopilot bitlocker remote wipe policy byod mobile app management' },
+  { id: 'm365-defender', title: 'Microsoft Defender', section: 'Security Threats', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['defender','security','malware','phishing','threat','incident','safe links','antivirus','edr','attack','virus','ransomware'], text: 'defender security malware phishing threat incident safe links antivirus edr attack virus ransomware' },
+  { id: 'm365-purview', title: 'Microsoft Purview', section: 'Compliance & DLP', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['dlp','compliance','retention','ediscovery','sensitivity label','data loss','audit','gdpr','legal hold'], text: 'dlp compliance retention ediscovery sensitivity label data loss prevention audit gdpr legal hold communication compliance' },
+  { id: 'm365-license', title: 'M365 Admin Center', section: 'Licenses & Users', module: 'ms365', moduleName: 'MS365 Admin Centers', href: '/docs/ms365', keywords: ['license','user','admin','create user','delete user','password','domain','billing','subscription'], text: 'license user create delete password reset domain admin billing subscription m365' },
+
+  // ── Azure ─────────────────────────────────────────────────────
+  { id: 'az-vm', title: 'Azure Virtual Machines', section: 'VM Operations', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure','vm','virtual machine','start','stop','rdp','ssh','disk','snapshot','resize','deallocate','not starting'], text: 'azure virtual machine start stop deallocate rdp ssh disk snapshot resize not starting boot diagnostics' },
+  { id: 'az-network', title: 'Azure Networking', section: 'VNet / NSG / Load Balancer', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure','vnet','nsg','network','firewall','load balancer','subnet','peering','vpn','private endpoint','dns'], text: 'azure vnet nsg network security group load balancer subnet peering vpn private endpoint dns application gateway' },
+  { id: 'az-aad', title: 'Azure Entra ID', section: 'Azure Active Directory', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure ad','entra','user','group','conditional access','mfa','pim','app registration','service principal','sso'], text: 'azure ad entra id user group conditional access mfa pim app registration service principal sso rbac' },
+  { id: 'az-appservice', title: 'Azure App Service', section: 'Web App Deployment', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['app service','web app','deploy','publish','slot','custom domain','ssl','autoscale','azure','node','python'], text: 'azure app service web app deploy publish deployment slot custom domain ssl certificate autoscale application settings' },
+  { id: 'az-storage', title: 'Azure Storage', section: 'Blob / File Share', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure','storage','blob','file share','sas','token','access','container','upload','lifecycle','replication'], text: 'azure storage blob file share sas token access container upload lifecycle management replication access denied' },
+  { id: 'az-monitor', title: 'Azure Monitor', section: 'Alerts & Logs', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure','monitor','alert','log analytics','kql','metric','diagnostic','dashboard','workbook','notification'], text: 'azure monitor alert log analytics kql query metric diagnostic settings dashboard workbook action group' },
+  { id: 'az-aks', title: 'Azure Kubernetes Service', section: 'AKS Operations', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['aks','kubernetes','kubectl','pod','deployment','container','node','cluster','ingress','docker','k8s'], text: 'aks azure kubernetes kubectl pod deployment container node cluster ingress docker crashloopbackoff' },
+  { id: 'az-cost', title: 'Azure Cost Management', section: 'Cost & Billing', module: 'azure', moduleName: 'Microsoft Azure', href: '/docs/azure', keywords: ['azure','cost','billing','budget','reservation','pricing','advisor','expense','saving'], text: 'azure cost management billing budget reservation pricing advisor savings plan cost analysis' },
+
+  // ── SAP ───────────────────────────────────────────────────────
+  { id: 'sap-fiori', title: 'SAP Fiori Launchpad', section: 'App Access & Roles', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','fiori','app','role','tile','access','authorization','business catalog','launchpad','not visible','missing tile'], text: 'sap fiori launchpad app role tile access authorization business catalog not visible missing tile business role' },
+  { id: 'sap-fico', title: 'SAP FICO', section: 'Finance & Controlling', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','fico','fi','co','gl','journal','posting','accounts payable','accounts receivable','asset','cost center','profit center','period close'], text: 'sap fico fi co gl journal posting accounts payable receivable asset accounting cost center profit center period close' },
+  { id: 'sap-mm', title: 'SAP MM', section: 'Materials Management', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','mm','purchase','procurement','purchase order','po','goods receipt','gr','invoice','vendor','stock','inventory','material'], text: 'sap mm purchase procurement purchase order goods receipt invoice verification vendor stock inventory material' },
+  { id: 'sap-sd', title: 'SAP SD', section: 'Sales & Distribution', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','sd','sales','order','delivery','billing','customer','invoice','pricing','credit','shipping'], text: 'sap sd sales order delivery billing customer invoice pricing credit management shipping distribution' },
+  { id: 'sap-basis', title: 'SAP BASIS', section: 'System Administration', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','basis','system','admin','user','transport','background job','monitoring','ias','performance','incident'], text: 'sap basis system administration user transport background job monitoring ias identity authentication performance incident' },
+  { id: 'sap-qm-pm', title: 'SAP QM & PM', section: 'Quality & Maintenance', module: 'sap', moduleName: 'SAP S/4HANA', href: '/docs/sap', keywords: ['sap','qm','pm','quality','maintenance','inspection','notification','equipment','work order','preventive'], text: 'sap quality management inspection lot notification usage decision plant maintenance equipment work order preventive' },
+
+  // ── DevOps ────────────────────────────────────────────────────
+  { id: 'devops-docker', title: 'Docker & Containers', section: 'Container Operations', module: 'devops', moduleName: 'Cloud & DevOps', href: '/docs/devops', keywords: ['docker','container','image','build','run','compose','dockerfile','registry','push','pull','crash'], text: 'docker container image build run compose dockerfile registry push pull crashloopbackoff exit' },
+  { id: 'devops-k8s', title: 'Kubernetes', section: 'kubectl & AKS', module: 'devops', moduleName: 'Cloud & DevOps', href: '/docs/devops', keywords: ['kubernetes','kubectl','pod','deployment','service','ingress','namespace','helm','node','cluster'], text: 'kubernetes kubectl pod deployment service ingress namespace helm node cluster crashloopbackoff' },
+  { id: 'devops-terraform', title: 'Terraform / IaC', section: 'Infrastructure as Code', module: 'devops', moduleName: 'Cloud & DevOps', href: '/docs/devops', keywords: ['terraform','iac','infrastructure','apply','plan','state','provider','resource','module'], text: 'terraform infrastructure as code apply plan destroy state lock provider resource module' },
+  { id: 'devops-cicd', title: 'GitHub Actions CI/CD', section: 'Pipelines & Automation', module: 'devops', moduleName: 'Cloud & DevOps', href: '/docs/devops', keywords: ['github actions','cicd','pipeline','workflow','deploy','build','test','secret','runner','action'], text: 'github actions cicd pipeline workflow deploy build test secret runner self-hosted failing' },
+  { id: 'devops-monitoring', title: 'Monitoring & Observability', section: 'Prometheus / Grafana', module: 'devops', moduleName: 'Cloud & DevOps', href: '/docs/devops', keywords: ['monitoring','prometheus','grafana','alert','metric','log','trace','incident','pagerduty','oncall'], text: 'monitoring prometheus grafana alert metric log trace incident response pagerduty oncall observability' },
+]
+
+export function searchDocs(query: string, limit = 4): DocSearchResult[] {
+  if (!query.trim()) return []
+  const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
+  if (tokens.length === 0) return []
+
+  const scored = DOC_INDEX.map(entry => {
+    let score = 0
+    for (const token of tokens) {
+      if (entry.keywords.some(k => k.includes(token) || token.includes(k))) score += 4
+      if (entry.title.toLowerCase().includes(token)) score += 3
+      if (entry.section.toLowerCase().includes(token)) score += 2
+      if (entry.text.includes(token)) score += 1
+    }
+    return { entry, score }
+  })
+  .filter(x => x.score > 0)
+  .sort((a, b) => b.score - a.score)
+  .slice(0, limit)
+
+  return scored.map(({ entry, score }) => ({
+    id: entry.id,
+    title: entry.title,
+    section: entry.section,
+    module: entry.module,
+    moduleName: entry.moduleName,
+    href: entry.href,
+    snippet: entry.text.slice(0, 80) + '…',
+    score,
+  }))
+}

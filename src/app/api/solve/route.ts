@@ -1,5 +1,6 @@
 import { solveQuery } from '@/lib/solver-engine'
 import { mockSolutions } from '@/lib/mock-data'
+import { searchDocs } from '@/lib/docs-search'
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.2'
@@ -16,17 +17,13 @@ async function askOllama(problem: string): Promise<string | null> {
           {
             role: 'system',
             content:
-              'You are an expert IT support technician. When given an IT problem, respond with a concise numbered list of troubleshooting steps (max 7 steps). Be direct and practical. No introductory phrases, just the steps.',
+              'You are an expert IT support engineer. When given a problem, respond with a numbered list of 5-7 clear, actionable troubleshooting steps. Be concise and direct. No preamble, just the steps.',
           },
-          {
-            role: 'user',
-            content: `IT Problem: ${problem}`,
-          },
+          { role: 'user', content: `IT Problem: ${problem}` },
         ],
       }),
       signal: AbortSignal.timeout(15000),
     })
-
     if (!res.ok) return null
     const data = await res.json()
     return (data.message?.content as string) ?? null
@@ -43,17 +40,24 @@ export async function POST(request: Request) {
     return Response.json({ error: 'query is required' }, { status: 400 })
   }
 
-  // 1. Always run keyword engine (instant, no dependency)
-  const keywordResult = solveQuery(query, mockSolutions)
-
-  // 2. Try Ollama for a richer AI response (only available locally)
-  const aiAnswer = await askOllama(query)
+  // Run all three sources in parallel
+  const [keywordResult, aiAnswer, docRefs] = await Promise.all([
+    Promise.resolve(solveQuery(query, mockSolutions)),
+    askOllama(query),
+    Promise.resolve(searchDocs(query, 4)),
+  ])
 
   return Response.json({
     query,
-    aiAnswer,          // null when Ollama is unreachable (e.g. Vercel prod)
+    aiAnswer,
     aiModel: aiAnswer ? OLLAMA_MODEL : null,
     solutions: keywordResult.solutions,
+    docRefs: docRefs.map(d => ({
+      title: d.title,
+      section: d.section,
+      module: d.moduleName,
+      href: d.href,
+    })),
     confidence: keywordResult.confidence,
   })
 }
