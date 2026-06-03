@@ -857,6 +857,172 @@ const SAP_DOCS = [
       },
     ],
   },
+  {
+    id: 'sap-abap-overview',
+    title: 'SAP ABAP — Cloud Development Overview',
+    icon: '💻',
+    color: 'green',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'SAP\'s Clean Core ABAP strategy introduces a tier model that separates SAP standard code from customer extensions. In S/4HANA Cloud, classic on-premise ABAP development (direct table access, function modules, BAPI modifications, implicit enhancements) is NOT permitted. Instead, SAP enforces ABAP Cloud — a restricted language profile that only allows access to released APIs (C1-released objects). This ensures upgradability: your code will not break during SAP quarterly updates because it only calls stable, versioned APIs. Classic on-prem ABAP has no such restrictions and allows access to any internal table or function, making it fragile for cloud deployments.',
+      },
+      {
+        heading: 'Extensibility Tiers',
+        items: [
+          { label: 'Tier 1 — SAP Standard', path: 'SAP-delivered code and configuration — no modification allowed. Customer code must never change SAP-owned repository objects. This tier is fully managed by SAP and updated quarterly.' },
+          { label: 'Tier 2 — Key User Extensibility', path: 'In-app extensibility performed by key users via Fiori apps (Custom Fields, Custom Logic, Custom CDS Views, Custom Business Objects). No ABAP development skills required. Transportable via Adaptation Transport Organizer (ATO).' },
+          { label: 'Tier 3 — BTP ABAP Environment (Steampunk)', path: 'Full ABAP Cloud development on SAP BTP ABAP Environment. Uses ABAP Development Tools (ADT) in Eclipse. Only released APIs (C1) can be called. Supports RAP (RESTful Application Programming Model), CDS views, OData services, and unit testing.' },
+        ],
+      },
+      {
+        heading: 'Key User Tools Available in S/4HANA Cloud',
+        items: [
+          { label: 'Custom Fields App', path: 'Fiori → "Custom Fields and Logic" → Add custom fields to standard SAP business objects and UIs without ABAP' },
+          { label: 'Custom Logic App (BAdI)', path: 'Fiori → "Custom Logic" → Implement predefined Business Add-Ins (BAdIs) using a browser-based ABAP editor — no Eclipse needed' },
+          { label: 'Custom CDS Views', path: 'Fiori → "Custom CDS Views" → Extend standard CDS views with custom fields and associations for analytics and OData consumption' },
+          { label: 'Custom Business Objects (CUBEX)', path: 'Fiori → "Custom Business Objects" → Create entirely new business objects with data persistence, UI, and workflow without ABAP IDE' },
+          { label: 'Custom Forms (Adobe)', path: 'Fiori → "Custom Forms" → Design and adapt Adobe-based print forms and output documents' },
+          { label: 'Adaptation Transport Organizer (ATO)', path: 'Fiori → "Export Software Collection" → Transport all key user customizations (custom fields, logic, CDS, forms) from DEV → QA → PRD' },
+        ],
+      },
+      {
+        heading: 'Restriction Rules for ABAP Cloud',
+        steps: [
+          'ALLOWED: Access to C1-released APIs only — check release state in ADT via "Used APIs" view or in the repository object properties',
+          'ALLOWED: CDS views with released annotation @AbapCatalog.sqlViewName, OData service definitions, ABAP Unit tests, RAP behavior definitions and implementations',
+          'ALLOWED: ABAP language constructs supported by the "ABAP for Cloud Development" language version (no system fields like SY-REPID for program names, no SELECT * on non-released tables)',
+          'NOT ALLOWED: Direct SELECT on SAP-internal database tables (e.g., BKPF, VBAK) — use released CDS views or APIs instead',
+          'NOT ALLOWED: CALL FUNCTION on function modules not released as C1 — use equivalent ABAP classes or released APIs',
+          'NOT ALLOWED: ABAP dynpro (classical screens), classical ALV reports, SAP GUI-dependent code',
+          'NOT ALLOWED: Implicit or explicit enhancements to SAP standard code, user exits of the old-style CMOD/SMOD type',
+          'FINDING RELEASED APIs: In Eclipse ADT → right-click any object → "Used APIs" shows release state; browse released objects at https://api.sap.com or in the ABAP repository via filter C1CONTRACT',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sap-key-user-ext',
+    title: 'SAP Key User Extensibility',
+    icon: '🔧',
+    color: 'amber',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'Key User Extensibility is Tier 2 of SAP\'s Clean Core model. It allows business power users (key users) to extend S/4HANA Cloud without any ABAP development knowledge or Eclipse installation. All tools are browser-based Fiori apps. Key user extensibility covers: adding custom fields to standard objects and screens, implementing custom business logic via predefined BAdIs, creating custom CDS views for analytics, building new custom business objects, and designing custom output forms. All changes are fully transportable and upgrade-safe because they work within SAP\'s released extensibility framework.',
+      },
+      {
+        heading: 'Add Custom Field to Business Object',
+        steps: [
+          'Open the "Custom Fields and Logic" app from the Fiori Launchpad (search for "Custom Fields")',
+          'Click "New" → enter a field label, field name (technical name), and select the data type (Text, Amount, Date, Checkbox, etc.)',
+          'Select the Business Context — this determines which SAP business object and database extension table the field is added to (e.g., Sales Order, Purchase Order, Business Partner)',
+          'Enable the field for the relevant UIs: in the "UIs and Reports" tab, activate the field for the Fiori app(s) where it should appear',
+          'Enable for Analytics if the field should be available in CDS-based reporting and embedded analytics',
+          'Enable for OData APIs if external systems need to read/write the field via API',
+          'Save and publish the field — it is immediately active in the DEV tenant',
+          'Transport the field via "Adaptation Transport Organizer" (ATO): export the software collection from DEV, import to QA, then to PRD after testing',
+        ],
+      },
+      {
+        heading: 'Add Custom Business Logic via BAdI',
+        steps: [
+          'Open "Custom Fields and Logic" app → switch to the "Logic" tab, or navigate directly to "Custom Logic" app',
+          'Click "New Implementation" → search for the BAdI (Business Add-In) definition that corresponds to the process step you want to enhance (e.g., SAP_PS_CHECK_BEFORE_SAVE for project save validation)',
+          'Enter a description for your implementation and click "Create"',
+          'In the code editor, write ABAP code using only the Cloud-restricted language version — local variables, IF/LOOP/CASE constructs, and calls to C1-released APIs are permitted',
+          'Use the "Parameters" available in the BAdI interface — these are the import/export/changing parameters provided by SAP at the BAdI call point',
+          'Activate the implementation and test by performing the business action that triggers the BAdI (e.g., saving the relevant object)',
+          'Transport via ATO alongside the custom field if applicable',
+        ],
+      },
+      {
+        heading: 'Troubleshooting Key User Extensibility',
+        steps: [
+          'Custom logic not triggering: verify the BAdI implementation is "Active" in the Custom Logic app — inactive implementations are skipped',
+          'Syntax error in custom logic: the browser-based editor performs syntax checks on activation — read the error message carefully; common issues are using non-released APIs or unsupported ABAP syntax',
+          'Custom field not visible on UI: in "Custom Fields" → select the field → "UIs and Reports" tab → ensure the target Fiori app is enabled and the field is set to "Visible"',
+          'Custom field missing in analytics: ensure "Enable for Analytics" is switched on for the field — republish if it was added after initial creation',
+          'Transport error in ATO: open "Export Software Collection" → check if all custom objects are included in the collection → re-export and re-import',
+          'Field visible in DEV but not PRD: confirm the ATO transport was completed successfully in PRD — check "Import Software Collection" history in the PRD tenant',
+          'BAdI changes not reflecting in QA/PRD: ATO transport must be completed — changes in the browser editor are DEV-only until transported',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sap-abap-cloud',
+    title: 'SAP ABAP Cloud / BTP ABAP Environment',
+    icon: '⚡',
+    color: 'purple',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'ABAP Cloud (also called Steampunk) is SAP\'s cloud-native ABAP runtime hosted on SAP BTP (Business Technology Platform). It provides a full ABAP development environment in the cloud, accessed via ABAP Development Tools (ADT) — an Eclipse plugin. The core programming model is RAP (RESTful ABAP Programming Model), which is used to build transactional and read-only OData services consumed by SAP Fiori UIs. All development must use the "ABAP for Cloud Development" language version, meaning only C1-released APIs are allowed, no classic dynpros, and no direct table access to non-released objects. ABAP Cloud supports CDS (Core Data Services) views for data modeling, ABAP Unit testing, and ATC (ABAP Test Cockpit) for code quality enforcement.',
+      },
+      {
+        heading: 'Development Workflow',
+        steps: [
+          'Provision an ABAP Environment system on SAP BTP: BTP Cockpit → Subaccount → Services → ABAP Environment → create a service instance',
+          'Install ABAP Development Tools (ADT): in Eclipse (2023-09 or newer) → Help → Eclipse Marketplace → search "ABAP Development Tools" → install',
+          'Connect ADT to the ABAP system: File → New → ABAP Cloud Project → enter the service key URL and log on with your BTP credentials',
+          'Create a development package: in the Project Explorer → right-click the system → New → ABAP Package → enter name, description, and assign a transport request',
+          'Create an ABAP class: right-click the package → New → ABAP Class → implement your logic in the CLASS IMPLEMENTATION section using only cloud-permitted ABAP',
+          'Activate the object: Ctrl+F3 or right-click → Activate — all syntax and API release checks are performed on activation',
+          'Run ABAP Unit tests: right-click the class → Run As → ABAP Unit Test → review test results in the ABAP Unit view',
+          'Run ATC checks: right-click the package → Run As → ABAP Test Cockpit → review findings and fix all errors and warnings before transport',
+        ],
+      },
+      {
+        heading: 'RAP Object Creation Steps',
+        steps: [
+          'Create the CDS Root View Entity: New → Other → Core Data Services → Data Definition → enter name (e.g., ZR_MyObject) → select template "Define Root View Entity" → define fields from the database table',
+          'Annotate the root view: add @AbapCatalog.viewEnhancementCategory, @AccessControl.authorizationCheck, and semantic key annotations',
+          'Create the Behavior Definition (BDEF): New → Other → ABAP → Behavior Definition → link to the root view entity → define operations (create, update, delete, actions) and field properties (read-only, mandatory)',
+          'Create the Behavior Implementation class: the wizard generates a skeleton class with methods for each defined operation — implement the business logic (field validations, determinations, actions) in these methods',
+          'Create the Service Definition: New → Other → ABAP → Service Definition → expose the CDS root view and any compositions as service entities',
+          'Create the Service Binding: New → Other → ABAP → Service Binding → link to the service definition → select binding type (OData V2 UI, OData V4 UI, or Web API) → publish the service',
+          'Test in Fiori Preview: in ADT → right-click the Service Binding → Preview → the built-in Fiori Elements preview opens the service in a browser for end-to-end testing',
+        ],
+      },
+      {
+        heading: 'ABAP CDS Views',
+        items: [
+          { label: 'Basic Interface View (I_)', path: 'Data model layer — defines the raw entity with field mappings and associations. Named with prefix I_ (e.g., I_SalesOrder). No UI annotations.' },
+          { label: 'Composite View (C_)', path: 'Consumption layer — extends the interface view, adds UI annotations (@UI.lineItem, @UI.fieldGroup, @UI.selectionField) for Fiori elements rendering. Named with prefix C_ (e.g., C_SalesOrder).' },
+          { label: 'Extension Include View', path: 'Used in key user extensibility to extend standard CDS views with custom fields. Created via the Custom CDS Views Fiori app. Extension fields appear in both UI and OData without modifying SAP standard.' },
+          { label: 'Analytical View', path: 'Annotated with @Analytics.dataCategory: #CUBE or #DIMENSION for use in embedded analytics and SAP Analytics Cloud. Uses measures (@DefaultAggregation) and dimensions (@AnalyticsDetails.query.display).' },
+          { label: 'Key Syntax', path: 'define root view entity <Name> as select from <table> association [0..1] to <target> as _Assoc on $projection.Key = _Assoc.Key { key <field>, _Assoc }' },
+        ],
+      },
+      {
+        heading: 'Key Released APIs and Where to Find Them',
+        items: [
+          { label: 'SAP Business Accelerator Hub (api.sap.com)', path: 'https://api.sap.com → Browse by product "SAP S/4HANA Cloud" → filter by API type (OData, SOAP, REST) → download EDMX metadata and test APIs with sandbox system' },
+          { label: 'ABAP Repository — Released Objects', path: 'In ADT: Project Explorer → right-click ABAP System → Properties → Released Objects → browse all C1-released classes, interfaces, CDS views, and function modules available for use in ABAP Cloud' },
+          { label: 'ADT Used APIs View', path: 'In any ABAP object in ADT: right-click → "Used APIs" → shows release contract (C1 = cloud-released, C0 = SAP internal only) for every API called in the object' },
+          { label: 'ABAP Class IF_OO_ADT_CLASSRUN', path: 'Implement this interface in your ABAP class to run it as a console application directly from ADT — useful for testing released API calls without building a full OData service' },
+          { label: 'SAP Note 3271454 / Clean Core APIs', path: 'SAP regularly publishes notes listing newly released APIs. Subscribe to SAP Community topic "ABAP Cloud" for updates on new C1 releases and deprecations.' },
+        ],
+      },
+      {
+        heading: 'Testing and Quality',
+        steps: [
+          'Write ABAP Unit tests: create a test class in the same source file using CLASS ltcl_test DEFINITION FOR TESTING → implement test methods with CL_ABAP_UNIT_ASSERT calls for assertions',
+          'Run unit tests in ADT: right-click the class or package → Run As → ABAP Unit Test → review results in the "ABAP Unit" view — aim for 100% method coverage on business-critical logic',
+          'Run ATC (ABAP Test Cockpit) checks: right-click package → Run As → ABAP Test Cockpit → checks include: use of non-released APIs, security vulnerabilities (SQL injection patterns), performance anti-patterns, and naming convention violations',
+          'Fix all ATC errors before transport — errors block transport in SAP-managed ABAP systems; warnings should also be reviewed and resolved where possible',
+          'Create a transport request: in ADT → Transport Organizer view → create a new transportable task → assign all developed objects to the task',
+          'Release the transport: Transport Organizer → select the task → Release → then release the parent transport request → the system imports to QA automatically (in managed landscapes) or manually via the import queue',
+          'Perform integration testing in QA: test the OData service via the Service Binding preview or a connected Fiori app → verify all CRUD operations, validations, and determinations behave correctly',
+          'After QA sign-off: release the QA transport to PRD following your change management process — document the transport number and test evidence',
+        ],
+      },
+    ],
+  },
 ]
 
 export default function SAPPage() {
@@ -864,7 +1030,7 @@ export default function SAPPage() {
     <>
       <TopBar
         title="SAP S/4HANA Public Cloud"
-        subtitle="Complete admin and consultant reference — Fiori, FICO, MM, SD, QM, PM, BASIS, Integration"
+        subtitle="Complete admin and consultant reference — Fiori, FICO, MM, SD, QM, PM, BASIS, Integration, ABAP & Cloud Dev"
       />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-4xl mx-auto">

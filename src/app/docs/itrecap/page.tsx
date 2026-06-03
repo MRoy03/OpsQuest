@@ -1,0 +1,687 @@
+import TopBar from '@/components/layout/TopBar'
+import DocSection from '@/components/docs/DocSection'
+
+const IT_RECAP_DOCS = [
+  {
+    id: 'net-fundamentals',
+    title: 'Networking Fundamentals',
+    icon: '🌐',
+    color: 'cyan' as const,
+    sections: [
+      {
+        heading: 'OSI Model — 7 Layers (Top to Bottom)',
+        items: [
+          { label: 'Layer 7 — Application', path: 'User-facing services and network apps. Protocols: HTTP, HTTPS, FTP, SMTP, DNS, SNMP, Telnet' },
+          { label: 'Layer 6 — Presentation', path: 'Data translation, encryption/decryption, compression. Protocols: SSL/TLS, JPEG, MPEG, ASCII' },
+          { label: 'Layer 5 — Session', path: 'Manages sessions/connections between applications. Protocols: NetBIOS, RPC, PPTP, SIP' },
+          { label: 'Layer 4 — Transport', path: 'End-to-end delivery, error correction, flow control. Protocols: TCP (reliable), UDP (fast/unreliable)' },
+          { label: 'Layer 3 — Network', path: 'Logical addressing and routing between networks. Protocols: IP, ICMP, OSPF, BGP, RIP' },
+          { label: 'Layer 2 — Data Link', path: 'MAC addressing, frames, switches, error detection. Protocols: Ethernet, Wi-Fi (802.11), PPP, ARP' },
+          { label: 'Layer 1 — Physical', path: 'Raw bit transmission over physical media. Standards: RJ45, Cat6, fiber optic, coax, hubs, repeaters' },
+        ],
+      },
+      {
+        heading: 'TCP/IP Model — 4 Layers',
+        content: 'Application (maps to OSI 5-7): HTTP, DNS, SMTP, FTP, SSH — all user-facing protocols. Transport (OSI 4): TCP (connection-oriented, 3-way handshake: SYN→SYN-ACK→ACK) and UDP (connectionless, no guarantee). Internet (OSI 3): IP addressing, routing, ICMP. Network Access (OSI 1-2): Physical transmission and MAC addressing (Ethernet, Wi-Fi).',
+      },
+      {
+        heading: 'Key Protocols Quick Reference (Port + Purpose)',
+        items: [
+          { label: 'TCP — port varies', path: 'Connection-oriented, reliable, ordered delivery. Uses 3-way handshake. Used by HTTP, HTTPS, FTP, SSH, SMTP' },
+          { label: 'UDP — port varies', path: 'Connectionless, fast, no guarantee. Used by DNS (53), DHCP (67/68), SNMP (161), streaming, VoIP' },
+          { label: 'ICMP — no port', path: 'Error reporting and diagnostics. Used by ping (echo request/reply) and traceroute' },
+          { label: 'HTTP — port 80', path: 'Hypertext Transfer Protocol. Unencrypted web traffic. Methods: GET, POST, PUT, DELETE, PATCH' },
+          { label: 'HTTPS — port 443', path: 'HTTP over TLS/SSL. Encrypted web traffic. Certificate-based authentication' },
+          { label: 'DNS — port 53', path: 'Domain Name System. Resolves hostnames to IP addresses. Uses UDP for queries, TCP for zone transfers' },
+          { label: 'DHCP — ports 67/68', path: 'Dynamic Host Configuration Protocol. Server:67, Client:68. Assigns IP, subnet, gateway, DNS' },
+          { label: 'FTP — ports 20/21', path: 'File Transfer Protocol. Control:21, Data:20. Unencrypted. FTPS (TLS) or SFTP (SSH) preferred' },
+          { label: 'SSH — port 22', path: 'Secure Shell. Encrypted remote terminal, file transfer (SCP/SFTP), tunneling' },
+          { label: 'SMTP — port 25/587', path: 'Simple Mail Transfer Protocol. 25=server-to-server, 587=client-to-server (with auth/TLS)' },
+          { label: 'POP3 — port 110/995', path: 'Post Office Protocol v3. Downloads email to local client. 995=TLS. Email removed from server' },
+          { label: 'IMAP — port 143/993', path: 'Internet Message Access Protocol. Syncs email on server. 993=TLS. Email stays on server' },
+          { label: 'SNMP — port 161/162', path: 'Simple Network Management Protocol. 161=queries, 162=traps. Monitors network devices' },
+          { label: 'NTP — port 123', path: 'Network Time Protocol. UDP. Synchronizes clocks across network. Stratum 0=atomic, 1=primary, 2+=secondary' },
+          { label: 'RDP — port 3389', path: 'Remote Desktop Protocol. Windows remote desktop. TCP. Should be behind VPN or MFA' },
+          { label: 'LDAP — port 389/636', path: 'Lightweight Directory Access Protocol. 389=unencrypted, 636=LDAPS (TLS). Used by Active Directory' },
+        ],
+      },
+      {
+        heading: 'Subnetting Quick Reference',
+        steps: [
+          'CIDR Notation: IP address followed by prefix length (e.g. 192.168.1.0/24). Prefix = network bits, remainder = host bits',
+          '/24 = 256 addresses, 254 usable hosts (subtract network + broadcast). Subnet mask: 255.255.255.0',
+          '/25 = 128 addresses, 126 usable hosts. Subnet mask: 255.255.255.128 (splits /24 into 2 halves)',
+          '/26 = 64 addresses, 62 usable hosts. Subnet mask: 255.255.255.192 (4 subnets per /24)',
+          '/27 = 32 addresses, 30 usable hosts. Subnet mask: 255.255.255.224 (8 subnets per /24)',
+          '/28 = 16 addresses, 14 usable hosts. Subnet mask: 255.255.255.240 (16 subnets per /24)',
+          '/29 = 8 addresses, 6 usable hosts. Subnet mask: 255.255.255.248 (useful for point-to-point links)',
+          'Formula: Usable hosts = 2^(32 - prefix) - 2. Example: /26 → 2^(32-26) - 2 = 2^6 - 2 = 62',
+          'Private IP ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC 1918, not routed on internet)',
+        ],
+      },
+      {
+        heading: 'IPv4 vs IPv6 Key Differences',
+        items: [
+          { label: 'Address Length', path: 'IPv4: 32-bit (4 octets) → ~4.3 billion addresses. IPv6: 128-bit (8 groups of 4 hex) → 340 undecillion addresses' },
+          { label: 'Notation', path: 'IPv4: dotted decimal (192.168.1.1). IPv6: colon-hex (2001:0db8:85a3::8a2e:0370:7334), :: compresses consecutive zeros' },
+          { label: 'Header Size', path: 'IPv4: variable 20-60 bytes, includes checksum. IPv6: fixed 40 bytes, no checksum (handled by transport layer)' },
+          { label: 'NAT Required', path: 'IPv4: yes, NAT used to conserve addresses. IPv6: no NAT needed, every device can have public address' },
+          { label: 'Configuration', path: 'IPv4: manual or DHCP. IPv6: SLAAC (Stateless Address Autoconfiguration), DHCPv6, or manual' },
+          { label: 'Broadcast', path: 'IPv4: uses broadcast. IPv6: replaces broadcast with multicast (FF02::1) and anycast' },
+          { label: 'Security', path: 'IPv4: IPSec optional. IPv6: IPSec built-in (mandatory in spec, optional in practice)' },
+          { label: 'Link-local', path: 'IPv6: every interface auto-gets FE80::/10 link-local address. IPv4 equivalent: 169.254.x.x (APIPA)' },
+        ],
+      },
+      {
+        heading: 'Common Network Diagnostic Commands',
+        items: [
+          { label: 'ping', path: 'Test connectivity to host: ping 8.8.8.8 (Windows/Linux). Uses ICMP. ping -n 10 (count) | ping -t (continuous Windows)' },
+          { label: 'traceroute / tracert', path: 'Trace packet path hop-by-hop: tracert google.com (Windows), traceroute google.com (Linux/Mac). Shows latency per hop' },
+          { label: 'nslookup', path: 'DNS query tool: nslookup google.com, nslookup -type=MX domain.com, nslookup 8.8.8.8 (reverse lookup)' },
+          { label: 'ipconfig / ifconfig', path: 'Show IP config: ipconfig /all (Windows full detail), ipconfig /release + /renew (DHCP refresh), ifconfig (Linux/Mac)' },
+          { label: 'netstat', path: 'Network connections/stats: netstat -an (all connections), netstat -tulpn (Linux listening ports), netstat -r (routing table)' },
+          { label: 'arp', path: 'Address Resolution Protocol cache: arp -a (show all), arp -d <IP> (delete entry). Maps IP to MAC addresses' },
+          { label: 'route', path: 'View/modify routing table: route print (Windows), ip route show (Linux). route add/delete for static routes' },
+          { label: 'Test-NetConnection (PS)', path: 'PowerShell connectivity test: Test-NetConnection -ComputerName server1 -Port 443. Shows TCP success/failure' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'active-directory',
+    title: 'Active Directory & LDAP',
+    icon: '🗂️',
+    color: 'purple' as const,
+    sections: [
+      {
+        heading: 'AD Object Hierarchy Overview',
+        content: 'Forest: top-level container, trust boundary, one schema. Domain: administrative unit within forest, contains all objects, has its own policies. OU (Organizational Unit): container within domain to organize objects and apply GPOs. User: security principal, has SAMAccountName + UPN. Group: collection of users/computers for permissions or email. Computer: machine account created when joined to domain. GPO (Group Policy Object): policy container linked to site, domain, or OU. Site: physical network location used for AD replication and login optimization.',
+      },
+      {
+        heading: 'AD Group Types & Scopes',
+        items: [
+          { label: 'Security Group', path: 'Used for assigning permissions to resources (file shares, mailboxes, applications). Can also be mail-enabled' },
+          { label: 'Distribution Group', path: 'Email distribution lists only. Cannot be used for resource permissions. Used in Exchange/M365' },
+          { label: 'Domain Local Group', path: 'Scope: single domain. Members from: any domain. Use to assign permissions to resources in THIS domain' },
+          { label: 'Global Group', path: 'Scope: forest-wide. Members from: same domain only. Use to group users by role (e.g., HR_Users)' },
+          { label: 'Universal Group', path: 'Scope: forest-wide. Members from: any domain. Use for cross-domain assignments. Stored in Global Catalog' },
+          { label: 'AGDLP Best Practice', path: 'Accounts → Global groups → Domain Local groups → Permissions. Nest globals into domain local, assign permissions to domain local' },
+        ],
+      },
+      {
+        heading: 'FSMO Roles — All 5 Explained',
+        items: [
+          { label: 'Schema Master (Forest)', path: 'One per forest. Controls all changes to the AD schema (object class/attribute definitions). Rare but critical role' },
+          { label: 'Domain Naming Master (Forest)', path: 'One per forest. Controls adding/removing domains from the forest. Must be online when adding child domains' },
+          { label: 'PDC Emulator (Domain)', path: 'One per domain. Handles password changes, account lockouts, time sync (authoritative NTP), Group Policy updates, legacy NT support' },
+          { label: 'RID Master (Domain)', path: 'One per domain. Allocates pools of Relative IDs to DCs. Each security principal (user, group, computer) needs a unique RID' },
+          { label: 'Infrastructure Master (Domain)', path: 'One per domain. Maintains references to objects in other domains (cross-domain group membership). Should not be on GC server (except if all DCs are GCs)' },
+          { label: 'Find FSMO holder', path: 'netdom query fsmo  |  Get-ADDomain | Select-Object *Master*, PDC*  |  Get-ADForest | Select-Object *Master*' },
+        ],
+      },
+      {
+        heading: 'Essential AD PowerShell Commands',
+        steps: [
+          'Get-ADUser -Identity jsmith -Properties * — Get full user details including all attributes',
+          'Get-ADUser -Filter {Department -eq "IT"} -Properties Department,Title | Select Name,Title — Filter users',
+          'New-ADUser -Name "Jane Doe" -SamAccountName jdoe -UserPrincipalName jdoe@domain.com -AccountPassword (Read-Host -AsSecureString) -Enabled $true',
+          'Set-ADUser -Identity jsmith -Department "Finance" -Manager (Get-ADUser mmanager) — Modify user attributes',
+          'Get-ADGroup -Identity "IT Admins" -Properties Members | Select -ExpandProperty Members — List group members',
+          'Add-ADGroupMember -Identity "IT Admins" -Members jsmith,jdoe — Add users to group',
+          'Remove-ADGroupMember -Identity "IT Admins" -Members jsmith -Confirm:$false — Remove from group',
+          'Get-ADComputer -Filter {OperatingSystem -like "*Server*"} | Select Name,OperatingSystem — Find servers',
+          'Search-ADAccount -LockedOut | Unlock-ADAccount — Find and unlock ALL locked accounts at once',
+          'Unlock-ADAccount -Identity jsmith — Unlock specific user account',
+          'Disable-ADAccount -Identity jsmith | Enable-ADAccount -Identity jsmith — Disable/enable account',
+          'Get-ADUser -Identity jsmith | Set-ADAccountExpiration -DateTime "12/31/2026" — Set expiry',
+        ],
+      },
+      {
+        heading: 'GPO Essentials',
+        items: [
+          { label: 'Create GPO', path: 'Group Policy Management Console (gpmc.msc) → Group Policy Objects → Right-click → New. Name it descriptively (e.g., IT-PasswordPolicy)' },
+          { label: 'Link GPO to OU', path: 'GPMC → Right-click target OU/Domain/Site → Link an Existing GPO → select GPO. Linked objects inherit policy' },
+          { label: 'Force Immediate Update', path: 'gpupdate /force (local machine) | Invoke-GPUpdate -Computer "PC01" -Force (remote via PS) — applies all GPOs now' },
+          { label: 'RSoP — Resultant Set of Policy', path: 'rsop.msc — shows effective policies applied to current user/computer. Read-only view of merged policy result' },
+          { label: 'gpresult — Command Line RSoP', path: 'gpresult /r (summary), gpresult /h C:\\gpreport.html (full HTML report), gpresult /user jsmith /r (for specific user)' },
+          { label: 'GPO Inheritance & Blocking', path: 'Enforced (No Override): parent GPO cannot be blocked. Block Inheritance: OU ignores parent GPOs. Enforced wins over Block' },
+          { label: 'GPO Processing Order (LSDOU)', path: 'Local → Site → Domain → OU (last applied wins for conflicts). User settings in User Configuration, machine in Computer Configuration' },
+        ],
+      },
+      {
+        heading: 'AD Troubleshooting Steps',
+        steps: [
+          'Replication errors: repadmin /showrepl — shows replication status for all DC connections. Look for FAIL entries',
+          'repadmin /replsummary — high-level replication health. repadmin /syncall /AdeP — force replication from all partners',
+          'Locked accounts: Search-ADAccount -LockedOut | Select Name,LastLogonDate. Check event ID 4740 on PDC emulator for lockout source',
+          'Time sync issues (breaks Kerberos): w32tm /query /status — check time source and offset. Offset >5 min will break AD auth',
+          'Fix time: w32tm /config /manualpeerlist:"time.windows.com" /syncfromflags:manual /reliable:YES /update → net stop w32tm && net start w32tm',
+          'DC not finding domain: dcdiag /test:locatorcheck — tests if DC can locate domain. netlogon service must be running',
+          'Full DC health check: dcdiag /v /c /d /e /s:DCName — comprehensive diagnostics for specified DC',
+          'Check AD services: net start | findstr -i "net logon\|kdc\|adws\|dns" — verify critical services are running',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'dns-dhcp',
+    title: 'DNS & DHCP',
+    icon: '📋',
+    color: 'amber' as const,
+    sections: [
+      {
+        heading: 'DNS Record Types Reference',
+        items: [
+          { label: 'A Record', path: 'Maps hostname → IPv4 address. Most common record. Example: server1.domain.com → 192.168.1.10' },
+          { label: 'AAAA Record', path: 'Maps hostname → IPv6 address. Example: server1.domain.com → 2001:db8::1' },
+          { label: 'CNAME Record', path: 'Alias pointing to another hostname (not IP). Example: www.domain.com → domain.com. Cannot coexist with other records at same name' },
+          { label: 'MX Record', path: 'Mail exchanger — specifies mail server for domain. Has priority value (lower = preferred). Example: domain.com MX 10 mail.domain.com' },
+          { label: 'PTR Record', path: 'Reverse DNS — maps IP → hostname. Lives in in-addr.arpa zone. Example: 10.1.168.192.in-addr.arpa → server1.domain.com' },
+          { label: 'NS Record', path: 'Name Server — identifies authoritative DNS servers for a zone. Multiple NS records for redundancy' },
+          { label: 'SOA Record', path: 'Start of Authority — contains zone metadata: primary NS, admin email, serial, refresh, retry, expire, minimum TTL' },
+          { label: 'TXT Record', path: 'Arbitrary text. Used for: SPF (email validation), DKIM (email signing), DMARC (policy), domain verification (M365, Google)' },
+          { label: 'SRV Record', path: 'Service locator — specifies host and port for services. Format: _service._protocol.domain TTL IN SRV priority weight port target. Used by AD, SIP, XMPP' },
+        ],
+      },
+      {
+        heading: 'DNS Resolution Process (Recursive Query)',
+        steps: [
+          'Client queries local DNS resolver (configured in NIC settings, usually DHCP-assigned or 8.8.8.8)',
+          'Resolver checks its cache — if TTL is still valid, returns cached result immediately',
+          'If not cached, resolver queries a Root DNS Server (13 root server clusters, e.g., a.root-servers.net)',
+          'Root server responds with referral to TLD server (e.g., .com, .org, .net name servers)',
+          'Resolver queries TLD name server → gets referral to authoritative name server for that domain',
+          'Resolver queries authoritative name server → receives the actual DNS record (A, MX, etc.)',
+          'Resolver caches the result for TTL duration → returns answer to client. Client also caches in local OS resolver cache',
+        ],
+      },
+      {
+        heading: 'DHCP Lease Process — DORA',
+        steps: [
+          'DISCOVER: Client broadcasts DHCPDISCOVER on 255.255.255.255 (UDP port 67). No IP yet — uses 0.0.0.0 as source',
+          'OFFER: DHCP server receives broadcast, selects available IP, sends DHCPOFFER (unicast or broadcast) with proposed IP, subnet, lease time, gateway, DNS',
+          'REQUEST: Client broadcasts DHCPREQUEST accepting the offer (also informs other DHCP servers the offer was not taken)',
+          'ACKNOWLEDGE: Server sends DHCPACK confirming lease. Client now configures its NIC with the assigned parameters',
+          'Renewal: At 50% of lease time, client sends DHCPREQUEST directly to original server. At 87.5%, broadcasts if no response received',
+          'Release: Client sends DHCPRELEASE when disconnecting (not always done — lease expires after lease time)',
+        ],
+      },
+      {
+        heading: 'Windows DHCP Server Administration',
+        items: [
+          { label: 'Create New Scope', path: 'DHCP console → Server → IPv4 → New Scope. Set: name, start/end IP, subnet mask, exclusions, lease duration' },
+          { label: 'Add Exclusions', path: 'Scope → Address Pool → New Exclusion Range. Exclude IPs for static-assigned devices (servers, printers, switches)' },
+          { label: 'Create Reservation', path: 'Scope → Reservations → New Reservation. Enter: name, IP address, MAC address (format: 001122AABBCC). Ensures same IP always assigned' },
+          { label: 'Option 003 — Default Router', path: 'Scope Options → 003 Router → add gateway IP. Assigned to clients as default gateway' },
+          { label: 'Option 006 — DNS Servers', path: 'Scope Options → 006 DNS Servers → add DNS server IPs (primary, secondary). Clients use these for name resolution' },
+          { label: 'Option 015 — DNS Domain Name', path: 'Scope Options → 015 DNS Domain Name → enter domain suffix (e.g., corp.local). Sets DNS search suffix for clients' },
+          { label: 'Authorize DHCP in AD', path: 'Right-click server in DHCP console → Authorize. Required for Windows DHCP servers in AD domain (rogue server protection)' },
+          { label: 'DHCP Failover', path: 'Right-click scope → Configure Failover. Modes: Hot Standby (one active, one standby) or Load Balance (both serve, split %)' },
+        ],
+      },
+      {
+        heading: 'Common DNS/DHCP Troubleshooting',
+        steps: [
+          'Stale DNS records: old A records pointing to decommissioned servers. Fix: enable DNS scavenging (Aging & Scavenging) — set no-refresh and refresh intervals. Run: dnscmd /startscavenging',
+          'Negative caching (NXDOMAIN): client cached "record does not exist". Check negative TTL in SOA record. Clear cache: ipconfig /flushdns (client), dnscmd /clearcache (server)',
+          'IP conflicts (same IP on two devices): event ID 4199 on Windows. Use: arp -a to find both MACs. One device has static IP in DHCP range — add exclusion or change static IP',
+          'DHCP scope exhausted (no IPs left): DHCP console → Address Pool → check utilization. Solutions: increase scope range, shorten lease time, reclaim unused reservations, add superscope',
+          'DHCP failover sync issues: DHCP console → Failover tab → check state. Run: Invoke-DhcpServerv4FailoverReplication -ComputerName server1 -Force to sync lease database',
+          'DNS resolution fails for internal names: check DNS suffix search list (ipconfig /all), verify conditional forwarder exists for internal zone, check that DNS server has SOA for internal zone',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'windows-server',
+    title: 'Windows Server Roles & Features',
+    icon: '🖥️',
+    color: 'green' as const,
+    sections: [
+      {
+        heading: 'Core Server Roles Reference',
+        items: [
+          { label: 'AD DS — Active Directory Domain Services', path: 'Provides identity and authentication for domain. Stores users, groups, computers, GPOs. Required for domain-joined environments' },
+          { label: 'AD CS — Active Directory Certificate Services', path: 'Internal PKI (Public Key Infrastructure). Issues SSL/TLS certs, smart card certs, code signing for internal use' },
+          { label: 'DHCP Server', path: 'Automatically assigns IP addresses, subnet masks, gateways, DNS to network clients. Must be authorized in AD' },
+          { label: 'DNS Server', path: 'Name resolution service. Required for AD to function. Hosts Forward and Reverse lookup zones for internal domains' },
+          { label: 'File and Storage Services', path: 'File sharing (SMB), DFS (Distributed File System), FSRM (quota/screening), iSCSI target, storage spaces' },
+          { label: 'Hyper-V', path: 'Type 1 hypervisor for running VMs directly on Windows Server. Includes VM management, vSwitches, live migration, checkpoints' },
+          { label: 'IIS — Internet Information Services', path: 'Web server for hosting HTTP/HTTPS sites, web apps, REST APIs. Supports ASP.NET, PHP, classic ASP. Manages SSL bindings' },
+          { label: 'RDS — Remote Desktop Services', path: 'Provides remote desktop access to applications or full desktops. Components: RD Gateway, Session Host, Connection Broker, Web Access, Licensing' },
+          { label: 'WSUS — Windows Server Update Services', path: 'Centralized management of Windows/Office updates. Approves, downloads, deploys updates from Microsoft Update to endpoints' },
+          { label: 'Print and Document Services', path: 'Centralized print queue management. Deploy printers via GPO, manage print drivers, monitor print jobs' },
+        ],
+      },
+      {
+        heading: 'PowerShell Server Management Commands',
+        steps: [
+          'Get-WindowsFeature — List all roles/features and their install status (Available/Installed/Removed)',
+          'Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools — Install role with management tools',
+          'Install-WindowsFeature -Name DHCP,DNS -IncludeAllSubFeature -IncludeManagementTools — Install multiple roles',
+          'Uninstall-WindowsFeature -Name Telnet-Client — Remove a feature',
+          'Get-Service | Where-Object {$_.Status -eq "Stopped"} — Find all stopped services',
+          'Get-Service -Name Spooler | Stop-Service | Start-Service — Stop and restart print spooler',
+          'net stop spooler && net start spooler — Quick service restart from CMD',
+          'Restart-Computer -Force — Immediate reboot (use -ComputerName for remote)',
+          'Get-EventLog -LogName System -Newest 50 -EntryType Error | Format-List — View recent system errors',
+          'Get-HotFix | Sort-Object InstalledOn -Descending | Select -First 10 — Latest installed patches',
+        ],
+      },
+      {
+        heading: 'Windows Server Editions — Standard vs Datacenter',
+        content: 'Windows Server Standard: 2 virtual machine (Hyper-V) licenses included. All core server roles available. No storage spaces direct, no software-defined networking. Lower cost — suited for most organizations. Windows Server Datacenter: Unlimited VM licenses on the host. Adds: Storage Spaces Direct (S2D), Software-Defined Networking (SDN), Storage Replica, Shielded VMs. Higher cost — designed for large virtualization hosts and private cloud deployments. Both editions: same management features, same roles, same 180-day trial. Licensing: Datacenter/Standard both licensed per physical core (minimum 16 cores per server, 8 cores per CPU).',
+      },
+      {
+        heading: 'Key Windows Server Event IDs to Know',
+        items: [
+          { label: 'Event 4624 — Successful Logon', path: 'Security log. Logon Type 2=interactive, 3=network, 10=RemoteInteractive (RDP), 7=unlock. Track who logged in and when' },
+          { label: 'Event 4625 — Failed Logon', path: 'Security log. Failed authentication attempt. Sub Status codes: 0xC000006A=wrong password, 0xC0000234=account locked, 0xC0000064=user not found' },
+          { label: 'Event 4740 — Account Lockout', path: 'Security log on PDC Emulator. Shows which computer caused the lockout. Critical for troubleshooting repeated lockouts' },
+          { label: 'Event 4776 — NTLM Authentication', path: 'Security log. Domain controller validated NTLM credentials. Includes workstation name — helps trace NTLM vs Kerberos auth issues' },
+          { label: 'Event 6005 — Event Log Started (Startup)', path: 'System log. Indicates the system was started or event log service started. Marks OS boot time in logs' },
+          { label: 'Event 6006 — Event Log Stopped (Shutdown)', path: 'System log. Clean shutdown. If no 6006 before next 6005 → system crashed or was powered off abruptly' },
+          { label: 'Event 1074 — System Restart/Shutdown Initiated', path: 'System log. Includes: who initiated, reason code, comment. Useful for auditing unexpected reboots' },
+          { label: 'Event 7045 — New Service Installed', path: 'System log. A new service was installed. Common malware indicator if unexpected. Review service name and binary path' },
+        ],
+      },
+      {
+        heading: 'Server Core vs Desktop Experience',
+        content: 'Desktop Experience: Full GUI with Start menu, Server Manager, MMC consoles, Explorer. Higher disk footprint (~32 GB+), larger attack surface, more updates required. Easier to manage locally. Server Core: No GUI (command line and PowerShell only). Smaller footprint, fewer updates, smaller attack surface. Manage remotely via PowerShell, RSAT tools, Windows Admin Center, or Server Manager from another server. Roles not available on Core: IIS full GUI, some RDS components. Best practice: use Core for new deployments (especially DCs, DHCP, DNS). Switching: can convert between modes with Install-WindowsFeature Server-Gui-Shell (add) or Remove-WindowsFeature Server-Gui-Shell (remove) and reboot.',
+      },
+    ],
+  },
+  {
+    id: 'virtualization',
+    title: 'Virtualization',
+    icon: '⚡',
+    color: 'cyan' as const,
+    sections: [
+      {
+        heading: 'Hypervisor Types',
+        items: [
+          { label: 'Type 1 — Bare Metal (VMware ESXi)', path: 'Runs directly on hardware, no host OS. Maximum performance. VMware ESXi (vSphere): industry standard, enterprise feature-rich' },
+          { label: 'Type 1 — Bare Metal (Hyper-V)', path: 'Microsoft Hyper-V Server (free) or built into Windows Server. Native Windows ecosystem. PowerShell-managed. Azure uses Hyper-V' },
+          { label: 'Type 1 — Bare Metal (Proxmox VE)', path: 'Open-source, Debian-based. Runs KVM + LXC containers. Free with paid support option. Popular for homelabs and SMBs' },
+          { label: 'Type 1 — Bare Metal (Xen / Citrix Hypervisor)', path: 'Open-source Xen Project or commercial Citrix Hypervisor (XenServer). AWS EC2 historically used Xen; now Nitro (KVM-based)' },
+          { label: 'Type 2 — Hosted (VMware Workstation/Fusion)', path: 'Runs on top of host OS (Windows/macOS/Linux). For development, testing, and labs. Not for production. Workstation Pro (Windows/Linux), Fusion (macOS)' },
+          { label: 'Type 2 — Hosted (VirtualBox)', path: 'Free, open-source, cross-platform. Oracle. Great for labs and development. Lower performance than Type 1 but easy to use. Extension Pack adds USB 3, RDP support' },
+        ],
+      },
+      {
+        heading: 'VMware vSphere Key Concepts',
+        items: [
+          { label: 'ESXi', path: 'Bare-metal hypervisor host. Runs VMs. Managed via vCenter or directly via vSphere Client. Each host has local datastores and vSwitches' },
+          { label: 'vCenter Server', path: 'Centralized management appliance (VCSA). Required for vMotion, HA, DRS. Manages multiple ESXi hosts. Single pane of glass' },
+          { label: 'vMotion', path: 'Live migration of running VMs between ESXi hosts with zero downtime. Requires shared storage, vCenter, and dedicated vMotion network (1+ Gbps recommended)' },
+          { label: 'HA (High Availability)', path: 'Automatically restarts VMs on surviving hosts if an ESXi host fails. Requires minimum 2 hosts in cluster and shared storage. Admission control reserves capacity' },
+          { label: 'DRS (Distributed Resource Scheduler)', path: 'Automatically load-balances VMs across hosts using vMotion based on CPU/memory utilization. Modes: Manual, Partially Automated, Fully Automated' },
+          { label: 'vDS (vSphere Distributed Switch)', path: 'Cluster-level virtual switch managed centrally via vCenter. Consistent network config across all hosts. Enables port mirroring, LACP, traffic shaping' },
+          { label: 'VMFS Datastore', path: 'VMware File System on block storage (SAN/local). Stores VM files (.vmdk, .vmx, snapshots). Supports multiple hosts simultaneously (VMFS-6 recommended)' },
+          { label: 'NFS Datastore', path: 'Network File System share from NAS. Easier to provision than VMFS. Good for non-critical VMs. Requires NFS network with low latency' },
+          { label: 'iSCSI', path: 'Block storage over TCP/IP network. Connects ESXi to SAN using software or hardware iSCSI initiator. Requires dedicated storage network/VLAN for performance' },
+        ],
+      },
+      {
+        heading: 'Hyper-V Quick Reference Tasks',
+        steps: [
+          'Enable Hyper-V (Windows 10/11): Turn Windows features on/off → Hyper-V → enable all sub-items. Or: Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All',
+          'Enable Hyper-V (Server): Install-WindowsFeature -Name Hyper-V -IncludeManagementTools -Restart',
+          'Create new VM: Hyper-V Manager → New → Virtual Machine wizard. Or: New-VM -Name "VM01" -MemoryStartupBytes 4GB -Path "D:\\VMs" -Generation 2',
+          'Create virtual switch: Hyper-V Manager → Virtual Switch Manager → New → External (bridges to physical NIC), Internal (host+VMs only), or Private (VMs only)',
+          'Take checkpoint/snapshot: Right-click VM → Checkpoint. Checkpoints capture VM state. Use Production checkpoints (VSS-based) in production — not Standard checkpoints',
+          'Live Migration: Right-click running VM → Move → Move the virtual machine. Source and destination need same virtual switch name and access to VM files',
+          'Enable RemoteFX / Enhanced Session: VM Settings → Integration Services → enable all. For Gen 2: Secure Boot must be configured correctly',
+        ],
+      },
+      {
+        heading: 'Container vs Virtual Machine — Key Differences',
+        content: 'Isolation: VMs have full OS isolation (hardware-level via hypervisor). Containers share the host OS kernel — isolated at process level using namespaces and cgroups. Overhead: VMs require full OS per instance (GBs of RAM, minutes to boot). Containers share OS kernel (MBs of overhead, seconds/milliseconds to start). Use Cases: VMs for full OS isolation, different OSes, legacy apps, security-sensitive workloads. Containers for microservices, CI/CD pipelines, consistent dev/prod environments, high-density deployments. Images: VM templates are large (tens of GBs). Container images are layered, small (MBs to low GBs), and stored in registries (Docker Hub, ACR). Portability: containers are highly portable across any host with Docker/containerd runtime. VMs are less portable (hypervisor-specific formats, though OVF helps). In practice: many organizations run containers INSIDE VMs for best of both worlds.',
+      },
+      {
+        heading: 'Common Virtualization Issues & Fixes',
+        steps: [
+          'VM snapshot too large: snapshots grow as the VM writes data. Consolidate/delete old snapshots: vSphere → VM → Snapshots → Delete All. Never keep production snapshots >72 hours',
+          'vMotion failing: check: shared storage accessible from both hosts, vMotion vmkernel enabled on both hosts with network connectivity, CPU compatibility (EVC cluster mode helps)',
+          'Datastore full: vSphere → Datastores → check % used. Solutions: Storage vMotion VMs to another datastore, expand LUN, delete old snapshots/ISOs/orphaned VMDKs',
+          'VM not booting after clone/move: check UUID conflicts (answer "I moved it" not "I copied it"), verify datastore path in VMX file is correct, check if vmdk is accessible',
+          'ESXi host not responding (purple screen/PSOD): physical issue (RAM/CPU fault), driver bug, or storage path loss. Check iDRAC/iLO for hardware alerts. Review vmkernel.log and vmksummary.log',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'security-fundamentals',
+    title: 'Security Fundamentals',
+    icon: '🔐',
+    color: 'purple' as const,
+    sections: [
+      {
+        heading: 'CIA Triad — The Foundation of Information Security',
+        content: 'Confidentiality: Ensuring information is accessible only to authorized parties. Examples: encryption at rest (BitLocker, AES-256), in transit (TLS), access controls, MFA, DLP solutions. Preventing unauthorized disclosure. Integrity: Ensuring information is accurate and unaltered. Examples: file hashing (SHA-256 checksums), digital signatures, version control, change audit logs, WORM storage, checksums. Detecting unauthorized modification. Availability: Ensuring systems and data are accessible when needed. Examples: redundant hardware (RAID, clustering), UPS, DRaaS, load balancing, regular backups, DDoS protection. Preventing denial of service.',
+      },
+      {
+        heading: 'Authentication Factors — MFA Explained',
+        items: [
+          { label: 'Factor 1 — Something You Know', path: 'Passwords, PINs, security questions. Weakest factor — can be guessed, phished, or leaked. Must be complex (12+ chars, no common words)' },
+          { label: 'Factor 2 — Something You Have', path: 'Hardware token (YubiKey, RSA SecurID), smartphone (Authenticator app, SMS OTP), smart card. Much stronger than passwords alone' },
+          { label: 'Factor 3 — Something You Are', path: 'Biometrics: fingerprint, face recognition (Windows Hello), iris scan, voice recognition. Hardest to fake but has false positive/negative rates' },
+          { label: 'MFA (Multi-Factor Authentication)', path: 'Requires 2+ different factor types. Example: password + Authenticator app. Blocks 99.9% of automated account compromise attacks (Microsoft data)' },
+          { label: 'Passwordless Authentication', path: 'Eliminates Factor 1 entirely. Uses FIDO2 security keys, Windows Hello, Microsoft Authenticator push approval. Most phishing-resistant method' },
+          { label: 'Conditional Access', path: 'Policy-based access: require MFA only from untrusted locations/devices. Block legacy auth protocols. Compliant device required. Risk-based policies' },
+        ],
+      },
+      {
+        heading: 'Encryption Types Reference',
+        items: [
+          { label: 'Symmetric Encryption (AES-256)', path: 'Same key encrypts and decrypts. Fast — used for bulk data. AES-256 is military-grade standard. BitLocker, TLS bulk data, file encryption. Key distribution is the challenge' },
+          { label: 'Asymmetric Encryption (RSA, ECC)', path: 'Public key encrypts, private key decrypts (or sign with private, verify with public). RSA-2048/4096 for certificates. ECC (ECDSA P-256) — smaller keys, same strength' },
+          { label: 'Hashing (SHA-256, bcrypt)', path: 'One-way function. SHA-256: file integrity verification, digital signatures. bcrypt/Argon2/PBKDF2: password storage (adds salt + iterations to prevent rainbow tables)' },
+          { label: 'TLS Handshake (simplified)', path: 'Client Hello (cipher suites) → Server Hello + Certificate → Client verifies cert, generates session key encrypted with server public key → Both derive symmetric session keys → Encrypted communication begins' },
+          { label: 'PKI — Public Key Infrastructure', path: 'System of CA (Certificate Authority), certificates (X.509), CRL (revocation lists), OCSP. Trust chain: Root CA → Intermediate CA → End-entity cert' },
+          { label: 'End-to-End Encryption (E2EE)', path: 'Only sender and recipient can decrypt. Provider cannot read content. Examples: Signal, WhatsApp (Signal Protocol), ProtonMail, BitLocker with TPM+PIN' },
+        ],
+      },
+      {
+        heading: 'Common Attack Types — Know Your Threats',
+        items: [
+          { label: 'Phishing / Spear Phishing', path: 'Email/SMS/voice luring user to fake site or malicious attachment. Spear phishing targets specific individuals with personalized content. #1 attack vector' },
+          { label: 'Man-in-the-Middle (MITM)', path: 'Attacker intercepts communication between two parties. Mitigate with TLS (verify certificates), VPN, certificate pinning' },
+          { label: 'SQL Injection', path: 'Malicious SQL code inserted into input fields. Mitigate with parameterized queries, ORMs, input validation, WAF' },
+          { label: 'Cross-Site Scripting (XSS)', path: 'Malicious scripts injected into web pages viewed by others. Types: Stored, Reflected, DOM-based. Mitigate with output encoding, CSP headers' },
+          { label: 'DDoS (Distributed Denial of Service)', path: 'Flood of traffic overwhelms system. Volumetric, protocol, application-layer types. Mitigate with CDN, rate limiting, DDoS protection service (Cloudflare, Azure DDoS)' },
+          { label: 'Ransomware', path: 'Encrypts victim files, demands ransom for decryption key. Spreads via phishing, RDP exposure, unpatched vulnerabilities. Defense: offline backups, network segmentation, EDR, patch management' },
+          { label: 'Social Engineering', path: 'Manipulating people to reveal information or grant access. Pretexting, baiting, tailgating, vishing. Defense: security awareness training, verification procedures' },
+          { label: 'Brute Force / Credential Stuffing', path: 'Trying many passwords (brute force) or using leaked credential pairs (stuffing). Mitigate with account lockout, MFA, rate limiting, impossible travel detection' },
+          { label: 'Zero-Day Exploit', path: 'Attack targeting unknown/unpatched vulnerability. No available patch. Mitigate with defense-in-depth, behavioral EDR, network segmentation, principle of least privilege' },
+        ],
+      },
+      {
+        heading: 'Security Best Practices — Defense in Depth',
+        steps: [
+          'Principle of Least Privilege: users and services get ONLY the permissions they need, nothing more. Review and revoke excessive access regularly. Use JIT (Just-in-Time) access for admin tasks',
+          'Patch management: patch critical vulnerabilities within 72 hours, high within 7 days, medium within 30 days. Use WSUS, SCCM, or Intune. Test patches before broad deployment',
+          'Network segmentation: separate networks by function (user, server, DMZ, management, IoT). Use VLANs and firewall rules between segments to limit lateral movement',
+          'MFA everywhere: enforce MFA for all remote access (VPN, RDP, admin portals, cloud services). Use FIDO2 hardware keys for privileged accounts. Block legacy auth (IMAP, SMTP auth, NTLMv1)',
+          'Logging and monitoring: enable audit logging for authentication, privileged actions, file access. Ship logs to SIEM (Sentinel, Splunk, QRadar). Set alerts for anomalies and known attack patterns',
+          'Backup strategy: follow 3-2-1 rule. Test restores quarterly. Store at least one backup offline or air-gapped. Protect backup infrastructure equally — ransomware targets backups first',
+          'Penetration testing: annual external pen test minimum, internal where possible. Vulnerability scanning weekly/monthly. Bug bounty programs for public-facing services',
+          'SOC monitoring: 24/7 if possible, or MSSP. Mean Time to Detect (MTTD) and Mean Time to Respond (MTTR) are key metrics. Document playbooks for common incident types',
+        ],
+      },
+      {
+        heading: 'Windows Security Commands',
+        steps: [
+          'secedit /analyze /db secpol.sdb /cfg sectemplate.inf — Analyze system security against a template. secedit /configure to apply',
+          'net accounts — View password and lockout policy: max password age, lockout threshold, observation window',
+          'net accounts /maxpwage:90 /minpwlen:12 /lockoutthreshold:5 — Set password policy from command line',
+          'auditpol /get /category:* — View all audit policy settings. auditpol /set /subcategory:"Logon" /success:enable /failure:enable — Enable logon auditing',
+          'wevtutil qe Security /q:"*[System[EventID=4625]]" /f:text /c:20 — Query last 20 failed logon events from Security log',
+          'Get-MpComputerStatus — Windows Defender status. Get-MpThreatDetection — Recent threat detections. Update-MpSignature — Force signature update',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'backup-dr',
+    title: 'Backup & Disaster Recovery',
+    icon: '💾',
+    color: 'amber' as const,
+    sections: [
+      {
+        heading: '3-2-1 Backup Rule',
+        content: '3 copies of data: production data + 2 additional backup copies. Never rely on a single backup. 2 different storage media types: e.g., local NAS + cloud, or tape + disk. Different media reduces risk of simultaneous failure. 1 offsite copy: geographically separated from primary — cloud (Azure Backup, AWS S3), colocation, or tape rotation. Offsite protects against site-level disasters (fire, flood, ransomware hitting on-site backups). Extended: 3-2-1-1-0 rule adds: 1 copy offline/air-gapped (ransomware protection) + 0 errors (verified restores). Immutable backups: object lock / WORM storage prevents backup deletion even by admins — critical for ransomware resilience.',
+      },
+      {
+        heading: 'Backup Types — Pros & Cons',
+        items: [
+          { label: 'Full Backup', path: 'Copies everything. Pros: simple restore (single set), complete point-in-time. Cons: slowest, uses most storage. Typical frequency: weekly' },
+          { label: 'Incremental Backup', path: 'Copies only data changed since LAST backup (full or incremental). Pros: fastest backup, least storage. Cons: slower restore (need full + all incrementals in chain). Most common strategy' },
+          { label: 'Differential Backup', path: 'Copies all data changed since LAST FULL backup. Pros: faster restore than incremental (only need full + latest differential). Cons: grows larger each day until next full' },
+          { label: 'Mirror Backup', path: 'Exact copy of source, deletions replicated to backup. Pros: fast restore, exact state. Cons: accidental deletion propagates immediately. Not a true backup — more like replication' },
+          { label: 'Snapshot', path: 'Point-in-time copy using pointers/COW (Copy-on-Write). Near-instant. Stored on same system — not a substitute for offsite backup. Used in VSS, VM checkpoints, ZFS, storage arrays' },
+          { label: 'Continuous Data Protection (CDP)', path: 'Captures every write in near-real-time. Very low RPO (seconds/minutes). Expensive in storage. Used for databases and tier-1 applications. Examples: Zerto, Veeam CDP' },
+        ],
+      },
+      {
+        heading: 'RPO vs RTO — Understanding Recovery Objectives',
+        content: 'RPO (Recovery Point Objective): How much data loss is acceptable? Measured in time — "we can afford to lose up to 4 hours of data." Determines backup frequency: RPO=4h means backup every 4 hours. The further back your last backup, the more data you lose in a disaster. RTO (Recovery Time Objective): How long can systems be offline? Measured in time — "systems must be restored within 2 hours of a disaster declaration." Determines DR architecture: RTO=2h requires near-instant failover, RTO=48h can use tape restore. Example: banking system RPO=0 (zero data loss, synchronous replication), RTO=15 min (hot standby). Internal app RPO=24h (nightly backup OK), RTO=48h (restore from backup is fine). Calculate: multiply downtime/data loss cost by duration to justify DR investment.',
+      },
+      {
+        heading: 'Windows Server Backup (wbadmin) Commands',
+        steps: [
+          'wbadmin start backup -backuptarget:\\\\server\\share -include:C: -allCritical -quiet — Full backup to network share',
+          'wbadmin start backup -backuptarget:D: -include:C: -allCritical -vssFull — Full VSS backup to local drive D:',
+          'wbadmin get versions — List available backup versions with version identifiers',
+          'wbadmin get items -version:MM/DD/YYYY-HH:MM — List items in a specific backup version',
+          'wbadmin start recovery -version:MM/DD/YYYY-HH:MM -itemType:Volume -items:C: -recoveryTarget:D: — Restore volume',
+          'wbadmin start recovery -version:MM/DD/YYYY-HH:MM -itemType:File -items:C:\\Users\\jsmith\\Documents -recursive — Restore files',
+          'wbadmin start sysrecovery -version:MM/DD/YYYY-HH:MM -backuptarget:D: — Bare metal recovery (run from WinPE/recovery environment)',
+          'Schedule backup via GUI: Windows Server Backup (wbadmin) console → Backup Schedule → select daily/multiple times → choose backup target',
+        ],
+      },
+      {
+        heading: 'Common Backup & DR Tools',
+        items: [
+          { label: 'Veeam Backup & Replication', path: 'Industry standard for VMware/Hyper-V/physical/cloud backup. Features: instant VM recovery, SureBackup (automated restore testing), replication, CDP, immutability. Free community edition available' },
+          { label: 'Acronis Cyber Protect', path: 'Backup + security in one platform. Supports physical, virtual, cloud, Microsoft 365 backup. Ransomware protection built-in. Good for SMB environments' },
+          { label: 'Windows Server Backup (wbadmin)', path: 'Built-in Windows feature. Good for basic system state, volume, file-level backups. Free. Limited scheduling and retention compared to enterprise tools' },
+          { label: 'Azure Backup', path: 'Cloud-native backup service. Agents for Windows/Linux servers, Azure VMs, SQL Server in Azure, SAP HANA. Offsite by default. Soft delete and immutability available' },
+          { label: 'Robocopy (File Sync)', path: 'robocopy \\\\source\\share \\\\dest\\share /MIR /R:3 /W:5 /LOG:C:\\robocopy.log — Mirror directory with 3 retries. /MIR mirrors source (deletes extra files in dest). Not a backup tool — great for file migration' },
+          { label: 'DFS Replication', path: 'Microsoft built-in file replication. Replicates folders between servers using RDC (only changed blocks). Used for DFS namespaces and SYSVOL replication in AD' },
+        ],
+      },
+      {
+        heading: 'DR Testing — Best Practices',
+        steps: [
+          'Document the recovery plan: step-by-step runbook for each critical system. Include: contact list, vendor support numbers, license keys, IP addresses, DNS entries, application dependencies',
+          'Test restore quarterly minimum: actually restore from backup to verify integrity. A backup is only as good as its last successful restore test. Veeam SureBackup automates this',
+          'Tabletop exercise: walk team through a disaster scenario (ransomware, datacenter fire) without actually failing over. Identify gaps in process, documentation, and communication',
+          'Full failover test annually: actually fail over to DR site/cloud and run business operations. Validates RTO is achievable. Schedule during low-traffic window',
+          'Document RTO achieved: compare actual recovery time vs RTO objective. If actual > RTO, adjust DR architecture (more replication, pre-staged environments, automation)',
+          'Update contact list and documentation: ensure contacts are current, procedures reflect any infrastructure changes. Assign DR owner — someone responsible for keeping it current',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'cloud-fundamentals',
+    title: 'Cloud Computing Fundamentals',
+    icon: '☁️',
+    color: 'green' as const,
+    sections: [
+      {
+        heading: 'Cloud Service Models — IaaS, PaaS, SaaS',
+        items: [
+          { label: 'IaaS — Infrastructure as a Service', path: 'You manage: OS, runtime, applications, data. Provider manages: physical hardware, networking, virtualization. Examples: Azure VMs, AWS EC2, Google Compute Engine. You have most control but most responsibility' },
+          { label: 'PaaS — Platform as a Service', path: 'You manage: applications and data only. Provider manages: OS, runtime, middleware, hardware. Examples: Azure App Service, Azure SQL, AWS Elastic Beanstalk, Google App Engine. Faster deployment, less management' },
+          { label: 'SaaS — Software as a Service', path: 'You manage: your data and user configuration only. Provider manages: everything else. Examples: Microsoft 365, Salesforce, Dropbox, Zoom. No infrastructure responsibility — just use the service' },
+          { label: 'FaaS / Serverless', path: 'Execute individual functions triggered by events. Pay per execution. Provider manages all infrastructure. Examples: Azure Functions, AWS Lambda, Google Cloud Functions. Ideal for event-driven, variable workloads' },
+          { label: 'CaaS — Container as a Service', path: 'Run containers without managing VMs. Examples: Azure Container Apps, AWS ECS/Fargate, Google Cloud Run. Between IaaS and PaaS — manage containers, not servers' },
+        ],
+      },
+      {
+        heading: 'Cloud Deployment Models',
+        content: 'Public Cloud: infrastructure owned and operated by provider (Azure, AWS, GCP). Multi-tenant but logically isolated. Lowest CapEx, pay-as-you-go, global scale, shared security model. Private Cloud: infrastructure dedicated to single organization. Can be on-premises (VMware vSphere, OpenStack, Azure Stack HCI) or hosted. Higher cost, full control, meets strict compliance requirements. Hybrid Cloud: combination of public + private with interconnection (ExpressRoute, VPN). Run sensitive workloads on-prem, burst to cloud for scale. Most enterprise organizations today. Multi-Cloud: using multiple public cloud providers (Azure + AWS, or Azure + GCP). Avoids vendor lock-in, leverages best services from each. Adds complexity — different tools, skill sets, cost management challenges.',
+      },
+      {
+        heading: 'Key Cloud Concepts Reference',
+        items: [
+          { label: 'Elasticity', path: 'Ability to automatically scale resources up AND down based on demand. Pay for what you use. Key difference from on-prem (buy for peak capacity)' },
+          { label: 'Scalability', path: 'Scale Up (vertical): add more CPU/RAM to existing instance. Scale Out (horizontal): add more instances. Cloud excels at scale-out — use load balancer + auto-scaling' },
+          { label: 'High Availability (HA)', path: 'System remains operational despite component failures. Achieved with: Availability Sets (fault/update domains), Availability Zones (separate datacenter), multi-region active-passive' },
+          { label: 'Fault Tolerance', path: 'System continues operating correctly even when components fail. Higher standard than HA — zero downtime vs minimal downtime. Requires redundancy at every layer' },
+          { label: 'Auto-Scaling', path: 'Automatically add/remove instances based on metrics (CPU %, requests/sec, queue depth). Azure: VM Scale Sets, App Service scale rules. Saves cost during low traffic' },
+          { label: 'Load Balancing', path: 'Distributes traffic across multiple instances. Azure: Load Balancer (L4), Application Gateway (L7/WAF), Traffic Manager (DNS-based global), Front Door (global CDN+WAF)' },
+          { label: 'CDN (Content Delivery Network)', path: 'Caches static content at edge locations worldwide. Reduces latency for global users. Azure CDN, Cloudflare, Akamai. Assets served from nearest PoP (Point of Presence)' },
+          { label: 'Regions & Availability Zones (AZs)', path: 'Region: geographic area with multiple datacenters (e.g., East US, West Europe). AZ: physically separate datacenter within a region — independent power, cooling, networking. Deploy across AZs for HA' },
+        ],
+      },
+      {
+        heading: 'Shared Responsibility Model',
+        steps: [
+          'On-Premises: YOU are responsible for everything — physical security, hardware, OS, patching, networking, applications, identity, data',
+          'IaaS (e.g., Azure VMs): Provider handles physical hosts, network, datacenter. YOU handle: OS updates, runtime, applications, identity, data, network security groups, encryption',
+          'PaaS (e.g., Azure App Service): Provider handles OS, runtime, hardware, network. YOU handle: application code, data, identity and access management, application-level security',
+          'SaaS (e.g., Microsoft 365): Provider handles almost everything. YOU handle: your data (classify, govern), user accounts and access, client endpoint security, compliance configuration',
+          'Always YOUR responsibility regardless of model: Data classification and protection, User identity and access management, Client/endpoint devices, Authentication policy (MFA enforcement)',
+        ],
+      },
+      {
+        heading: 'Cloud vs On-Premises Comparison',
+        items: [
+          { label: 'Cost Model', path: 'On-prem: CapEx (large upfront: hardware, licenses, datacenter). Cloud: OpEx (monthly subscription, pay-per-use). Cloud easier to budget short-term; on-prem can be cheaper long-term for stable workloads' },
+          { label: 'Maintenance', path: 'On-prem: full hardware and software maintenance your responsibility. Cloud: hardware maintained by provider; PaaS/SaaS also handles OS and runtime maintenance' },
+          { label: 'Scaling', path: 'On-prem: buy hardware for peak capacity, often wasteful. Cloud: scale up/down in minutes, pay only for what you use. Cloud wins for variable workloads' },
+          { label: 'Security', path: 'Both can be highly secure or poorly secured — depends on implementation. Cloud providers invest billions in security. On-prem gives full control. Cloud: shared responsibility model' },
+          { label: 'Compliance', path: 'On-prem: you control all data location and access — easier for some regulations. Cloud: providers have many compliance certifications (ISO 27001, SOC 2, GDPR, HIPAA) but data residency and sovereignty must be verified' },
+          { label: 'Disaster Recovery', path: 'On-prem DR requires duplicate hardware investment. Cloud DR: geo-redundant storage, Azure Site Recovery, multi-region failover — faster and cheaper to implement robust DR in cloud' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'itil',
+    title: 'ITIL & Service Management',
+    icon: '📊',
+    color: 'cyan' as const,
+    sections: [
+      {
+        heading: 'ITIL 4 — Key Concepts',
+        content: 'ITIL 4 (released 2019) is a framework for IT service management based on value co-creation. Service Value System (SVS): Guiding Principles → Governance → Service Value Chain → Practices → Continual Improvement. Service Value Chain: Plan, Improve, Engage, Design & Transition, Obtain/Build, Deliver & Support — these are activities that transform demand into value. Practices (formerly Processes): ITIL 4 has 34 management practices in 3 categories: General (14), Service (17), Technical (3). Four Dimensions of Service Management: Organizations & People, Information & Technology, Partners & Suppliers, Value Streams & Processes. Guiding Principles: Focus on value, Start where you are, Progress iteratively with feedback, Collaborate and promote visibility, Think and work holistically, Keep it simple and practical, Optimize and automate.',
+      },
+      {
+        heading: 'Key ITIL Practices Reference',
+        items: [
+          { label: 'Incident Management', path: 'Restore normal service operation as quickly as possible after an unplanned interruption. Minimizes negative impact. Focus: speed of restoration, not root cause (that is Problem Management)' },
+          { label: 'Problem Management', path: 'Identify and manage causes of incidents. Three phases: Problem Identification, Problem Control (analyze/document), Error Control (manage known errors/workarounds until permanent fix)' },
+          { label: 'Change Enablement', path: 'Maximize value while minimizing risk of changes. Types: Standard (pre-approved, low risk), Normal (CAB review), Emergency (expedited approval). Change Advisory Board (CAB) reviews Normal changes' },
+          { label: 'Service Desk', path: 'Single point of contact between users and IT. Logs all contacts, provides first-line support, escalates when needed. Key metrics: First Contact Resolution (FCR), customer satisfaction' },
+          { label: 'IT Asset Management', path: 'Tracks lifecycle of IT assets from procurement to disposal. Maintains CMDB (Configuration Management Database). Supports licensing compliance, financial planning, security' },
+          { label: 'Monitoring & Event Management', path: 'Observes services and components, categorizes events: Informational, Warning, Exception. Triggers incident creation for exceptions. Foundation for proactive and automated operations' },
+          { label: 'Service Level Management', path: 'Sets, monitors, and manages service level targets. SLA (with customer), OLA (between internal teams), UC (with third-party suppliers). Regular service reviews' },
+        ],
+      },
+      {
+        heading: 'Incident vs Problem vs Change — Clear Distinction',
+        content: 'Incident: An unplanned interruption or degradation of a service. Focus: restore service fast. Example: email server down — restore it first, ask why later. Logged in service desk, assigned priority, escalated as needed. Problem: Root cause of one or more incidents. Focus: understand and eliminate the cause. Example: recurring email server crashes traced to a memory leak in an update. May result in known error with workaround until permanent fix. Change: Addition, modification or removal of anything that could affect IT services. Focus: implement improvements while minimizing risk. Example: install patch to fix the memory leak (permanent fix from problem management). A change often resolves a problem, which was raised by multiple incidents.',
+      },
+      {
+        heading: 'Priority Matrix — SLA Targets',
+        items: [
+          { label: 'P1 — Critical', path: 'Major service outage affecting all/most users or business-critical system down. Response: immediate (15 min). Resolution target: 2-4 hours. Example: email down, core network failure, production DB unreachable' },
+          { label: 'P2 — High', path: 'Significant impact on one team/department or critical system degraded. Response: 30 min. Resolution target: 4 hours. Example: VPN not working for sales team, file server slow' },
+          { label: 'P3 — Medium', path: 'Limited impact, workaround available, single user affected with business impact. Response: 2 hours. Resolution target: 8 hours (same business day). Example: laptop slow, printer not working' },
+          { label: 'P4 — Low', path: 'Minimal impact, cosmetic issues, requests, questions. Response: 8 hours. Resolution target: 48 hours (next 2 business days). Example: new software request, password reset, minor display issue' },
+          { label: 'SLA Uptime Reference', path: '99% = 87.6 hours downtime/year. 99.5% = 43.8 hours/year. 99.9% (three nines) = 8.7 hours/year. 99.95% = 4.4 hours/year. 99.99% (four nines) = 52 minutes/year. 99.999% (five nines) = 5.26 minutes/year' },
+        ],
+      },
+      {
+        heading: 'Key ITSM Metrics Reference',
+        items: [
+          { label: 'MTTR — Mean Time to Restore/Repair', path: 'Average time from incident creation to service restoration. Lower is better. Formula: total downtime ÷ number of incidents. Key measure of incident management effectiveness' },
+          { label: 'MTBF — Mean Time Between Failures', path: 'Average operating time between failures. Higher is better. Formula: total uptime ÷ number of failures. Measures system reliability. Used for capacity and maintenance planning' },
+          { label: 'FCR — First Contact Resolution', path: 'Percentage of incidents resolved at first contact (service desk) without escalation. Target: 70-80%. Higher FCR = more skilled service desk, better knowledge base, fewer escalations' },
+          { label: 'SLA Compliance %', path: 'Percentage of tickets resolved within SLA time targets by priority. Target: 95%+ for P1/P2. Report monthly to management. Identify repeat SLA breaches for root cause analysis' },
+          { label: 'Ticket Backlog', path: 'Number of open tickets beyond their SLA resolution time. Growing backlog = insufficient capacity or recurring problems. Review weekly — aging tickets indicate systemic issues' },
+          { label: 'Change Success Rate', path: 'Percentage of changes implemented without causing incidents or needing emergency rollback. Target: >95%. Failed changes indicate insufficient testing, change process gaps, or CMDB inaccuracies' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'powershell-ref',
+    title: 'PowerShell Quick Reference',
+    icon: '⌨️',
+    color: 'purple' as const,
+    sections: [
+      {
+        heading: 'Core Cmdlet Verb Patterns',
+        items: [
+          { label: 'Get-*', path: 'Retrieve/read data without making changes. Example: Get-Service, Get-Process, Get-ADUser, Get-Item. Always safe to run — no side effects' },
+          { label: 'Set-*', path: 'Modify existing object properties. Example: Set-ADUser, Set-Item, Set-Service. Changes existing objects — use Get- first to verify target' },
+          { label: 'New-*', path: 'Create new objects/resources. Example: New-ADUser, New-Item, New-VM, New-NetIPAddress. Creates something new — may require confirmation' },
+          { label: 'Remove-*', path: 'Delete objects/resources. Example: Remove-ADUser, Remove-Item, Remove-Job. Destructive — use -WhatIf first to preview: Remove-Item path -WhatIf' },
+          { label: 'Start-* / Stop-*', path: 'Control state of processes/services. Start-Service, Stop-Service, Start-Process, Stop-Process. Restart-Service combines both in one cmdlet' },
+          { label: 'Invoke-*', path: 'Execute actions or commands. Invoke-Command (remote execution), Invoke-WebRequest (HTTP calls), Invoke-Expression (run string as code — use with caution)' },
+          { label: 'Test-*', path: 'Validate or check without changing anything. Test-NetConnection (ping+port), Test-Path (file exists), Test-ADServiceAccount. Returns True/False or status object' },
+          { label: 'Import-* / Export-*', path: 'Import-Module (load module), Import-Csv (read CSV as objects), Export-Csv (write objects to CSV), Import-Clixml / Export-Clixml (serialized PS objects)' },
+        ],
+      },
+      {
+        heading: 'Essential PowerShell Commands for IT Work',
+        steps: [
+          'Get-Service -Name * | Where-Object {$_.Status -eq "Stopped"} | Format-Table -AutoSize — Find all stopped services',
+          'Start-Service -Name "Spooler" | Stop-Service -Name "Spooler" — Start or stop a service by name',
+          'Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 | Format-Table Name,Id,CPU,WS — Top 10 CPU processes',
+          'Stop-Process -Name "notepad" -Force | Stop-Process -Id 1234 — Kill process by name or PID',
+          'Get-EventLog -LogName System -Newest 100 -EntryType Error,Warning | Select TimeGenerated,Source,Message — Recent errors',
+          'Get-WinEvent -LogName "Application" -MaxEvents 50 | Where-Object {$_.Level -le 3} — Modern event log query',
+          'Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select Name,InterfaceDescription,LinkSpeed — Active network adapters',
+          'Test-NetConnection -ComputerName 8.8.8.8 -Port 443 | Select ComputerName,TcpTestSucceeded — Test TCP port connectivity',
+          'Get-NetIPAddress | Where-Object {$_.AddressFamily -eq "IPv4"} | Select IPAddress,PrefixLength,InterfaceAlias — Show IP addresses',
+          'Get-Disk | Format-Table -AutoSize | Get-Volume | Format-Table DriveLetter,FileSystemLabel,SizeRemaining,Size — Disk and volume info',
+          'Get-ADUser -Filter * -Properties LastLogonDate | Where-Object {$_.LastLogonDate -lt (Get-Date).AddDays(-90)} | Select Name,LastLogonDate — Inactive users',
+          'Invoke-Command -ComputerName Server01,Server02 -ScriptBlock { Get-Service "W32Time" } — Run command on remote servers',
+        ],
+      },
+      {
+        heading: 'File & Folder Operations',
+        steps: [
+          'Get-ChildItem -Path C:\\Logs -Filter *.log -Recurse | Sort-Object LastWriteTime -Descending — List .log files recursively, sorted by date',
+          'Get-ChildItem -Path C:\\Logs -Recurse | Where-Object {$_.LastWriteTime -lt (Get-Date).AddDays(-30)} — Files older than 30 days',
+          'Copy-Item -Path C:\\source\\file.txt -Destination D:\\backup\\file.txt -Force — Copy file, overwrite if exists',
+          'Copy-Item -Path C:\\source\\* -Destination D:\\backup\\ -Recurse — Copy entire folder recursively',
+          'Move-Item -Path C:\\old\\file.txt -Destination C:\\new\\file.txt — Move/rename file or folder',
+          'Remove-Item -Path C:\\Temp\\* -Recurse -Force — Delete all contents of Temp folder',
+          'New-Item -ItemType Directory -Path C:\\NewFolder | New-Item -ItemType File -Path C:\\NewFolder\\file.txt — Create folder then file',
+          'Get-Content -Path C:\\logs\\app.log -Tail 50 -Wait — Tail log file in real-time (like tail -f in Linux)',
+          'Set-Content -Path C:\\config.txt -Value "Setting=True" | Add-Content -Path C:\\log.txt -Value "Entry added $(Get-Date)" — Write or append to file',
+          'Rename-Item -Path C:\\folder\\old.txt -NewName new.txt — Rename file without moving it',
+        ],
+      },
+      {
+        heading: 'Remote Operations Reference',
+        items: [
+          { label: 'Enter-PSSession', path: 'Interactive remote session: Enter-PSSession -ComputerName Server01. Like SSH for Windows. Type "exit" to end session. Requires WinRM enabled on target' },
+          { label: 'Invoke-Command', path: 'Run command on one or more remote computers: Invoke-Command -ComputerName Server01,Server02 -ScriptBlock { Get-Service }. Returns objects, not text' },
+          { label: 'New-PSSession', path: 'Create persistent reusable session: $s = New-PSSession -ComputerName Server01. Use with Invoke-Command -Session $s. Remove-PSSession $s when done' },
+          { label: 'Enable PSRemoting', path: 'On target: Enable-PSRemoting -Force (requires admin). Also enables WinRM service. For workgroup: also set TrustedHosts on client: Set-Item WSMan:\\localhost\\Client\\TrustedHosts -Value "*"' },
+          { label: 'WinRM (Windows Remote Management)', path: 'Underlying protocol for PSRemoting. Check: winrm enumerate winrm/config/listener. Start service: Start-Service WinRM. Firewall: 5985 (HTTP), 5986 (HTTPS)' },
+          { label: 'Copy-Item -ToSession / -FromSession', path: 'Copy files over PSSession: $s = New-PSSession Server01; Copy-Item C:\\local.txt -Destination C:\\remote.txt -ToSession $s — copies to remote' },
+        ],
+      },
+      {
+        heading: 'PowerShell Scripting Fundamentals',
+        steps: [
+          'Variables: $name = "John" | $count = 42 | $list = @("item1","item2","item3") | $hash = @{Key="Value"; Key2="Value2"}',
+          'Foreach loop: foreach ($item in $list) { Write-Output "Processing $item" } | Also: $list | ForEach-Object { $_ }',
+          'For loop: for ($i = 0; $i -lt 10; $i++) { Write-Output "Count: $i" }',
+          'While loop: while ($condition -eq $true) { # do something; $condition = $false }',
+          'If/ElseIf/Else: if ($x -gt 10) { "big" } elseif ($x -eq 10) { "ten" } else { "small" }. Operators: -eq, -ne, -gt, -lt, -ge, -le, -like, -match, -contains',
+          'Try/Catch/Finally: try { Get-Item "C:\\missing.txt" -ErrorAction Stop } catch { Write-Error "Error: $($_.Exception.Message)" } finally { Write-Output "Always runs" }',
+          'Functions: function Get-ServerInfo { param([string]$ComputerName = "localhost") — body here — } | Call: Get-ServerInfo -ComputerName "Server01"',
+          'Import-Module: Import-Module ActiveDirectory | Import-Module Az | Get-Module -ListAvailable | Find-Module -Name Az (from PSGallery)',
+          'Write-Output vs Write-Host: Write-Output sends to pipeline (use in scripts). Write-Host writes directly to console (not in pipeline — use for user messages only)',
+          'Pipeline and filtering: Get-Process | Where-Object {$_.WorkingSet -gt 100MB} | Sort-Object WorkingSet -Descending | Select-Object -First 5 Name,Id,@{N="RAM(MB)";E={[math]::Round($_.WorkingSet/1MB,1)}}',
+        ],
+      },
+    ],
+  },
+]
+
+export default function ITRecapPage() {
+  return (
+    <>
+      <TopBar
+        title="IT Topics Quick Recap"
+        subtitle="Concise reference sheets for networking, AD, security, virtualization, cloud, ITIL and more"
+      />
+      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+        <div className="max-w-4xl mx-auto">
+          <DocSection sections={IT_RECAP_DOCS} />
+        </div>
+      </div>
+    </>
+  )
+}

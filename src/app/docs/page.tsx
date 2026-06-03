@@ -1,6 +1,6 @@
 import TopBar from '@/components/layout/TopBar'
 import Link from 'next/link'
-import { Cloud, Server, Database, GitBranch, HardDrive, ArrowRight } from 'lucide-react'
+import { Cloud, Server, Database, GitBranch, HardDrive, BookOpen, ArrowRight } from 'lucide-react'
 
 const DOC_SECTIONS = [
   {
@@ -9,8 +9,8 @@ const DOC_SECTIONS = [
     desc: 'Exchange, Entra ID, Teams, SharePoint, Defender, Intune, Purview — complete admin reference with step-by-step guides',
     icon: Cloud,
     color: 'cyan',
-    topics: ['Exchange Online', 'Entra ID / Azure AD', 'Teams Admin', 'SharePoint', 'Defender XDR', 'Intune', 'Purview'],
-    count: 32,
+    topics: ['Exchange Online', 'Entra ID', 'Teams Admin', 'SharePoint', 'Defender XDR', 'Intune', 'Purview'],
+    count: 35,
   },
   {
     href: '/docs/azure',
@@ -19,16 +19,16 @@ const DOC_SECTIONS = [
     icon: Server,
     color: 'purple',
     topics: ['Virtual Machines', 'Networking / NSG', 'App Service', 'Azure SQL', 'AKS / Kubernetes', 'Cost Management'],
-    count: 28,
+    count: 30,
   },
   {
     href: '/docs/sap',
     title: 'SAP S/4HANA Public Cloud',
-    desc: 'Fiori, FICO, MM, SD, QM, PM, BASIS — full functional module reference for SAP S/4HANA cloud consultants and admins',
+    desc: 'Fiori, FICO, MM, SD, QM, PM, BASIS, ABAP Cloud, Key User Extensibility — full functional and technical reference',
     icon: Database,
     color: 'amber',
-    topics: ['Fiori Launchpad', 'FICO Finance', 'MM Procurement', 'SD Sales', 'QM Quality', 'PM Maintenance', 'BASIS'],
-    count: 24,
+    topics: ['Fiori', 'FICO', 'MM', 'SD', 'QM / PM', 'BASIS', 'ABAP Cloud'],
+    count: 28,
   },
   {
     href: '/docs/devops',
@@ -36,17 +36,26 @@ const DOC_SECTIONS = [
     desc: 'Docker, Kubernetes, Terraform, GitHub Actions, Prometheus/Grafana monitoring and incident response runbooks',
     icon: GitBranch,
     color: 'green',
-    topics: ['Docker & Compose', 'Kubernetes / AKS', 'Terraform IaC', 'GitHub Actions', 'Monitoring', 'Incident Response'],
+    topics: ['Docker', 'Kubernetes / AKS', 'Terraform IaC', 'GitHub Actions', 'Monitoring', 'Incident Response'],
     count: 22,
   },
   {
     href: '/docs/hardware',
     title: 'Hardware & Network Guide',
-    desc: 'Windows diagnostics, WiFi/Ethernet troubleshooting, hardware tests, storage, BIOS, drivers, printer and display fixes',
+    desc: 'Windows diagnostics, WiFi, Ethernet, Firewall, Physical Servers, IT Infrastructure, Access Points, BIOS, drivers',
     icon: HardDrive,
     color: 'cyan',
-    topics: ['Network Diagnostics', 'WiFi Troubleshooting', 'Hardware Diagnostics', 'Storage & Disk', 'BIOS / Boot', 'Drivers'],
-    count: 20,
+    topics: ['Network Diagnostics', 'Firewall', 'Physical Servers', 'IT Infrastructure', 'Access Points', 'Drivers'],
+    count: 28,
+  },
+  {
+    href: '/docs/itrecap',
+    title: 'IT Topics Quick Recap',
+    desc: 'Concise cheat-sheets for Networking, Active Directory, DNS/DHCP, Windows Server, Virtualization, Security, Cloud, ITIL, PowerShell',
+    icon: BookOpen,
+    color: 'purple',
+    topics: ['OSI / TCP-IP', 'Active Directory', 'DNS & DHCP', 'Virtualization', 'Security', 'Cloud', 'ITIL', 'PowerShell'],
+    count: 25,
   },
 ]
 
@@ -58,16 +67,15 @@ const colorMap = {
 }
 
 export default function DocsPage() {
+  const totalGuides = DOC_SECTIONS.reduce((a, s) => a + s.count, 0)
   return (
     <>
-      <TopBar title="Documentation Hub" subtitle="Enterprise IT guides — M365, Azure, SAP, DevOps, Hardware & Network" />
+      <TopBar title="Documentation Hub" subtitle={`${totalGuides}+ enterprise IT guides — M365, Azure, SAP, DevOps, Hardware, IT Fundamentals`} />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="text-center pb-2">
             <h2 className="text-xl font-bold text-[#e2e8f0]">IT Knowledge Base</h2>
-            <p className="text-sm text-[#64748b] mt-1">
-              {DOC_SECTIONS.reduce((a, s) => a + s.count, 0)}+ step-by-step guides across {DOC_SECTIONS.length} platforms
-            </p>
+            <p className="text-sm text-[#64748b] mt-1">{totalGuides}+ step-by-step guides across {DOC_SECTIONS.length} platforms and topics</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
