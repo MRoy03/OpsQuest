@@ -1196,6 +1196,400 @@ const HARDWARE_DOCS = [
       },
     ],
   },
+  {
+    id: 'cable-crimping',
+    title: 'Network Cable Crimping (RJ45)',
+    icon: '🔌',
+    color: 'green',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'RJ45 crimping is the process of terminating Cat5e/Cat6/Cat6a Ethernet cable with RJ45 8P8C connectors for patch cables and direct runs. Two wiring standards exist: TIA-568A and TIA-568B. T568B is the most widely deployed standard in North America — use it for all new installs unless the existing infrastructure uses T568A. For straight-through cables (PC to switch, most common), crimp the same standard on both ends. For a crossover cable (PC to PC direct, switch to switch without uplink), crimp T568A on one end and T568B on the other. Modern switches and NICs support Auto-MDI-X, making crossover cables largely obsolete. Pass-through RJ45 connectors allow the wire tips to protrude from the connector face, simplifying alignment verification before crimping.',
+      },
+      {
+        heading: 'Tools Required',
+        items: [
+          { label: 'Crimping tool', path: 'Platinum Tools EZ-RJPRO HD or Fluke Networks Pro3000 — quality crimp tool ensures consistent contact pin seating' },
+          { label: 'Cable stripper', path: 'Dedicated Cat5e/Cat6 stripper (Ideal Industries 45-162 or Klein Tools VDV110-095) — adjustable blade depth prevents scoring conductors' },
+          { label: 'RJ45 connectors', path: 'Pass-through connectors (e.g., Platinum Tools 100010C) for easier wire alignment, or standard RJ45 for Cat5e/Cat6/Cat6a — match connector grade to cable grade' },
+          { label: 'Cable tester', path: 'Fluke Networks MicroScanner2 or Klein Tools VDV501-851 — verifies all 8 pins, wiring map, and detects shorts, opens, and split pairs' },
+          { label: 'Wire cutter / flush cutters', path: 'Klein Tools D228-8 — for trimming wires cleanly to exact length before insertion into connector' },
+          { label: 'Cable labels', path: 'Brady BMP21-PLUS or Brother PT-E550W label printer — label both ends at time of crimping for permanent identification' },
+        ],
+      },
+      {
+        heading: 'T568B Pin-Out Reference',
+        items: [
+          { label: 'Pin 1', path: 'White/Orange' },
+          { label: 'Pin 2', path: 'Orange' },
+          { label: 'Pin 3', path: 'White/Green' },
+          { label: 'Pin 4', path: 'Blue' },
+          { label: 'Pin 5', path: 'White/Blue' },
+          { label: 'Pin 6', path: 'Green' },
+          { label: 'Pin 7', path: 'White/Brown' },
+          { label: 'Pin 8', path: 'Brown' },
+        ],
+      },
+      {
+        heading: 'T568A Pin-Out Reference',
+        items: [
+          { label: 'Pin 1', path: 'White/Green' },
+          { label: 'Pin 2', path: 'Green' },
+          { label: 'Pin 3', path: 'White/Orange' },
+          { label: 'Pin 4', path: 'Blue' },
+          { label: 'Pin 5', path: 'White/Blue' },
+          { label: 'Pin 6', path: 'Orange' },
+          { label: 'Pin 7', path: 'White/Brown' },
+          { label: 'Pin 8', path: 'Brown' },
+        ],
+      },
+      {
+        heading: 'Step-by-Step Crimping',
+        steps: [
+          'Measure and cut cable to required length — allow extra for routing. Maximum finished patch cable length is 5m for patch use; horizontal runs must not exceed 90m permanent link',
+          'Strip 25mm of outer jacket using the cable stripper — set blade depth carefully so it scores only the jacket, not the insulation on individual conductors',
+          'Carefully untwist all 4 pairs — separate each pair fully but maintain twist as far toward the jacket end as possible to preserve crosstalk performance',
+          'Straighten all 8 individual conductors — hold them flat between thumb and forefinger and run fingers down each wire to remove kinks',
+          'Arrange conductors in T568B order (left to right with clip facing down): White/Orange, Orange, White/Green, Blue, White/Blue, Green, White/Brown, Brown',
+          'Hold the arranged wires tightly and trim the ends with flush cutters to exactly 12mm even length — all 8 wires must be the same length and cut perfectly flat',
+          'Slide all 8 conductors into the RJ45 connector simultaneously, keeping the order correct. For pass-through connectors, push wires until they protrude from the front',
+          'Verify wire color order through the clear connector housing — look at the pin face and confirm T568B sequence before crimping',
+          'Insert the loaded connector fully into the crimping tool die until it seats in the slot',
+          'Crimp firmly with a single full stroke — the crimping tool should bottom out completely so all 8 pins are driven into conductors and the strain relief grips the jacket',
+          'Perform a tug test — grasp the cable and pull with moderate force. The connector should not pull off the cable. If it does, the strain relief did not seat properly — cut and re-crimp',
+          'Repeat for the other end in the same T568B order (straight-through), then connect both ends to the cable tester and verify all 8 pins light in sequence (1-1, 2-2, 3-3, 4-4, 5-5, 6-6, 7-7, 8-8)',
+        ],
+      },
+      {
+        heading: 'Crossover Cable',
+        steps: [
+          'Crimp one end in T568B order and the other end in T568A order — pins 1 and 3 swap (transmit and receive pairs cross), and pins 2 and 6 swap',
+          'Crossover cables were required for: switch-to-switch connections without an uplink port, PC-to-PC direct Ethernet, router Ethernet port to switch without uplink',
+          'Modern use: Auto-MDI-X on all modern switches (IEEE 802.3ab compliant, all Gigabit Ethernet) automatically detects and corrects the pair orientation — a standard straight-through cable works in all cases. Crossover cables are only needed for legacy equipment manufactured before ~2002',
+        ],
+      },
+      {
+        heading: 'Troubleshooting Bad Crimp',
+        steps: [
+          'Re-test with cable tester — note which pin numbers fail. A single pin failure usually means that conductor was not fully seated or the pin did not make contact',
+          'Check for continuity failures — if pins show open circuit, the conductor did not reach the pin. Cut the connector off and re-crimp, ensuring wires are pushed fully to the front of the connector',
+          'Check for split pair errors — tester shows wiring map 1-1, 2-2 but pins 3 and 6 are transposed. This indicates the white/green and green conductors were placed in wrong positions. Re-crimp with correct T568B order',
+          'Check for damaged conductors — if a wire was scored during stripping, it may pass low-speed tests but fail Gigabit. Look for exposed copper in the stripped section. Cut back beyond the damage and re-crimp',
+          'Short circuit between pins — two conductors touching inside the connector or the crimp tool drove a pin into an adjacent conductor. Cut and re-crimp with a new connector',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'punch-down',
+    title: 'Punch-Down & Patch Panels',
+    icon: '🔧',
+    color: 'amber',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          '110-type punch-down connections are the standard method for terminating twisted-pair Ethernet cable in structured cabling installations. IDC (Insulation Displacement Connector) punch-down contacts cut through the wire insulation and make gas-tight contact with the conductor without stripping the wire. Used in: patch panels (IDF/MDF — terminate horizontal cable runs from wall outlets), keystone jacks (wall outlet end — user-facing RJ45 jack), and surface-mount I/O boxes. Patch panels provide a flexible cross-connect point — cable from the wall is punched down on the rear, and a short patch cable runs from the front port to the switch. This allows moves, adds, and changes without disturbing the horizontal cable run.',
+      },
+      {
+        heading: 'Tools Required',
+        items: [
+          { label: '110 punch-down tool', path: 'Fluke Networks D914S or Klein Tools VDV427-300 — dual-ended tool with blade side (cuts excess wire) and non-blade side (seat only, no cut). Always use the blade-side facing the cut direction' },
+          { label: 'Patch panel', path: '24-port or 48-port 1U/2U rack-mount panel (Panduit, Belden, or Leviton Cat6/Cat6a rated). Rear IDC slots with color-coded T568A/B guides printed on body' },
+          { label: 'Cable stripper', path: 'Dedicated Cat6 jacket stripper — set depth to score jacket only, not conductor insulation' },
+          { label: 'Scissors or flush cutters', path: 'Klein Tools D228-8 or Knipex 78 03 125 — for trimming excess wire stubs after punch-down if using non-blade side of tool' },
+          { label: 'Cable tester', path: 'Fluke MicroScanner2 or Klein VDV501-851 — to verify end-to-end continuity from patch panel port to wall jack after completion' },
+          { label: 'Cable labeler', path: 'Brady BMP21-PLUS or Brother PT-E550W — label each port on patch panel front and rear before or immediately after termination' },
+        ],
+      },
+      {
+        heading: 'Patch Panel Pin Assignments',
+        items: [
+          { label: 'Pair 1 — Blue / White-Blue', path: 'Pins 4 and 5 (center pair). Blue wire → slot 4, White/Blue wire → slot 5' },
+          { label: 'Pair 2 — Orange / White-Orange', path: 'Pins 1 and 2. White/Orange → slot 1, Orange → slot 2' },
+          { label: 'Pair 3 — Green / White-Green', path: 'Pins 3 and 6. White/Green → slot 3, Green → slot 6' },
+          { label: 'Pair 4 — Brown / White-Brown', path: 'Pins 7 and 8. White/Brown → slot 7, Brown → slot 8' },
+        ],
+      },
+      {
+        heading: 'Punching Down to Patch Panel',
+        steps: [
+          'Strip 50mm of outer jacket from the cable end — longer than for crimping, to allow routing through the patch panel strain relief/cable manager',
+          'Route the cable through the rear cable manager or strain relief bracket on the patch panel — this secures the jacket and protects the connection from pull forces',
+          'Separate the 4 pairs. Do NOT untwist more than 13mm (0.5 inch) from the punch-down point toward the jacket — excessive untwisting degrades near-end crosstalk (NEXT) performance and will fail Cat6 cable certification',
+          'Locate the correct IDC slot for port number. Patch panels have T568A and T568B color guides printed directly on the body — follow the T568B row for all new installs',
+          'Lay each conductor into the correct IDC slot following the printed color code — the wire sits in the slot groove before punching. Do not punch yet; seat all 8 conductors first',
+          'Orient the punch-down tool with the blade side facing the cut side (toward the wire stub end, not the conductor). Press the tool squarely onto each conductor in turn and punch firmly with one stroke',
+          'Punch until you hear and feel a click — this confirms the IDC contact has cut through insulation and gripped the conductor. An incomplete punch is a common cause of intermittent failures',
+          'The excess wire stub is cut by the blade side of the tool simultaneously with the punch stroke — verify each stub is cleanly trimmed. Untrimmed stubs can short against adjacent contacts',
+          'Verify all 8 conductors are fully seated and none are sitting loosely in the slot — a conductor resting on top of the slot without penetrating is a failed connection',
+          'Test end-to-end: connect cable tester remote to the wall jack and main unit to the patch panel port via a short patch cable — verify all 8 pins show correct wiring map',
+        ],
+      },
+      {
+        heading: 'Punching Down to Keystone Jack',
+        steps: [
+          'Strip 25mm of outer jacket from the cable end at the wall outlet — shorter than patch panel as less routing slack is needed inside the wall box',
+          'Maintain the pair twist as close as possible to the punch-down point — untwist no more than 13mm for Cat6 performance',
+          'Follow the T568B color guide printed on the keystone jack body — color codes are molded into the IDC slot positions. Most jacks show both T568A and T568B; use B side',
+          'Lay each conductor into the correct IDC slot, seating it fully in the groove before punching',
+          'Use punch-down tool with blade facing away from the jack body (toward the wire stub). Punch each conductor firmly until click',
+          'Trim any untrimmed wire stubs with flush cutters if necessary',
+          'Snap the keystone jack cap closed to protect the IDC connections — most jacks have a fold-over cover or clip-on cap',
+          'Install the keystone jack into the face plate by pressing it in until the retention tabs click. Cat6a keystones may require an angled or tooled installation depending on brand',
+          'Screw the face plate to the wall box and label the port with the cable ID and patch panel destination (e.g., "P01 → PP1-01")',
+        ],
+      },
+      {
+        heading: 'Common Mistakes',
+        steps: [
+          'Over-untwisting pairs: untwisting more than 13mm from the punch-down point is the most common and damaging mistake — it degrades crosstalk performance and may fail Cat6 certification. Always maintain twist as close to the termination as possible',
+          'Wrong color seating: placing a conductor in the wrong IDC slot causes a wiring error (miswire, split pair, or crossed pair) that the cable tester will flag. Always follow the printed color guide on the panel/jack and double-check before punching',
+          'Incomplete punch: not pressing the tool firmly enough results in the IDC contact not fully cutting through insulation. The conductor appears seated but has no electrical contact. Symptoms: intermittent or no connectivity on that pin',
+          'Reversed polarity on a pair: swapping the two conductors of a pair (e.g., putting Blue where White/Blue should go) causes a reversed pair — tester shows pins 4 and 5 crossed. Check color codes carefully before punching',
+          'Not routing through strain relief: pulling on the cable without strain relief causes the punch-down connections to move and eventually fail. Always secure the jacket in the panel strain relief or wall box cable clamp',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'io-box-faceplate',
+    title: 'I/O Box & Face Plate Setup',
+    icon: '🏠',
+    color: 'cyan',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'The wall outlet or I/O box is the end-user-facing termination point of the horizontal structured cabling run. It consists of four components: the back box (wall box — flush-mount or surface-mount), the face plate (accepts keystones), keystone jacks (RJ45 Cat5e/Cat6/Cat6a IDC connectors), and labeling. The wall outlet terminates the permanent link from the IDF patch panel. The user plugs their device into the keystone RJ45 port with a short patch cable. Flush-mount installation (recessed into the wall) requires cutting a hole and installing a dry-wall back box. Surface-mount installation screws directly to the wall or baseboard — used where cutting is not permitted (rental premises, concrete walls). Port labeling at both ends of every cable run is mandatory for efficient management.',
+      },
+      {
+        heading: 'Components',
+        items: [
+          { label: 'Back box / wall box', path: 'Surface-mount: Leviton 47605-B or Panduit CB1IW — screws to wall, no cutting. Flush-mount: standard dry-wall box (single or double gang, 35mm or 47mm depth) for recessed installation' },
+          { label: 'Face plate', path: 'Single (1 port), dual (2 port), quad (4 port), or 6-port face plate in standard single-gang or double-gang size. Panduit, Leviton, Belden. Match keystone brand to face plate for correct snap-fit' },
+          { label: 'Keystone jack (RJ45)', path: 'Cat5e (Leviton 5G108), Cat6 (Panduit CJ688TGAW), Cat6a (Belden REVConnect or Leviton eXtreme 6A) — match cable category. T568B termination. Color: white, ivory, or black to match face plate' },
+          { label: 'Blank keystones', path: 'Insert blank keystones in all unused face plate ports to prevent dust ingress and maintain airflow seals in partition walls' },
+          { label: 'Face plate labels / inserts', path: 'Brady DAT series or Panduit PSC label inserts — print port number, cable ID, and destination patch panel port. Laminated labels resist fading and cleaning chemicals' },
+        ],
+      },
+      {
+        heading: 'Flush-Mount I/O Box Installation',
+        steps: [
+          'Mark the wall position — use a stud finder (Zircon e50 or Franklin ProSensor) to locate and avoid wall studs. Mark a single-gang cutout (70mm x 45mm typical) centered between studs',
+          'Verify no electrical cables or plumbing run through the cut zone — use a non-contact voltage tester and listen for pipes. Drill a small pilot hole first to check for obstructions',
+          'Cut the wall opening using a drywall saw (jab saw) — cut cleanly on the lines. Smooth rough edges with a utility knife',
+          'Fish the structured cable through the wall opening — use a fish tape or flex bit drill to route from the IDF cable path down through wall cavity. Pull through 300-400mm of cable slack',
+          'Install the back box into the opening: dry-wall boxes use expanding wings or toggle-bolt style anchors that grip behind the dry-wall when tightened. Insert box, tighten screws until firm',
+          'Route the cable through the cable entry hole in the back box. Leave 150mm of cable inside the box for termination working room',
+          'Punch down the keystone jack (T568B, see punch-down procedure): strip 25mm jacket, maintain pair twist, lay in color-coded IDC slots, punch down all 8 conductors, close jack cap',
+          'Snap the keystone jack into the face plate port opening until the retention tabs click audibly',
+          'Screw the face plate to the back box using the provided screws — do not overtighten on dry-wall boxes, as the box can rotate if wings are not fully engaged',
+          'Label the face plate port with port ID and destination (e.g., "P01 → PP1-01" means Port 01 routes to Patch Panel 1, Port 01 in the IDF)',
+          'Test end-to-end with a cable tester: plug tester remote into the wall jack, connect tester main unit to the patch panel port, verify all 8 pins — correct wiring map, no opens or shorts',
+        ],
+      },
+      {
+        heading: 'Surface-Mount I/O Box',
+        steps: [
+          'Position the surface-mount box at the desired location — typically at skirting board height (150mm) or desk height (900mm). Mark screw hole positions with a pencil',
+          'Drill and plug wall fixings appropriate for the wall material (raw plug + screw for masonry, direct screw for timber stud). Screw the box base plate firmly to wall',
+          'Route the incoming structured cable through the cable gland or entry hole at the rear or side of the box — allow 150mm working slack inside the box',
+          'Punch down the keystone jack inside the box (same T568B process). Clip keystone into the face plate or box front',
+          'Close the surface-mount box lid by snapping or screwing it onto the base. Ensure cable is not pinched by the lid',
+          'Label the port and secure the cable run to the wall above the box using cable clips or conduit to the entry point where it joins the main cable route',
+        ],
+      },
+      {
+        heading: 'Port Labeling Best Practice',
+        items: [
+          { label: 'Label format', path: 'Use a consistent format: [FloorCode][Room][PortSeq] → PP[PanelNum]-[Port] — e.g., "1A01 → PP1-01" = Floor 1, Room A, Port 01, connects to Patch Panel 1, Port 01 in IDF' },
+          { label: 'Label both ends at installation time', path: 'Label the wall outlet AND the corresponding patch panel port with matching cable IDs at the time of installation — never leave unlabeled cables' },
+          { label: 'Cable ID on cable jacket', path: 'Wrap a cable ID label around the jacket at both ends — if the face plate label is removed, the cable itself still has identification' },
+          { label: 'Patch panel to I/O mapping document', path: 'Maintain a cable register spreadsheet or CMDB entry: Cable ID, Wall outlet location (room, position), Patch panel port, Cable category, Date installed, Test result' },
+          { label: 'Labeling tools', path: 'Brady BMP21-PLUS with B-595 vinyl ribbon for wall environment labels. Panduit PSC self-laminating wrap-around cable labels for cable jacket marking' },
+        ],
+      },
+      {
+        heading: 'Testing',
+        steps: [
+          'Plug a short patch cable from the wall I/O jack to a laptop or test device',
+          'At the patch panel end, plug the patch panel port into the switch with a short patch cable',
+          'Verify link light illuminates on the switch port and on the device NIC — confirms physical layer connectivity',
+          'Test with a cable tester (Fluke MicroScanner2 or Klein VDV501-851): attach remote to wall jack, main unit to patch panel port via patch cable. Verify: all 8 pins correct, no opens, no shorts, no split pairs, length within specification',
+          'For Cat6 certification (new building installations): use a Fluke DSX-5000 CableAnalyzer to perform full TIA-568 certification sweep — measures NEXT, FEXT, attenuation, return loss. Required for warranty on Cat6/Cat6a channel',
+          'Document test results in cable register — record pass/fail, any deferred faults, and tester model and calibration date',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'cable-connectors',
+    title: 'Cable Types & Connectors Reference',
+    icon: '📦',
+    color: 'purple',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'Selecting the correct cable and connector type is fundamental to building reliable, future-proof network infrastructure. Copper Ethernet cables carry data via electrical signals over twisted pairs; fiber optic cables carry data via light pulses and are immune to EMI, suitable for long distances and high-speed backbone runs. Coaxial cables are used for CCTV, RF, and legacy broadband installations. Each cable type has specific distance limits, bandwidth ratings, and connector families. This reference covers all cable categories encountered in enterprise networking, from desktop Cat6 patch cables to OS2 single-mode fiber backbone runs and MTP/MPO high-density trunk cables.',
+      },
+      {
+        heading: 'Copper Ethernet Cable Categories',
+        items: [
+          { label: 'Cat5e', path: '100 MHz bandwidth. 1 Gbps at 100m. Legacy standard — do not install new Cat5e. Still functional for 1 Gbps but no headroom for 10 Gbps. UTP (unshielded twisted pair)' },
+          { label: 'Cat6', path: '250 MHz bandwidth. 1 Gbps at 100m, or 10 Gbps at up to 55m. Current minimum standard for new horizontal runs. UTP. Larger conductor diameter than Cat5e — verify connector compatibility' },
+          { label: 'Cat6a (Augmented Category 6)', path: '500 MHz bandwidth. 10 Gbps at full 100m. Recommended for all new installations. Available in UTP and STP (shielded). STP requires grounding at patch panels. Larger diameter — needs larger conduit and bend radius management' },
+          { label: 'Cat7', path: '600 MHz bandwidth. 10 Gbps at 100m. Fully shielded (SSTP/SFTP per ISO/IEC 11801). Uses GG45 or TERA connectors — not RJ45 compatible. Less commonly deployed in enterprise due to connector non-standardization. Requires grounding' },
+          { label: 'Cat8', path: '2 GHz bandwidth. 25 or 40 Gbps at up to 30m maximum. Designed exclusively for data center top-of-rack connections between servers and switches. Uses RJ45 connectors. Not suitable for horizontal runs exceeding 30m' },
+        ],
+      },
+      {
+        heading: 'Fiber Cable Types',
+        items: [
+          { label: 'OM1 (multimode, orange)', path: '62.5μm core. 1 Gbps at 275m, 10 Gbps at 33m. Legacy — do not install. Found in older buildings. Orange jacket. LC or SC connectors' },
+          { label: 'OM2 (multimode, orange)', path: '50μm core. 1 Gbps at 550m, 10 Gbps at 82m. Legacy — do not install new. Orange jacket. LC or SC connectors' },
+          { label: 'OM3 (multimode, aqua)', path: '50μm laser-optimized core. 10 Gbps at 300m, 40 Gbps at 100m, 100 Gbps at 70m. Aqua (turquoise) jacket. Suitable for new inter-rack and inter-switch runs within buildings' },
+          { label: 'OM4 (multimode, aqua/violet)', path: '50μm enhanced laser-optimized core. 10 Gbps at 400m, 40 Gbps at 150m, 100 Gbps at 100m. Aqua or violet jacket. Preferred for new backbone installations within buildings and campuses under 400m' },
+          { label: 'OM5 (multimode, lime green)', path: '50μm wideband multimode (SWDM). Supports SWDM4 for 40/100 Gbps wavelength division multiplexing. Lime green jacket. Used in high-density data centers to increase fiber utilization' },
+          { label: 'OS1 (single-mode, yellow)', path: '9μm core. Up to 10 Gbps at 10 km for indoor/tight buffered applications. Yellow jacket. Used for long inter-building runs within a campus where OS2 direct burial is not required' },
+          { label: 'OS2 (single-mode, yellow)', path: '9μm core. Up to 100 Gbps at 40 km+. Yellow jacket. Loose-tube outdoor-rated fiber for direct burial or conduit between buildings. Campus and WAN backbone standard' },
+        ],
+      },
+      {
+        heading: 'Fiber Connectors',
+        items: [
+          { label: 'LC (Lucent Connector)', path: 'Small form factor, 1.25mm ferrule, push-pull latch. Enterprise and data center standard for SFP/SFP+/QSFP transceivers. Used in duplex (LC-LC) pairs for send/receive. Dominant connector in modern installations' },
+          { label: 'SC (Subscriber Connector)', path: 'Square snap connector, 2.5mm ferrule, push-pull. Older enterprise installs and patch panels. Still widely found in existing infrastructure. Larger than LC, so requires more panel space' },
+          { label: 'ST (Straight Tip)', path: 'Bayonet twist-lock connector, 2.5mm ferrule. Legacy — found in older campus backbone runs and some CCTV/security systems. Twist to lock, twist to remove. Being replaced by LC/SC in all new installs' },
+          { label: 'FC (Ferrule Connector)', path: 'Screw-on threaded connector, 2.5mm ferrule. Used on optical test equipment (OTDR, optical power meters) and some single-mode patch panels. High-vibration environments where positive lock-down is needed' },
+          { label: 'MTP/MPO (Multi-fiber Push-On)', path: 'Multi-fiber connector carrying 8, 12, or 24 fibers in a single connector body. Used for trunk cables in high-density data centers and structured cabling backbones. MTP is the US Conec-brand version of MPO. Used with fiber cassettes that break out to individual LC ports' },
+        ],
+      },
+      {
+        heading: 'Copper Connectors',
+        items: [
+          { label: 'RJ45 (8P8C)', path: '8 Position 8 Contact. Standard Ethernet connector for all Cat5e through Cat6a cable. Plug crimped onto cable; jack punched down in panel or wall outlet. Most widely used network connector' },
+          { label: 'RJ11 (6P2C)', path: '6 Position 2 Contact. Standard analogue telephone connector. Used for POTS (Plain Old Telephone Service) lines and DSL modem connections. Physically smaller than RJ45' },
+          { label: 'RJ12 (6P6C)', path: '6 Position 6 Contact. ISDN and multi-line telephone systems. Same physical size as RJ11 but uses all 6 contacts. Used for some PBX handset connections' },
+          { label: 'BNC (Bayonet Neill-Concelman)', path: 'Coaxial connector, twist-lock. Used for CCTV/analog camera connections (75Ω RG59/RG6), RF test equipment, and legacy 10BASE2 thin Ethernet. Quick-connect but can loosen under vibration' },
+          { label: 'F-type connector', path: 'Threaded coaxial connector for RG6/RG11. Used for cable TV (CATV), satellite dish feeds, DOCSIS broadband modems, and IPTV set-top box connections. 75Ω impedance. Requires compression or crimp tooling for weatherproof outdoor use' },
+          { label: 'SFP / SFP+ / QSFP28 (transceivers)', path: 'Small Form-factor Pluggable modules that insert into switch/router SFP ports. SFP = 1 Gbps, SFP+ = 10 Gbps, QSFP28 = 100 Gbps. Available in fiber (LC duplex) and copper (RJ45 twinax DAC) versions. Brand-match or use multi-source compatible modules' },
+        ],
+      },
+      {
+        heading: 'Coaxial Cable Types',
+        items: [
+          { label: 'RG6', path: '75Ω impedance. Standard for CCTV, satellite, and CATV/cable broadband. Quad-shield version for high-interference environments. Supports HD-SDI (3G-SDI) video signals for broadcast CCTV. Maximum run: 100-300m depending on signal type' },
+          { label: 'RG11', path: '75Ω impedance. Thicker than RG6, lower loss per meter. Used for long coaxial runs (antenna mast to equipment room) where RG6 loss is excessive. Less flexible than RG6' },
+          { label: 'RG58', path: '50Ω impedance. Used in legacy 10BASE2 (Thin Ethernet) — now obsolete for networking. Still used for RF test equipment patch cables and some amateur radio applications' },
+          { label: 'LMR-400', path: '50Ω low-loss coaxial cable. Used for outdoor antenna feeds, long cable runs to access point antennas, and RF repeater systems. Significantly lower attenuation than RG58 for runs over 15m. Requires N-type or TNC connectors' },
+        ],
+      },
+      {
+        heading: 'When to Use What',
+        steps: [
+          'Horizontal desk drops (floor to outlet): Cat6a UTP — provides 10 Gbps capability at full 100m for future-proofing, and RJ45 compatible. Use Cat6 as a budget alternative where 10 Gbps is not required',
+          'Server rack to server rack (within data center, <100m): OM4 multimode fiber with LC connectors — supports 40 Gbps and 100 Gbps, easy to manage. Or Cat6a for <30m 10 Gbps links',
+          'Building backbone (IDF to MDF, within building): OM4 multimode fiber (LC or MTP/MPO for high-density) or OS1 single-mode for runs approaching 300m',
+          'Campus backbone (building to building, outdoor): OS2 single-mode outdoor direct-burial or conduit-rated fiber — supports 100 Gbps+ at distances exceeding 500m. OS2 is unaffected by distance limitations that constrain multimode',
+          'CCTV and analog security cameras: RG6 coaxial with BNC connectors. Quad-shield for outdoor or high-EMI environments. For IP cameras, use Cat6 to PoE switch instead — eliminates coax entirely and uses existing Ethernet infrastructure',
+          'Telephone and POTS lines: Cat3 or Cat5e with RJ11 connectors. For modern VoIP desk phones: standard RJ45 Cat6 Ethernet — VoIP phones connect to PoE switch port like any other device',
+          'High-density data center server connections (ToR to servers): MTP/MPO fiber trunk from patch panel to cassette, then LC breakout cables to individual server HBAs or NICs. Allows 12 or 24 fiber connections in a single MTP connection',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'backbone-maintenance',
+    title: 'Network Backbone & Server Room Maintenance',
+    icon: '🏗️',
+    color: 'green',
+    sections: [
+      {
+        heading: 'Overview',
+        content:
+          'The network backbone consists of high-capacity links interconnecting the MDF (Main Distribution Frame — central point housing core switches, WAN routers, and main fiber termination panels) to IDFs (Intermediate Distribution Frames — per-floor or per-zone closets with distribution switches connecting to MDF via fiber uplinks). Horizontal cabling runs from each IDF patch panel to wall outlets throughout the served area. Vertical backbone fiber typically uses OM4 multimode (within a building) or OS2 single-mode for campus inter-building runs. Server room maintenance ensures the physical environment supporting all infrastructure remains within operational parameters for temperature, power, humidity, and physical security — the foundation on which all digital services depend.',
+      },
+      {
+        heading: 'Backbone Architecture',
+        items: [
+          { label: 'MDF (Main Distribution Frame)', path: 'Central infrastructure point. Houses core switches (Cisco Catalyst 9500, Juniper EX9200), main fiber patch panels, WAN/ISP router/firewall connections, core UPS, and main PDUs. All IDFs connect back to MDF via fiber backbone uplinks' },
+          { label: 'IDF (Intermediate Distribution Frame)', path: 'Per-floor or per-zone closet. Houses distribution switches, fiber uplink patch panel (to MDF), horizontal patch panels (to wall outlets), PoE switches for access layer, and local UPS. Typically one IDF per floor for buildings with floors under 90m horizontal cable run radius' },
+          { label: 'Horizontal cabling', path: 'From IDF patch panel (rear punch-down) to wall I/O outlets (keystone jack). Maximum 90m permanent link + 10m patch cables = 100m total per TIA-568. Typically Cat6 or Cat6a UTP' },
+          { label: 'Vertical backbone (intra-building)', path: 'Fiber runs between MDF and each IDF, typically in riser conduit or cable tray in stairwells or utility shafts. OM4 multimode for <400m runs, OS1/OS2 for longer distances. 12-fiber or 24-fiber MTP/MPO trunk cables with LC breakouts at patch panels' },
+          { label: 'Campus backbone (inter-building)', path: 'OS2 single-mode outdoor-rated fiber in conduit between buildings. Supports 100 Gbps+ at distances up to several kilometers. Requires outdoor-rated direct-burial or conduit-rated fiber. Armored fiber for direct burial without conduit' },
+        ],
+      },
+      {
+        heading: 'Core/Distribution/Access Layer Architecture',
+        steps: [
+          'Core layer: the highest-speed layer — typically a pair of redundant Layer 3 switches (e.g., Cisco Catalyst 9500, Arista 7050). Responsibilities: inter-VLAN routing, uplinks to firewall/WAN, fast convergence. Typical uplink speeds: 40 Gbps or 100 Gbps fiber between core switches and to MDF patch panels',
+          'Distribution layer: aggregates access switches — one or two distribution switches per IDF. Layer 3 capable. Runs OSPF or static routes. Uplinks to core at 10 Gbps or 25 Gbps fiber. Connects downward to access switches via 1 Gbps or 10 Gbps fiber or copper',
+          'Access layer: Layer 2 switches in each IDF providing 1 Gbps RJ45 ports to end devices. PoE+ (802.3at, 30W) or PoE++ (802.3bt, 90W) for IP phones, APs, cameras, and IoT devices. VLAN assignment per port. Uplinks to distribution at 10 Gbps',
+          'Redundant uplinks: critical switches should have dual uplinks to different parent switches using LACP (Link Aggregation Control Protocol) for bonding — doubles bandwidth and provides failover. Configure with LACP mode active on both ends',
+          'Spanning Tree Protocol (STP): in Layer 2 domains, STP prevents loops — ensure root bridge is the core switch (set bridge priority to 4096 on core, 8192 on distribution). Use RSTP (Rapid STP, 802.1w) or MSTP for faster convergence. Avoid classic STP on new installs',
+          'VLAN trunks: configure 802.1Q trunk ports between access and distribution switches and between distribution and core. Allow only required VLANs on each trunk — do not allow all VLANs everywhere. Native VLAN should be a dedicated management VLAN (not VLAN 1)',
+        ],
+      },
+      {
+        heading: 'Fiber Patch Cord Best Practices',
+        items: [
+          { label: 'Connector type', path: 'Use LC-LC duplex patch cords for all SFP/SFP+ transceiver connections in racks and patch panels. Ensure connector type matches transceiver (LC for most enterprise SFPs, SC for legacy equipment)' },
+          { label: 'Color coding', path: 'Blue jacket = OS2 single-mode. Aqua = OM3/OM4 multimode. Yellow = OS1/OS2 (some vendors). Lime green = OM5. Maintain consistent color coding across the installation — never use wrong-color cords even if they fit physically' },
+          { label: 'Dust caps', path: 'Keep dust caps on all unused fiber ports and patch cord connectors. A single dust particle on a fiber end-face causes signal loss and can scratch the connector. Replace caps immediately when disconnecting a cord' },
+          { label: 'Protective boots', path: 'Use LC patch cords with angled or 45-degree boot on bend-sensitive installs where cables exit vertically from patch panels — standard 90-degree boots cause micro-bending signal loss when forced into tight bends' },
+          { label: 'Cleaning before connection', path: 'Clean every fiber connector with a lint-free IEC 61300-3-35 approved optical pen cleaner (Fujikura NFC-100 or Ilsintech Cletop) before making a connection. Dirty fiber end-faces are the leading cause of fiber link failures. Inspect with a fiber microscope or video inspection probe' },
+        ],
+      },
+      {
+        heading: 'Server Room Daily Checks',
+        steps: [
+          'Check UPS status and battery runtime: log in to APC Network Management Card web interface (https://<NMC IP>) or Eaton IPM → verify battery state is Charged, runtime is above minimum threshold (typically 10+ minutes for graceful shutdown), and load is below 80% of UPS capacity',
+          'Verify CRAC/PAC (Computer Room Air Conditioning / Precision Air Conditioning) unit is running: check unit controller panel or BMS (Building Management System) integration — confirm compressor is active, supply air temperature is 18-24°C at cold aisle floor, return air temperature is within acceptable range',
+          'Review physical access log: check door access control system logs for any unauthorized or after-hours access attempts — review badge reader audit log or video footage if any anomalies',
+          'Check critical system uptime in monitoring dashboard: verify core switches, firewalls, servers, and storage show uptime without recent reboots in Zabbix, PRTG, or SolarWinds monitoring',
+          'Verify no cable management issues: during physical inspection walk, look for any patch cables pulled loose, new cables draped unsecured on top of equipment, or velcro ties that have come undone',
+          'Scan for amber and red LEDs on switches, servers, and storage arrays: amber LEDs indicate warning status (degraded RAID, single power supply failure, fan warning). Red LEDs indicate critical failure requiring immediate action. Check iDRAC/iLO health dashboards for any new alerts',
+        ],
+      },
+      {
+        heading: 'Server Room Weekly Maintenance',
+        steps: [
+          'Review backup job logs: check backup solution (Veeam, Backup Exec, Windows Server Backup) for any failed or incomplete backup jobs from the past week. Verify all critical VMs and file shares were backed up successfully and that at least one copy is offsite or cloud-replicated',
+          'Check switch port utilization: review managed switch statistics (via switch web UI, CLI, or SNMP monitoring) for any ports showing sustained high utilization (>80%) that may indicate saturation — plan capacity upgrades proactively',
+          'Verify patch panel labeling is current: walk the racks and compare physical port labels against the cable register. Any unlabeled cables installed since last review should be labeled immediately',
+          'Inspect cable routing and velcro ties: check that cable bundles are neatly routed in cable managers and vertical cable trays. Replace any velcro ties that have come loose. Ensure hot aisle/cold aisle containment curtains are intact',
+          'Check physical security: test server room door lock is functioning, verify CCTV cameras have no blind spots or obstructions, confirm badge reader is operational, and review the visitor log for the past week',
+          'Look for new equipment requiring documentation: any new servers, switches, or patch cables installed should be documented in the rack diagram, cable register, and IP address management tool before the week is out',
+        ],
+      },
+      {
+        heading: 'Server Room Monthly Tasks',
+        steps: [
+          'Test UPS by simulating power failure: put UPS into maintenance bypass test mode from the APC/Eaton web interface (Settings → Diagnostics → Runtime Calibration or Self-Test). Verify connected equipment continues to run on battery, monitoring system generates alert, and UPS returns to mains correctly after test',
+          'Clean dust filters on servers and CRAC units: shut down or use hot-swap filter access to remove and clean intake dust filters with compressed air or vacuum. Blocked filters reduce airflow and raise operating temperatures — critical in dusty environments',
+          'Verify fire suppression system arm status: check the fire suppression panel status indicator (should show Armed/Ready). Confirm suppressant agent level indicator is within specification. Log the inspection result. Notify facilities manager if any faults are shown',
+          'Review capacity planning: assess current power draw (from PDU monitoring), cooling load, and rack space consumption against maximum capacity. Update the capacity plan if current utilization is above 70% — begin procurement planning for additional infrastructure',
+          'Update network diagram if changes were made: open the Visio/draw.io/NetBox diagram and verify it reflects current rack layout, cable paths, and IP addressing. Any changes made during the month should be reflected — a stale diagram is worse than no diagram',
+          'Check fiber optic connections for dust or damage: use a fiber inspection scope or video probe to inspect LC connectors on active fiber links in patch panels and SFP modules. Clean any contaminated end-faces with an optical cleaning pen before reconnecting',
+        ],
+      },
+      {
+        heading: 'Documentation Requirements',
+        items: [
+          { label: 'Cable register (port-to-port map)', path: 'Spreadsheet or CMDB: Cable ID, source device + port, destination device + port, cable type (Cat6/OM4/OS2), cable length, jacket color, date installed, test result (pass/fail). Every cable should have an entry' },
+          { label: 'Network diagram (logical)', path: 'Shows VLANs, subnets, routing topology, firewall zones, WAN connections, and inter-device links with speeds. Tools: Visio, draw.io (app.diagrams.net — free), Lucidchart, NetBox. Update after every infrastructure change' },
+          { label: 'IP address management (IPAM)', path: 'phpIPAM, NetBox, or InfoBlox — documents every subnet, VLAN ID, IP assignment, DHCP scope range, and DNS record. Prevents IP conflicts and is essential reference during incident response' },
+          { label: 'VLAN register', path: 'Document each VLAN: VLAN ID, name, purpose, subnet, default gateway IP, DHCP server, security zone, notes. Store in team wiki (Confluence, Notion) or CMDB' },
+          { label: 'Rack elevation diagram', path: 'Visual 1U-accurate diagram of each rack showing every device position, empty space, and blank panel. Tools: NetBox rack view, RackTables, or Visio rack stencils. Attached photos of actual rack front and rear are also valuable' },
+          { label: 'Maintenance log', path: 'Chronological log of all maintenance activities: date, engineer, action taken (firmware update, battery replacement, cable addition, etc.), result. Use ticketing system change records or a shared maintenance logbook' },
+          { label: 'Access log', path: 'Physical access control system audit log showing every entry and exit with timestamp and identity. Reviewed weekly for anomalies. Retained per organizational or regulatory retention policy (minimum 90 days, often 12 months)' },
+        ],
+      },
+    ],
+  },
 ]
 
 export default function HardwarePage() {
@@ -1203,7 +1597,7 @@ export default function HardwarePage() {
     <>
       <TopBar
         title="Hardware & Network Guide"
-        subtitle="Windows diagnostics, network, firewall, servers, infrastructure, access points"
+        subtitle="Crimping, punching, cabling, connectors, firewall, servers, infrastructure, access points"
       />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-4xl mx-auto">

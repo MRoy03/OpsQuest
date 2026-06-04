@@ -1,61 +1,63 @@
 import TopBar from '@/components/layout/TopBar'
 import Link from 'next/link'
-import { Cloud, Server, Database, GitBranch, HardDrive, BookOpen, ArrowRight } from 'lucide-react'
+import { Cloud, Server, Database, GitBranch, HardDrive, BookOpen, BarChart3, ArrowRight } from 'lucide-react'
 
 const DOC_SECTIONS = [
   {
     href: '/docs/ms365',
     title: 'Microsoft 365 Admin Centers',
-    desc: 'Exchange, Entra ID, Teams, SharePoint, Defender, Intune, Purview — complete admin reference with step-by-step guides',
-    icon: Cloud,
-    color: 'cyan',
-    topics: ['Exchange Online', 'Entra ID', 'Teams Admin', 'SharePoint', 'Defender XDR', 'Intune', 'Purview'],
+    desc: 'Exchange, Entra ID, Teams, SharePoint, Defender, Intune, Purview — complete admin reference',
+    icon: Cloud, color: 'cyan',
+    topics: ['Exchange Online', 'Entra ID', 'Teams Admin', 'SharePoint', 'Defender', 'Intune', 'Purview'],
     count: 35,
   },
   {
     href: '/docs/azure',
     title: 'Microsoft Azure Guide',
-    desc: 'VMs, Networking, App Service, SQL, Storage, Key Vault, AKS, Cost Management — detailed tasks with CLI commands',
-    icon: Server,
-    color: 'purple',
-    topics: ['Virtual Machines', 'Networking / NSG', 'App Service', 'Azure SQL', 'AKS / Kubernetes', 'Cost Management'],
+    desc: 'VMs, Networking, App Service, SQL, Storage, AKS, Key Vault, Cost Management with CLI commands',
+    icon: Server, color: 'purple',
+    topics: ['Virtual Machines', 'Networking', 'App Service', 'Azure SQL', 'AKS', 'Cost Management'],
     count: 30,
   },
   {
     href: '/docs/sap',
     title: 'SAP S/4HANA Public Cloud',
-    desc: 'Fiori, FICO, MM, SD, QM, PM, BASIS, ABAP Cloud, Key User Extensibility — full functional and technical reference',
-    icon: Database,
-    color: 'amber',
+    desc: 'Fiori, FICO, MM, SD, QM, PM, BASIS, ABAP Cloud & Key User Extensibility — full functional + technical reference',
+    icon: Database, color: 'amber',
     topics: ['Fiori', 'FICO', 'MM', 'SD', 'QM / PM', 'BASIS', 'ABAP Cloud'],
-    count: 28,
+    count: 30,
   },
   {
     href: '/docs/devops',
     title: 'Cloud Infrastructure & DevOps',
-    desc: 'Docker, Kubernetes, Terraform, GitHub Actions, Prometheus/Grafana monitoring and incident response runbooks',
-    icon: GitBranch,
-    color: 'green',
-    topics: ['Docker', 'Kubernetes / AKS', 'Terraform IaC', 'GitHub Actions', 'Monitoring', 'Incident Response'],
+    desc: 'Docker, Kubernetes, Terraform, GitHub Actions, Prometheus/Grafana monitoring and incident response',
+    icon: GitBranch, color: 'green',
+    topics: ['Docker', 'Kubernetes / AKS', 'Terraform', 'GitHub Actions', 'Monitoring'],
     count: 22,
   },
   {
     href: '/docs/hardware',
     title: 'Hardware & Network Guide',
-    desc: 'Windows diagnostics, WiFi, Ethernet, Firewall, Physical Servers, IT Infrastructure, Access Points, BIOS, drivers',
-    icon: HardDrive,
-    color: 'cyan',
-    topics: ['Network Diagnostics', 'Firewall', 'Physical Servers', 'IT Infrastructure', 'Access Points', 'Drivers'],
+    desc: 'Crimping, punching, cabling, connectors, firewall, physical servers, IT infrastructure, access points',
+    icon: HardDrive, color: 'cyan',
+    topics: ['Cable Crimping', 'Punch-Down', 'Firewall', 'Physical Servers', 'Access Points', 'Cabling'],
+    count: 32,
+  },
+  {
+    href: '/docs/dbms-erp',
+    title: 'DBMS, ERP & Problem Solving',
+    desc: 'SQL reference, database admin, ERP systems (SAP/D365/Oracle), NoSQL, RCA and IT troubleshooting methodology',
+    icon: BarChart3, color: 'purple',
+    topics: ['SQL Reference', 'Database Admin', 'ERP Overview', 'Dynamics 365', 'NoSQL', 'RCA Methods'],
     count: 28,
   },
   {
     href: '/docs/itrecap',
     title: 'IT Topics Quick Recap',
-    desc: 'Concise cheat-sheets for Networking, Active Directory, DNS/DHCP, Windows Server, Virtualization, Security, Cloud, ITIL, PowerShell',
-    icon: BookOpen,
-    color: 'purple',
-    topics: ['OSI / TCP-IP', 'Active Directory', 'DNS & DHCP', 'Virtualization', 'Security', 'Cloud', 'ITIL', 'PowerShell'],
-    count: 25,
+    desc: 'Concise cheat-sheets: Networking, Active Directory, DNS/DHCP, Computer Architecture, OS, Security, Cloud, ITIL, PowerShell',
+    icon: BookOpen, color: 'amber',
+    topics: ['OSI / TCP-IP', 'Active Directory', 'Computer Architecture', 'OS', 'Security', 'ITIL', 'PowerShell'],
+    count: 28,
   },
 ]
 
@@ -70,14 +72,13 @@ export default function DocsPage() {
   const totalGuides = DOC_SECTIONS.reduce((a, s) => a + s.count, 0)
   return (
     <>
-      <TopBar title="Documentation Hub" subtitle={`${totalGuides}+ enterprise IT guides — M365, Azure, SAP, DevOps, Hardware, IT Fundamentals`} />
+      <TopBar title="Documentation Hub" subtitle={`${totalGuides}+ guides — M365, Azure, SAP, DevOps, Hardware, DBMS/ERP, IT Fundamentals`} />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="text-center pb-2">
             <h2 className="text-xl font-bold text-[#e2e8f0]">IT Knowledge Base</h2>
-            <p className="text-sm text-[#64748b] mt-1">{totalGuides}+ step-by-step guides across {DOC_SECTIONS.length} platforms and topics</p>
+            <p className="text-sm text-[#64748b] mt-1">{totalGuides}+ step-by-step guides across {DOC_SECTIONS.length} platforms</p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {DOC_SECTIONS.map(({ href, title, desc, icon: Icon, color, topics, count }) => {
               const c = colorMap[color as keyof typeof colorMap]
@@ -89,9 +90,7 @@ export default function DocsPage() {
                   <h3 className="text-sm font-bold text-[#e2e8f0]">{title}</h3>
                   <p className="text-xs text-[#64748b] mt-1.5 leading-relaxed flex-1">{desc}</p>
                   <div className="flex flex-wrap gap-1.5 mt-3">
-                    {topics.map(t => (
-                      <span key={t} className={`text-[10px] px-2 py-0.5 rounded-full ${c.tag}`}>{t}</span>
-                    ))}
+                    {topics.map(t => <span key={t} className={`text-[10px] px-2 py-0.5 rounded-full ${c.tag}`}>{t}</span>)}
                   </div>
                   <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#1a2f4a]">
                     <span className="text-[11px] text-[#475569]">{count} guides</span>

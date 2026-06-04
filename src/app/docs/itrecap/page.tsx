@@ -668,6 +668,201 @@ const IT_RECAP_DOCS = [
       },
     ],
   },
+  {
+    id: 'computer-architecture',
+    title: 'Computer Architecture',
+    icon: '🖥️',
+    color: 'amber' as const,
+    sections: [
+      {
+        heading: 'Overview',
+        content: 'Von Neumann architecture fundamentals — stored program concept, fetch-decode-execute cycle, CPU + Memory + I/O model. Harvard architecture variant (separate instruction/data memory, used in microcontrollers). Modern CPUs combine both.',
+      },
+      {
+        heading: 'CPU Components',
+        items: [
+          { label: 'ALU', path: 'Arithmetic Logic Unit — performs math/logic operations (add, subtract, AND, OR, compare)' },
+          { label: 'CU', path: 'Control Unit — coordinates and directs execution of instructions across all CPU components' },
+          { label: 'Registers', path: 'Fastest storage: PC (Program Counter), IR (Instruction Register), MAR, MDR, accumulator, general purpose registers' },
+          { label: 'L1 Cache', path: 'Per-core, 32–256 KB, ~4 cycles latency. Split into instruction cache (L1i) and data cache (L1d)' },
+          { label: 'L2 Cache', path: 'Per-core or shared, 256 KB–4 MB, ~12 cycles latency. Unified (instructions + data)' },
+          { label: 'L3 Cache', path: 'Shared across all cores, 4–64 MB, ~40 cycles latency. Last level cache before main memory' },
+          { label: 'Pipeline Stages', path: 'IF (Instruction Fetch) → ID (Instruction Decode) → EX (Execute) → MEM (Memory Access) → WB (Write Back)' },
+          { label: 'Branch Predictor', path: 'Speculatively executes instructions along the predicted branch to avoid pipeline stalls. Misprediction flushes pipeline' },
+          { label: 'Out-of-Order Execution', path: 'CPU reorders instructions to avoid stalls, executes independent instructions in parallel, commits in original order' },
+          { label: 'Superscalar Execution', path: 'Multiple execution units allow simultaneous execution of more than one instruction per clock cycle (IPC > 1)' },
+        ],
+      },
+      {
+        heading: 'RISC vs CISC',
+        items: [
+          { label: 'RISC', path: 'Reduced Instruction Set: ARM, RISC-V — simple fixed-length instructions, load-store architecture, more registers, power efficient, used in mobile/server' },
+          { label: 'CISC', path: 'Complex Instruction Set: x86/x64 — variable-length instructions, memory operands, backward compatible, used in desktop/server' },
+          { label: 'RISC-V', path: 'Open-source ISA (Instruction Set Architecture). Royalty-free, extensible. Used from embedded microcontrollers to HPC' },
+          { label: 'Modern Intel/AMD', path: 'Internally translates CISC x86 instructions into simpler RISC-like microoperations (micro-ops) for efficient pipelining' },
+        ],
+      },
+      {
+        heading: 'Memory Hierarchy',
+        steps: [
+          'CPU Registers: 0–1 cycle latency, bytes of storage — fastest possible, directly inside the CPU',
+          'L1 Cache: ~4 cycles, KB range (32–256 KB) — per-core, extremely fast, split instruction/data',
+          'L2 Cache: ~12 cycles, MB range (256 KB–4 MB) — per-core or shared, still very fast',
+          'L3 Cache: ~40 cycles, MB range (4–64 MB) — shared across all cores, last cache level',
+          'RAM/DRAM: 100–200 ns (~100–200 cycles), GB range — main memory, volatile, much slower than cache',
+          'SSD NVMe: 50–100 μs latency, TB range — persistent storage, PCIe-direct, 7 GB/s+ sequential',
+          'HDD: 5–10 ms latency, TB range — mechanical, persistent, slowest random access',
+          'Tape: seconds of latency, PB range — archive/backup media, sequential access only',
+          'Locality of reference: temporal locality (recently used data likely reused soon) + spatial locality (nearby memory addresses likely accessed together) — both exploited by cache design',
+        ],
+      },
+      {
+        heading: 'Memory Types',
+        items: [
+          { label: 'SRAM', path: 'Static RAM — used in CPU caches. Fast (~1 ns), expensive, large per bit, no refresh needed. 6 transistors per bit' },
+          { label: 'DRAM', path: 'Dynamic RAM — main memory. Needs periodic refresh (charges leak). Slower than SRAM, cheap, dense. 1 transistor + 1 capacitor per bit' },
+          { label: 'DDR4', path: '3200 MT/s common (1600 MHz effective), 1.2 V. Dominant desktop/server RAM standard through 2020s' },
+          { label: 'DDR5', path: '4800–8400 MT/s, 1.1 V lower voltage, two 32-bit channels per DIMM, built-in ECC on die. Next-gen platform standard' },
+          { label: 'ECC RAM', path: 'Error-Correcting Code — detects and corrects single-bit errors, detects double-bit errors. Required for servers, workstations, critical systems' },
+          { label: 'LPDDR5', path: 'Low Power DDR5 — used in laptops, smartphones, tablets. Lower voltage, optimized for battery life and thin form factors' },
+          { label: 'HBM', path: 'High Bandwidth Memory — stacked DRAM dies connected via silicon interposer to GPU/CPU. 1 TB/s+ bandwidth. Used in high-end GPUs (AMD Instinct, Intel Xe HPC)' },
+        ],
+      },
+      {
+        heading: 'System Buses & I/O Interfaces',
+        items: [
+          { label: 'FSB / System Bus', path: 'Front Side Bus — legacy CPU-to-chipset connection. Replaced by direct point-to-point interconnects (Intel QPI/UPI, AMD Infinity Fabric)' },
+          { label: 'PCIe 5.0', path: 'PCI Express 5.0 — x16 slot = 64 GB/s bandwidth. Used for NVMe SSDs and discrete GPUs. PCIe 4.0 = 32 GB/s x16' },
+          { label: 'SATA III', path: '6 Gbps (~600 MB/s effective). Interface for HDDs and SATA SSDs. Much slower than NVMe; being phased out for storage' },
+          { label: 'NVMe', path: 'Non-Volatile Memory Express — protocol over PCIe direct to CPU. Up to 7 GB/s+ sequential read (Gen 4). Far lower latency than SATA' },
+          { label: 'USB 3.2 Gen 2×2', path: '20 Gbps (~2.4 GB/s). Two 10 Gbps channels. USB 3.2 Gen 2 = 10 Gbps. USB 4 = up to 40 Gbps' },
+          { label: 'Thunderbolt 4', path: '40 Gbps, supports PCIe tunneling, DisplayPort, USB. Up to 100W power delivery. Intel-developed, same connector as USB-C' },
+          { label: 'HDMI 2.1', path: '48 Gbps bandwidth, supports 8K@60Hz, 4K@144Hz, Variable Refresh Rate (VRR), eARC audio return' },
+          { label: 'DisplayPort 2.1', path: 'Up to 80 Gbps with UHBR20. Supports 16K resolution, 4K@240Hz. Common on monitors and discrete GPUs' },
+          { label: 'Memory Bus', path: 'CPU to RAM — dual-channel (2×64-bit = 128-bit bus width) or quad-channel. Width × speed = memory bandwidth' },
+        ],
+      },
+      {
+        heading: 'Instruction Pipeline & Performance',
+        steps: [
+          'Data hazard: instruction depends on result of a previous instruction still in pipeline. Types: RAW (Read-After-Write — most common), WAW (Write-After-Write), WAR (Write-After-Read). Resolved by forwarding or stalling (pipeline bubble)',
+          'Control hazard: branch instruction — CPU does not know next instruction address until branch resolves. Branch predictor speculatively executes predicted path to avoid stall',
+          'Structural hazard: two instructions need the same hardware resource simultaneously. Resolved by adding duplicate units or stalling',
+          'Pipelining benefit: increases IPC (Instructions Per Clock) by overlapping stages. 5-stage pipeline can theoretically execute 1 instruction per cycle instead of 5',
+          'Speculative execution: CPU executes instructions before knowing if they are needed. Basis of Spectre and Meltdown vulnerabilities — speculative reads can leak data through cache side-channels',
+          'Multi-core vs multi-threading: multi-core = physically separate CPUs on one die (true parallelism). SMT/Hyper-Threading = two logical cores share one physical core\'s resources (improves utilization ~20–30%)',
+          'Clock speed vs IPC: modern CPUs (Intel, AMD) focus on IPC improvements per generation rather than raw GHz. A 3 GHz CPU with high IPC outperforms a 4 GHz CPU with low IPC',
+          'TDP (Thermal Design Power): rated heat output in watts that cooling must dissipate. Desktop CPUs: 65–125 W. Laptop: 15–45 W. Server: 200–400 W. Exceeding TDP causes thermal throttling (CPU reduces frequency to reduce heat)',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'operating-systems',
+    title: 'Operating Systems',
+    icon: '⚙️',
+    color: 'green' as const,
+    sections: [
+      {
+        heading: 'Overview',
+        content: 'An OS is system software that manages hardware resources and provides services to user applications. Core functions: process management, memory management, file system management, I/O management, security/access control, networking. Main OS types: General Purpose (Windows/Linux/macOS), Real-Time (RTOS — VxWorks, FreeRTOS), Embedded (Android, iOS), Server (Windows Server, RHEL), Hypervisor (Type 1: ESXi, Hyper-V).',
+      },
+      {
+        heading: 'Process Management',
+        items: [
+          { label: 'Process', path: 'Program in execution — has its own address space, PID, state, open file handles, and resources. Isolated from other processes' },
+          { label: 'Thread', path: 'Lightweight unit of execution within a process — shares process memory and resources, faster context switch than full process switch' },
+          { label: 'PCB / Process Control Block', path: 'OS data structure tracking all process state: PID, CPU registers, memory maps, open files, scheduling info, I/O status' },
+          { label: 'Process States', path: 'New → Ready (waiting for CPU) → Running (executing on CPU) → Waiting/Blocked (awaiting I/O or event) → Terminated' },
+          { label: 'Context Switching', path: 'OS saves CPU register state of current process to its PCB and loads the next process\'s saved state. Pure overhead — no useful work done during switch' },
+          { label: 'Zombie Process', path: 'Process has finished execution but its PCB remains until the parent calls wait() to read exit status. Accumulation causes PID exhaustion' },
+          { label: 'Orphan Process', path: 'Parent process died before the child. The child is adopted by init (PID 1) or systemd, which calls wait() to clean it up' },
+          { label: 'Fork', path: 'Unix system call that creates a copy of the calling process. Uses copy-on-write (COW) — memory pages shared until one process writes, then copied' },
+        ],
+      },
+      {
+        heading: 'CPU Scheduling Algorithms',
+        items: [
+          { label: 'FCFS', path: 'First Come First Served — non-preemptive, simple FIFO queue. Suffers from convoy effect: short jobs wait behind long jobs' },
+          { label: 'SJF', path: 'Shortest Job First — schedules job with smallest CPU burst next. Optimal average wait time. Requires knowing/predicting burst time in advance' },
+          { label: 'SRTF', path: 'Shortest Remaining Time First — preemptive SJF. Preempts current job if new shorter job arrives. Better avg wait, more context switches' },
+          { label: 'Round Robin', path: 'Each process gets a fixed time quantum (typically 10–100 ms), then preempted and moved to back of ready queue. Fair, best for time-sharing. Performance depends on quantum size' },
+          { label: 'Priority Scheduling', path: 'Each process has a priority; highest priority runs first. Can cause starvation of low-priority processes. Fixed by aging (gradually increase priority of waiting processes)' },
+          { label: 'MLFQ', path: 'Multi-Level Feedback Queue — multiple queues with different priorities and quantum sizes. New jobs start high-priority; downgraded if they use full quantum. Used in Linux and Windows' },
+          { label: 'CFS', path: 'Completely Fair Scheduler — Linux default since 2.6.23. Uses red-black tree ordered by virtual runtime (vruntime). Always runs process with smallest vruntime. No fixed time slices' },
+        ],
+      },
+      {
+        heading: 'Memory Management',
+        steps: [
+          'Logical vs physical address space: process uses logical (virtual) addresses; MMU (Memory Management Unit) hardware translates to physical addresses at runtime using page table',
+          'Base + limit registers: simplest protection — OS stores base address and size of each process\'s memory region. Access outside range triggers a segmentation fault',
+          'Paging: divide physical memory into fixed-size frames (typically 4 KB) and logical memory into same-size pages. Page table maps logical page numbers to physical frame numbers. Eliminates external fragmentation',
+          'TLB (Translation Lookaside Buffer): hardware cache of recent page table entries. Avoids full page table walk on every memory access. TLB miss → page table walk → update TLB',
+          'Segmentation: divide memory into variable-size logical segments (code, stack, heap, data). Each segment has its own base + limit. Can cause external fragmentation',
+          'Virtual Memory: use disk (swap partition/pagefile) as extension of RAM. Demand paging — load pages only when accessed. Page fault triggers OS to load page from disk',
+          'Page replacement algorithms: FIFO (evict oldest page — simple, Belady\'s anomaly), LRU (evict least recently used — good but expensive), Optimal (evict page used furthest in future — theoretical best), Clock/NRU (approximates LRU efficiently)',
+          'Thrashing: CPU spends more time paging than executing — working set of active pages exceeds available RAM. Solution: reduce multiprogramming degree, add RAM, use working set model',
+          '64-bit address space: theoretical 2^64 = 16 exabytes of addressable memory. Current x86-64 CPUs implement 48-bit (256 TB) or 57-bit (128 PB) virtual addresses',
+        ],
+      },
+      {
+        heading: 'File Systems',
+        items: [
+          { label: 'NTFS', path: 'Windows default — journaling (MFT-based), ACLs, compression, EFS encryption, symbolic links, sparse files, up to 16 TB files, volume shadow copy support' },
+          { label: 'FAT32', path: 'Universal compatibility — max 4 GB file size, 32 GB volume (Windows limit; spec allows 2 TB). Used for USB drives needing cross-platform compatibility' },
+          { label: 'exFAT', path: 'Extended FAT — designed for flash drives. No 4 GB file size limit, supports large volumes, lightweight (no journaling), widely supported on modern OSes' },
+          { label: 'ext4', path: 'Linux default — journaling, extents (contiguous block allocation), 16 TB max file, 1 EB max volume, delayed allocation, dir_index (HTree). Backward compatible with ext3/ext2' },
+          { label: 'XFS', path: 'Linux high-performance — parallel I/O, excellent for large files, online resizing (grow only), delayed allocation. Default on RHEL. Poor at many small files' },
+          { label: 'ZFS', path: 'Copy-on-write, 256-bit checksums on all data and metadata (end-to-end integrity), snapshots, clones, RAID-Z (1/2/3 parity), self-healing, deduplication, compression. No fsck needed' },
+          { label: 'APFS', path: 'Apple File System — copy-on-write, native encryption (per-file or full volume), snapshots, space sharing between volumes, optimized for flash/SSD. Default on macOS 10.13+ and iOS 10.3+' },
+          { label: 'Btrfs', path: 'Linux — copy-on-write, per-file checksums, snapshots, subvolumes, online defrag, RAID 0/1/5/6/10, transparent compression. Still maturing; avoid RAID 5/6 in production' },
+        ],
+      },
+      {
+        heading: 'Deadlock — Four Conditions & Prevention',
+        steps: [
+          'Mutual Exclusion: at least one resource must be held in a non-shareable mode — only one process can use it at a time',
+          'Hold and Wait: a process holding at least one resource is waiting to acquire additional resources held by other processes',
+          'No Preemption: resources cannot be forcibly taken from a process — must be voluntarily released',
+          'Circular Wait: a circular chain of two or more processes, each waiting for a resource held by the next process in the chain',
+          'Prevention — break Mutual Exclusion: use shareable resources (read-only files) where possible. Not always feasible',
+          'Prevention — break Hold and Wait: require processes to request ALL needed resources at startup before executing. Reduces concurrency and resource utilization',
+          'Prevention — break No Preemption: if a process cannot get all resources, release all currently held resources and retry. Works for CPU registers and memory (not printers or other stateful resources)',
+          'Prevention — break Circular Wait: impose a total ordering of resource types; processes must request resources in increasing order. Eliminates circular dependency',
+          'Deadlock Avoidance — Banker\'s Algorithm: OS checks if granting a resource request leaves the system in a "safe state" (can complete all processes). Requires knowing max resource needs in advance',
+          'Detection and Recovery: allow deadlocks to occur, detect via resource allocation graph (cycle detection), recover by killing one or more processes or preempting resources from a process',
+        ],
+      },
+      {
+        heading: 'Inter-Process Communication',
+        items: [
+          { label: 'Pipes', path: 'Unidirectional byte stream between parent and child processes. Anonymous pipe: exists only for parent-child. Created with pipe() syscall. Used by shell pipelines (cmd1 | cmd2)' },
+          { label: 'Named Pipes / FIFO', path: 'Pipe with a file system name — allows unrelated processes to communicate. On Linux: mkfifo. On Windows: \\\\.\\pipe\\name. Persists until deleted' },
+          { label: 'Message Queues', path: 'Kernel-managed queue of messages. Processes can send/receive asynchronously. Messages have type and priority. Survives sender process death until consumed or deleted' },
+          { label: 'Shared Memory', path: 'Fastest IPC — same physical memory pages mapped into multiple process address spaces. Requires explicit synchronization (mutex/semaphore) to prevent race conditions. shmget/mmap on Linux' },
+          { label: 'Semaphores', path: 'Counting semaphore: integer counter, P() decrements (wait/acquire), V() increments (signal/release). Binary semaphore = mutex. Used to synchronize access to shared resources' },
+          { label: 'Sockets', path: 'Bidirectional network communication endpoint. Unix domain sockets: same machine, file-system path, faster than TCP. Network sockets: TCP/UDP for inter-machine IPC' },
+          { label: 'Signals', path: 'Asynchronous notification sent to a process. SIGKILL (9): force kill, uncatchable. SIGTERM (15): graceful shutdown request. SIGINT (2): Ctrl+C. SIGCHLD: child process state changed' },
+          { label: 'Memory-Mapped Files', path: 'mmap() maps a file or device into process address space. Reads/writes to memory directly read/write the file. Used for shared memory, large file processing, and executable loading' },
+        ],
+      },
+      {
+        heading: 'Windows vs Linux Key Differences',
+        items: [
+          { label: 'Kernel', path: 'Windows: NT hybrid kernel (combines monolithic performance with microkernel modularity). Linux: monolithic kernel with loadable modules (device drivers, filesystems loaded at runtime)' },
+          { label: 'File System', path: 'Windows: NTFS primary (ReFS for storage spaces). Linux: ext4 most common, also XFS (RHEL default), Btrfs, ZFS. Linux uses forward slashes; Windows uses backslashes' },
+          { label: 'Process Model', path: 'Windows: threads are first-class scheduling units; processes are heavier containers. Linux: uses clone() for both threads and processes — threads are lightweight processes sharing address space' },
+          { label: 'Package Management', path: 'Windows: winget, Chocolatey, MSI/MSIX installers. Linux: apt (Debian/Ubuntu), dnf/yum (RHEL/Fedora), pacman (Arch), zypper (openSUSE), Flatpak/Snap universal' },
+          { label: 'Configuration', path: 'Windows: centralized Registry (HKLM, HKCU, regedit). Linux: text files in /etc (human-readable, version-control friendly, no binary format)' },
+          { label: 'Shell', path: 'Windows: PowerShell (object-based, .NET) and CMD (legacy). Linux: Bash (default), Zsh (macOS default), Fish — all text-stream based' },
+          { label: 'Driver Model', path: 'Windows: KMDF (Kernel-Mode Driver Framework) and UMDF (User-Mode). Linux: kernel modules (C code, loaded with modprobe/insmod, same privilege as kernel)' },
+          { label: 'Init System', path: 'Windows: SCM (Service Control Manager), services managed via services.msc or sc.exe. Linux: systemd (dominant), SysV init (legacy), OpenRC (Gentoo/Alpine)' },
+          { label: 'Security Model', path: 'Windows: ACLs with SIDs (Security Identifiers), UAC (User Account Control). Linux: DAC (owner/group/other rwx), MAC extensions via SELinux (RHEL) or AppArmor (Ubuntu)' },
+        ],
+      },
+    ],
+  },
 ]
 
 export default function ITRecapPage() {
@@ -675,7 +870,7 @@ export default function ITRecapPage() {
     <>
       <TopBar
         title="IT Topics Quick Recap"
-        subtitle="Concise reference sheets for networking, AD, security, virtualization, cloud, ITIL and more"
+        subtitle="Networking, Active Directory, Security, Computer Architecture, OS, Cloud, ITIL, PowerShell and more"
       />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-4xl mx-auto">
