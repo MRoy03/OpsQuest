@@ -1,0 +1,20 @@
+{
+  "supabase_url": "https://YOUR_PROJECT_ID.supabase.co",
+  "supabase_anon_key": "YOUR_ANON_KEY_HERE",
+  "agent_id": "server-01",
+  "scan_interval_seconds": 60,
+  "cameras": [
+    {
+      "name": "Reception",
+      "ip": "192.168.1.100",
+      "port": 80,
+      "location": "Ground Floor"
+    },
+    {
+      "name": "Parking",
+      "ip": "192.168.1.101",
+      "port": 8080,
+      "location": "Basement"
+    }
+  ]
+}

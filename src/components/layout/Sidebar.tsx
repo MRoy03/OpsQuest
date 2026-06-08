@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
-  Trophy, FileText, ChevronRight, Shield, LogOut, LogIn, Loader2,
+  Trophy, FileText, ChevronRight, Shield, LogOut, LogIn, Loader2, Server,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/admin', label: 'Knowledge Lab', icon: BookOpen },
   { href: '/gamification', label: 'Achievements', icon: Trophy },
   { href: '/docs', label: 'Documentation', icon: FileText },
+  { href: '/infrastructure', label: 'Infrastructure', icon: Server },
 ]
 
 export default function Sidebar() {

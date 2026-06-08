@@ -1,0 +1,19 @@
+{
+  "name": "opsquest-agent",
+  "version": "1.0.0",
+  "description": "OpsQuest Server Monitoring Agent",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "build": "pkg agent.js --target node18-win-x64 --output dist/agent.exe --compress GZip",
+    "build-all": "pkg agent.js --targets node18-win-x64,node18-linux-x64 --output dist/agent --compress GZip"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "bin": "agent.js",
+  "pkg": {
+    "assets": ["config.json"],
+    "targets": ["node18-win-x64"]
+  }
+}
