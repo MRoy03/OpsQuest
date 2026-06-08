@@ -1,7 +1,14 @@
 'use strict'
-// OpsQuest Server Agent v1.0.0
-// Collects local hardware, scans LAN devices via ARP, checks cameras, posts to Supabase
-// Run as Administrator for full WMI access
+/**
+ * OpsQuest Server Agent v1.2.0
+ * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
+ *           storage (physical disks + partitions + logical drives),
+ *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
+ *           software inventory (licensed vs unlicensed + license keys),
+ *           ARP network scan, remote WMI for domain clients, camera checks
+ * Run as Administrator for full WMI access
+ * Build: npm install && npm run build  →  dist/agent.exe
+ */
 
 const { execSync, spawnSync } = require('child_process')
 const fs   = require('fs')
@@ -9,9 +16,9 @@ const path = require('path')
 const os   = require('os')
 const http = require('http')
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG_PATHS = [
-  path.join(path.dirname(process.execPath || process.argv[1]), 'config.json'),
+  path.join(path.dirname(process.execPath || ''), 'config.json'),
   path.join(process.cwd(), 'config.json'),
   path.join(__dirname, 'config.json'),
 ]
@@ -25,77 +32,61 @@ if (!cfg.supabase_url) {
   process.exit(1)
 }
 
-const SUPABASE_URL  = cfg.supabase_url.replace(/\/$/, '')
-const SUPABASE_KEY  = cfg.supabase_anon_key
-const AGENT_ID      = cfg.agent_id || os.hostname()
-const INTERVAL_MS   = (cfg.scan_interval_seconds || 60) * 1000
-const INGEST_URL    = cfg.ingest_url || null  // optional: override POST URL
+const SUPABASE_URL = cfg.supabase_url.replace(/\/$/, '')
+const SUPABASE_KEY = cfg.supabase_anon_key
+const AGENT_ID     = cfg.agent_id || os.hostname()
+const INTERVAL_MS  = (cfg.scan_interval_seconds || 60) * 1000
 
-// ─── Supabase REST helper ─────────────────────────────────────────────────────
-async function supaUpsert(table, rows, onConflict) {
-  const arr = Array.isArray(rows) ? rows : [rows]
-  // Use the ingest API route if available (avoids exposing service key)
-  if (INGEST_URL) {
-    const resp = await fetchJson(INGEST_URL, 'POST', { type: 'devices_batch', data: arr })
-    return resp
+// ─── LICENSED SOFTWARE DEFINITIONS ───────────────────────────────────────────
+const LICENSED_DEFS = [
+  { category: 'Microsoft Office Suite',  patterns: ['microsoft office', 'microsoft 365 apps', 'office 16', 'office 19', 'office 20', 'office, 20'] },
+  { category: 'Microsoft Word',          patterns: ['microsoft word'] },
+  { category: 'Microsoft Excel',         patterns: ['microsoft excel'] },
+  { category: 'Microsoft PowerPoint',    patterns: ['microsoft powerpoint'] },
+  { category: 'Microsoft Access',        patterns: ['microsoft access'] },
+  { category: 'Microsoft Publisher',     patterns: ['microsoft publisher'] },
+  { category: 'Microsoft OneNote',       patterns: ['microsoft onenote', 'onenote for windows'] },
+  { category: 'Microsoft Outlook',       patterns: ['microsoft outlook'] },
+  { category: 'Microsoft Teams',         patterns: ['microsoft teams'] },
+  { category: 'OneDrive',                patterns: ['microsoft onedrive', 'onedrive'] },
+  { category: 'AutoCAD',                 patterns: ['autodesk autocad', 'autocad 20', 'autocad lt 20', 'autocad'] },
+  { category: 'Adobe Acrobat / Reader',  patterns: ['adobe acrobat', 'adobe reader'] },
+  { category: 'Claude',                  patterns: ['claude for desktop', 'claude'] },
+]
+
+function classifySoftware(name) {
+  const lower = (name || '').toLowerCase()
+  for (const def of LICENSED_DEFS) {
+    if (def.patterns.some(p => lower.includes(p.toLowerCase()))) {
+      return { is_licensed: true, license_category: def.category }
+    }
   }
-  // Direct Supabase REST
-  const url  = `${SUPABASE_URL}/rest/v1/${table}`
-  const resp = await nodeFetch(url, {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer':        `resolution=merge-duplicates,return=minimal`,
-    },
-    body: JSON.stringify(arr),
-  })
-  if (!resp.ok) throw new Error(`Supabase ${table}: ${resp.status} ${await resp.text()}`)
+  return { is_licensed: false, license_category: null }
 }
 
-async function supaPost(table, rows) {
-  const arr  = Array.isArray(rows) ? rows : [rows]
-  const url  = `${SUPABASE_URL}/rest/v1/${table}`
-  const resp = await nodeFetch(url, {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer':        'return=minimal',
-    },
-    body: JSON.stringify(arr),
-  })
-  if (!resp.ok) throw new Error(`Supabase ${table}: ${resp.status} ${await resp.text()}`)
-}
-
-// ─── Minimal Node.js HTTP fetch (no dependencies) ────────────────────────────
+// ─── HTTP (no deps) ───────────────────────────────────────────────────────────
 function nodeFetch(url, options = {}) {
   return new Promise((resolve, reject) => {
     const parsed  = new URL(url)
     const isHttps = parsed.protocol === 'https:'
     const mod     = isHttps ? require('https') : require('http')
     const body    = options.body ? Buffer.from(options.body, 'utf8') : null
-    const headers = {
-      ...(options.headers || {}),
-      ...(body ? { 'Content-Length': body.length } : {}),
-    }
+    const headers = { ...(options.headers || {}), ...(body ? { 'Content-Length': body.length } : {}) }
     const req = mod.request({
       hostname: parsed.hostname,
       port:     parsed.port || (isHttps ? 443 : 80),
       path:     parsed.pathname + parsed.search,
       method:   options.method || 'GET',
       headers,
-      rejectUnauthorized: false,  // allow self-signed (for local Sophos XGS)
+      rejectUnauthorized: false,
     }, res => {
       let data = ''
       res.on('data', c => { data += c })
       res.on('end', () => resolve({
-        ok:     res.statusCode >= 200 && res.statusCode < 300,
+        ok: res.statusCode >= 200 && res.statusCode < 300,
         status: res.statusCode,
-        text:   () => Promise.resolve(data),
-        json:   () => Promise.resolve(JSON.parse(data)),
+        text: () => Promise.resolve(data),
+        json: () => Promise.resolve(JSON.parse(data)),
       }))
     })
     req.on('error', reject)
@@ -104,75 +95,424 @@ function nodeFetch(url, options = {}) {
   })
 }
 
-function fetchJson(url, method, body) {
-  return nodeFetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(body),
+async function supaUpsert(table, row) {
+  const resp = await nodeFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer':        'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(Array.isArray(row) ? row : [row]),
   })
+  if (!resp.ok) throw new Error(`Supabase ${table} ${resp.status}: ${await resp.text()}`)
 }
 
-// ─── PowerShell helper ────────────────────────────────────────────────────────
+// ─── POWERSHELL ───────────────────────────────────────────────────────────────
 function ps(command) {
   const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', command], {
-    timeout: 20000, encoding: 'utf8',
+    timeout: 25000, encoding: 'utf8',
   })
   if (r.error) return null
   const out = (r.stdout || '').trim()
-  if (!out) return null
-  try { return JSON.parse(out) }
-  catch { return out }
+  if (!out || out === 'null') return null
+  try { return JSON.parse(out) } catch { return out }
+}
+function one(v) { return Array.isArray(v) ? v[0] : v }
+function arr(v) { if (!v) return []; return Array.isArray(v) ? v : [v] }
+function log(msg) { console.log(`[${new Date().toISOString()}] ${msg}`) }
+
+// ─── MONITORS ─────────────────────────────────────────────────────────────────
+function collectMonitors() {
+  // Physical dimensions from WMI hardware layer (values in cm)
+  const wmiMon = arr(ps(
+    `try { Get-WmiObject -Namespace root\\wmi -Class WmiMonitorBasicDisplayParams -EA Stop | ` +
+    `Where-Object {$_.Active} | ` +
+    `Select-Object MaxHorizontalImageSize,MaxVerticalImageSize | ConvertTo-Json -Compress } catch { '[]' }`
+  ))
+  // Resolution + GPU from video controller
+  const vids = arr(ps(
+    `Get-CimInstance Win32_VideoController | ` +
+    `Select-Object Name,AdapterCompatibility,CurrentHorizontalResolution,CurrentVerticalResolution,` +
+    `CurrentRefreshRate,AdapterRAM,DriverVersion,VideoModeDescription | ConvertTo-Json -Compress`
+  ))
+
+  const monitors = []
+  const count = Math.max(wmiMon.length, vids.length, 1)
+
+  for (let i = 0; i < count; i++) {
+    const physical = wmiMon[i] || null
+    const vid      = vids[i]   || null
+
+    let sizeInches = null
+    if (physical?.MaxHorizontalImageSize && physical?.MaxVerticalImageSize) {
+      const h = physical.MaxHorizontalImageSize   // cm
+      const v = physical.MaxVerticalImageSize     // cm
+      if (h > 0 && v > 0) {
+        sizeInches = parseFloat((Math.sqrt(h * h + v * v) / 2.54).toFixed(1))
+      }
+    }
+
+    const resW = vid?.CurrentHorizontalResolution
+    const resH = vid?.CurrentVerticalResolution
+
+    monitors.push({
+      index:           i + 1,
+      size_inches:     sizeInches,
+      width_cm:        physical?.MaxHorizontalImageSize || null,
+      height_cm:       physical?.MaxVerticalImageSize   || null,
+      resolution:      (resW && resH) ? `${resW}x${resH}` : null,
+      refresh_rate_hz: vid?.CurrentRefreshRate         || null,
+      gpu_name:        vid?.Name                       || null,
+      gpu_vram_mb:     vid ? Math.round((vid.AdapterRAM || 0) / 1048576) : null,
+      driver_version:  vid?.DriverVersion              || null,
+      mode_desc:       vid?.VideoModeDescription       || null,
+    })
+  }
+  return monitors.filter(m => m.resolution || m.size_inches)
 }
 
-function one(val) { return Array.isArray(val) ? val[0] : val }
-function arr(val) { if (!val) return []; return Array.isArray(val) ? val : [val] }
+// ─── STORAGE (logical drives + partitions) ───────────────────────────────────
+function collectStorageDetails() {
+  const logical = arr(ps(
+    `Get-CimInstance Win32_LogicalDisk | Where-Object {$_.DriveType -in 2,3} | ` +
+    `Select-Object DeviceID,DriveType,FileSystem,Size,FreeSpace,VolumeName,VolumeSerialNumber | ` +
+    `ConvertTo-Json -Compress`
+  ))
+  const partitions = arr(ps(
+    `Get-CimInstance Win32_DiskPartition | ` +
+    `Select-Object DiskIndex,Index,Name,Type,PrimaryPartition,Bootable,Size | ` +
+    `ConvertTo-Json -Compress`
+  ))
 
-// ─── Hardware collection ──────────────────────────────────────────────────────
+  return {
+    logical_drives: logical.map(d => ({
+      drive:      d.DeviceID,
+      label:      (d.VolumeName || '').trim() || 'Local Disk',
+      filesystem: d.FileSystem,
+      size_gb:    Math.round((d.Size || 0) / 1073741824),
+      free_gb:    Math.round((d.FreeSpace || 0) / 1073741824),
+      used_gb:    Math.round(((d.Size || 0) - (d.FreeSpace || 0)) / 1073741824),
+      use_pct:    d.Size > 0 ? Math.round(((d.Size - d.FreeSpace) / d.Size) * 100) : 0,
+      type:       d.DriveType === 3 ? 'Fixed' : 'Removable',
+      serial:     d.VolumeSerialNumber,
+    })),
+    partitions: partitions.map(p => ({
+      disk:     p.DiskIndex,
+      index:    p.Index,
+      name:     p.Name,
+      type:     p.Type,
+      primary:  p.PrimaryPartition,
+      bootable: p.Bootable,
+      size_gb:  Math.round((p.Size || 0) / 1073741824),
+    })),
+  }
+}
+
+// ─── SOFTWARE INVENTORY ───────────────────────────────────────────────────────
+function collectSoftware() {
+  log('  Collecting software inventory...')
+  const sw = ps(`
+    $seen = @{}; $apps = @()
+    @(
+      'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+      'HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+      'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+    ) | ForEach-Object {
+      try {
+        Get-ItemProperty $_ -EA SilentlyContinue |
+          Where-Object { $_.DisplayName -and $_.DisplayName.Trim() } |
+          ForEach-Object {
+            $k = $_.DisplayName.Trim().ToLower()
+            if (-not $seen[$k]) {
+              $seen[$k] = $true
+              $apps += [PSCustomObject]@{
+                n=$_.DisplayName.Trim(); v=$_.DisplayVersion
+                p=$_.Publisher; d=$_.InstallDate; s=$_.EstimatedSize
+              }
+            }
+          }
+      } catch {}
+    }
+    $apps | Sort-Object n | ConvertTo-Json -Compress -Depth 2
+  `)
+  return arr(sw).filter(s => s && s.n).map(s => ({
+    name:         s.n,
+    version:      s.v  || null,
+    publisher:    s.p  || null,
+    install_date: s.d  || null,
+    size_mb:      s.s  ? Math.round(s.s / 1024) : null,
+    ...classifySoftware(s.n),
+  }))
+}
+
+// ─── LICENSE KEYS ─────────────────────────────────────────────────────────────
+function collectLicenseKeys() {
+  const keys = {}
+
+  // Windows OEM/embedded key
+  try {
+    const oa3 = ps(`(Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKey`)
+    keys.windows_key = (typeof oa3 === 'string' && oa3.trim().length > 10)
+      ? oa3.trim()
+      : 'Digital/Volume (key not stored in registry)'
+  } catch { keys.windows_key = 'Unable to read' }
+
+  // Windows edition + activation
+  try {
+    const edition   = ps(`(Get-CimInstance Win32_OperatingSystem).Caption`)
+    const activated = ps(
+      `(Get-CimInstance SoftwareLicensingProduct | ` +
+      `Where-Object {$_.Name -like '*Windows*' -and $_.PartialProductKey} | ` +
+      `Sort-Object LicenseStatus -Desc | Select-Object -First 1).LicenseStatus`
+    )
+    keys.windows_edition   = typeof edition === 'string' ? edition.trim() : null
+    keys.windows_activated = activated === 1 ? 'Activated' : 'Not Activated / Unknown'
+  } catch { keys.windows_activated = 'Unknown' }
+
+  // Office activation via OSPP.VBS
+  try {
+    const officeStatus = ps(`
+      $vbs = @(
+        'C:\\Program Files\\Microsoft Office\\Office16\\OSPP.VBS',
+        'C:\\Program Files (x86)\\Microsoft Office\\Office16\\OSPP.VBS',
+        'C:\\Program Files\\Microsoft Office\\root\\Office16\\OSPP.VBS'
+      ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if ($vbs) {
+        $out = (& cscript //nologo "$vbs" /dstatus 2>&1) -join ' '
+        if ($out -match 'LICENSE STATUS.*?---.*?LICENSED') { 'Activated' }
+        elseif ($out -match 'GRACE') { 'Grace Period' }
+        elseif ($out -match 'UNLICENSED') { 'Unlicensed' }
+        else { 'Not Activated' }
+      } else { 'Not Installed' }
+    `)
+    keys.ms_office = typeof officeStatus === 'string' ? officeStatus.trim() : 'Not Detected'
+  } catch { keys.ms_office = 'Not Detected' }
+
+  // AutoCAD serial (registry)
+  try {
+    const acadSerial = ps(
+      `(Get-ItemProperty 'HKLM:\\SOFTWARE\\Autodesk\\AutoCAD' -EA SilentlyContinue).ProductKey`
+    )
+    if (acadSerial && typeof acadSerial === 'string') keys.autocad = acadSerial.trim()
+  } catch { /* not installed */ }
+
+  return keys
+}
+
+// ─── PERIPHERALS ─────────────────────────────────────────────────────────────
+function collectPeripherals() {
+  log('  Collecting peripherals...')
+
+  // Mouse / pointing devices
+  const miceRaw = arr(ps(
+    `Get-CimInstance Win32_PointingDevice | ` +
+    `Select-Object Name,Manufacturer,DeviceInterface,HardwareType,PNPDeviceID | ConvertTo-Json -Compress`
+  ))
+
+  // Keyboards
+  const kbRaw = arr(ps(
+    `Get-CimInstance Win32_Keyboard | ` +
+    `Select-Object Name,Description,Layout,PNPDeviceID | ConvertTo-Json -Compress`
+  ))
+
+  // Printers (local + network)
+  const printerRaw = arr(ps(
+    `Get-CimInstance Win32_Printer | ` +
+    `Select-Object Name,DriverName,PortName,Network,Default,WorkOffline,PrinterStatus,` +
+    `ServerName,ShareName,Location,PrintProcessor | ConvertTo-Json -Compress`
+  ))
+
+  // External USB hard drives / flash drives
+  const extDiskRaw = arr(ps(
+    `Get-CimInstance Win32_DiskDrive | ` +
+    `Where-Object {$_.InterfaceType -eq 'USB'} | ` +
+    `Select-Object Model,Size,SerialNumber,MediaType | ConvertTo-Json -Compress`
+  ))
+
+  // Removable / removable media volumes (USB sticks, SD cards)
+  const remVolRaw = arr(ps(
+    `Get-CimInstance Win32_LogicalDisk | ` +
+    `Where-Object {$_.DriveType -eq 2} | ` +
+    `Select-Object DeviceID,VolumeName,FileSystem,Size,FreeSpace | ConvertTo-Json -Compress`
+  ))
+
+  // Bluetooth devices (paired/connected)
+  const btRaw = arr(ps(
+    `Get-CimInstance Win32_PnPEntity | ` +
+    `Where-Object { ($_.DeviceID -like 'BTHENUM\\*' -or $_.DeviceID -like 'BTH\\*') -and ` +
+    `  $_.Name -notlike '*Enumerator*' -and $_.Name -notlike '*Radio*' -and $_.Name -notlike '*HFP*' } | ` +
+    `Select-Object Name,Manufacturer,DeviceID,Status,Description | ConvertTo-Json -Compress`
+  ))
+
+  // All USB connected devices (excluding hubs and generic composites)
+  const usbRaw = arr(ps(
+    `Get-CimInstance Win32_PnPEntity | ` +
+    `Where-Object { $_.DeviceID -like 'USB\\VID_*' -and $_.Status -eq 'OK' -and ` +
+    `  $_.Name -notlike '*Root Hub*' -and $_.Name -notlike '*USB Composite Device*' -and ` +
+    `  $_.Name -notlike '*Generic USB Hub*' } | ` +
+    `Select-Object Name,Manufacturer,DeviceID,Service | ConvertTo-Json -Compress`
+  ))
+
+  // Decode mouse connection type
+  function mouseConnType(m) {
+    const pnp = (m.PNPDeviceID || '').toUpperCase()
+    const iface = m.DeviceInterface
+    if (pnp.includes('BTHENUM') || pnp.includes('BTH\\')) return 'Bluetooth'
+    if (iface === 3) return 'PS/2'
+    if (iface === 128 || pnp.includes('USB\\VID_')) return 'USB (Wired or Wireless dongle)'
+    if (iface === 16 || iface === 17) return 'Infrared (Wireless)'
+    return 'Unknown'
+  }
+
+  // Printer type detection
+  function printerType(p) {
+    const port = (p.PortName || '').toUpperCase()
+    if (p.Network || port.startsWith('\\\\') || port.includes('WSD') || port.includes('TCPIP')) return 'Network Printer'
+    if (port.startsWith('USB')) return 'USB (Local)'
+    if (port.startsWith('LPT') || port.startsWith('COM')) return 'Port (Local)'
+    return 'Local'
+  }
+
+  function printerStatus(code) {
+    const statuses = { 1:'Other', 2:'Unknown', 3:'Idle', 4:'Printing', 5:'Warmup', 6:'Stopped', 7:'Offline' }
+    return statuses[code] || `Status${code}`
+  }
+
+  return {
+    mice: miceRaw.filter(m => m.Name).map(m => ({
+      name:         m.Name,
+      manufacturer: m.Manufacturer || null,
+      connection:   mouseConnType(m),
+      hardware_type: m.HardwareType || null,
+    })),
+
+    keyboards: kbRaw.filter(k => k.Name || k.Description).map(k => ({
+      name:   k.Name || k.Description,
+      layout: k.Layout || null,
+      type:   (k.PNPDeviceID || '').toUpperCase().startsWith('HID\\VID_') ? 'USB / Wireless HID' : 'PS/2 / Other',
+    })),
+
+    printers: printerRaw.filter(p => p.Name).map(p => ({
+      name:       p.Name,
+      driver:     p.DriverName,
+      port:       p.PortName,
+      type:       printerType(p),
+      is_default: p.Default,
+      status:     printerStatus(p.PrinterStatus),
+      server:     p.ServerName || null,
+      share_name: p.ShareName  || null,
+      location:   p.Location   || null,
+      offline:    p.WorkOffline,
+    })),
+
+    external_storage: [
+      ...extDiskRaw.map(d => ({
+        name:     (d.Model || '').trim(),
+        size_gb:  Math.round((d.Size || 0) / 1073741824),
+        serial:   (d.SerialNumber || '').trim(),
+        media:    d.MediaType || 'USB External Drive',
+        category: 'USB Hard Drive / SSD',
+      })),
+      ...remVolRaw.map(d => ({
+        name:       `${d.DeviceID} — ${d.VolumeName || 'Removable'}`,
+        size_gb:    Math.round((d.Size || 0) / 1073741824),
+        free_gb:    Math.round((d.FreeSpace || 0) / 1073741824),
+        filesystem: d.FileSystem,
+        category:   'Removable Drive / USB Stick',
+      })),
+    ],
+
+    bluetooth: btRaw.filter(b => b.Name).map(b => ({
+      name:         b.Name,
+      manufacturer: b.Manufacturer || null,
+      description:  b.Description  || null,
+      status:       b.Status,
+    })),
+
+    usb_devices: usbRaw.filter(u => u.Name).map(u => ({
+      name:         u.Name,
+      manufacturer: u.Manufacturer || null,
+      service:      u.Service      || null,
+    })),
+  }
+}
+
+// ─── MAIN HARDWARE COLLECTION ─────────────────────────────────────────────────
 function collectHardware() {
-  log('  Collecting hardware...')
+  log('  Collecting hardware (CPU, RAM, disk, GPU, mobo, BIOS, OS, NICs)...')
 
   const cpuRaw  = one(ps(`Get-CimInstance Win32_Processor | Select-Object Name,Manufacturer,AddressWidth,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,L2CacheSize,L3CacheSize,SocketDesignation,Stepping,LoadPercentage,VirtualizationFirmwareEnabled,Status,Revision | ConvertTo-Json -Compress`))
   const ramRaw  = arr(ps(`Get-CimInstance Win32_PhysicalMemory | Select-Object DeviceLocator,Manufacturer,PartNumber,Capacity,Speed,MemoryType,FormFactor,SerialNumber | ConvertTo-Json -Compress`))
-  const diskRaw = arr(ps(`Get-CimInstance Win32_DiskDrive | Select-Object Model,InterfaceType,Size,Status,SerialNumber,FirmwareRevision,Partitions | ConvertTo-Json -Compress`))
+  const diskRaw = arr(ps(`Get-CimInstance Win32_DiskDrive | Select-Object Model,InterfaceType,Size,Status,SerialNumber,FirmwareRevision,Partitions,MediaType | ConvertTo-Json -Compress`))
   const gpuRaw  = arr(ps(`Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate,AdapterCompatibility | ConvertTo-Json -Compress`))
   const moboRaw = one(ps(`Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product,SerialNumber,Version | ConvertTo-Json -Compress`))
   const biosRaw = one(ps(`Get-CimInstance Win32_BIOS | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber | ConvertTo-Json -Compress`))
   const osRaw   = one(ps(`Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,OSArchitecture,BuildNumber,InstallDate,LastBootUpTime,RegisteredUser,CSName | ConvertTo-Json -Compress`))
-  const sysRaw  = one(ps(`Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory,Domain,UserName | ConvertTo-Json -Compress`))
-  const nicRaw  = arr(ps(`Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled } | Select-Object Description,MACAddress,IPAddress,DefaultIPGateway,DHCPEnabled,Speed | ConvertTo-Json -Compress`))
+  const sysRaw  = one(ps(`Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory,Domain,UserName,Manufacturer,Model | ConvertTo-Json -Compress`))
+  const nicRaw  = arr(ps(`Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled} | Select-Object Description,MACAddress,IPAddress,DefaultIPGateway,DHCPEnabled,Speed | ConvertTo-Json -Compress`))
   const volRaw  = arr(ps(`Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free | ConvertTo-Json -Compress`))
 
-  // Optional: LibreHardwareMonitor web API at http://localhost:8085 for temps/voltages
+  // Optional LibreHardwareMonitor for temps/voltages
   let lhm = null
   try {
     const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
       `(Invoke-WebRequest http://localhost:8085/data.json -UseBasicParsing -TimeoutSec 2).Content`
-    ], { timeout: 5000, encoding: 'utf8' })
-    if (r.stdout?.trim()) lhm = JSON.parse(r.stdout.trim())
+    ], { timeout: 4000, encoding: 'utf8' })
+    if ((r.stdout || '').trim()) lhm = JSON.parse(r.stdout.trim())
   } catch { /* LHM not running */ }
 
-  function extractLhm(name) {
+  function lhmFind(keyword) {
     if (!lhm?.Children) return undefined
-    function search(node) {
+    function walk(node) {
       if (!node) return undefined
-      if (node.Text?.toLowerCase().includes(name)) return parseFloat(node.Value)
-      for (const c of node.Children || []) { const v = search(c); if (v !== undefined) return v }
+      if ((node.Text || '').toLowerCase().includes(keyword.toLowerCase())) {
+        const val = parseFloat(node.Value)
+        return isNaN(val) ? undefined : val
+      }
+      for (const c of (node.Children || [])) {
+        const v = walk(c); if (v !== undefined) return v
+      }
       return undefined
     }
-    return search(lhm)
+    return walk(lhm)
   }
 
-  // Parse uptime
+  // Uptime calculation
   let uptimeHours = 0
   if (osRaw?.LastBootUpTime) {
-    // WMI date: /Date(ms)/ or ISO string
     let boot = null
-    if (typeof osRaw.LastBootUpTime === 'string' && osRaw.LastBootUpTime.startsWith('/Date(')) {
-      boot = new Date(parseInt(osRaw.LastBootUpTime.replace(/[^\d]/g, '')))
-    } else {
-      boot = new Date(osRaw.LastBootUpTime)
+    const raw = osRaw.LastBootUpTime
+    if (typeof raw === 'string' && raw.startsWith('/Date(')) {
+      boot = new Date(parseInt(raw.replace(/[^\d]/g, '')))
+    } else if (typeof raw === 'string') {
+      boot = new Date(raw)
     }
-    if (!isNaN(boot.getTime())) uptimeHours = Math.round((Date.now() - boot.getTime()) / 3600000)
+    if (boot && !isNaN(boot.getTime())) {
+      uptimeHours = Math.round((Date.now() - boot.getTime()) / 3600000)
+    }
+  }
+
+  // RAM type decoder
+  function ramType(t) {
+    const types = { 20: 'DDR', 21: 'DDR2', 24: 'DDR3', 26: 'DDR4', 34: 'DDR5', 0: 'Unknown' }
+    return types[t] || `Type${t}`
+  }
+  function ramFF(f) {
+    const ffs = { 8: 'DIMM', 12: 'SODIMM', 13: 'RIMM', 17: 'FBDIMM' }
+    return ffs[f] || `FF${f}`
+  }
+
+  // Disk type detection
+  function diskType(d) {
+    const iface = (d.InterfaceType || '').toUpperCase()
+    const media = (d.MediaType || '').toLowerCase()
+    if (iface.includes('SCSI') || media.includes('solid')) return 'SSD'
+    if (iface.includes('IDE') || media.includes('fixed')) return 'HDD'
+    if (iface.includes('USB')) return 'USB'
+    if (iface.includes('NVME') || d.Model?.toLowerCase().includes('nvme')) return 'NVMe SSD'
+    return iface || 'Unknown'
   }
 
   const ram = ramRaw.map(r => ({
@@ -181,45 +521,49 @@ function collectHardware() {
     part_number:  (r.PartNumber   || '').trim(),
     capacity_gb:  Math.round((r.Capacity || 0) / 1073741824),
     speed_mhz:    r.Speed,
-    type:         r.MemoryType === 26 ? 'DDR4' : r.MemoryType === 34 ? 'DDR5' : r.MemoryType === 24 ? 'DDR3' : `Type${r.MemoryType}`,
-    form_factor:  r.FormFactor  === 12 ? 'SODIMM' : r.FormFactor === 8 ? 'DIMM' : `FF${r.FormFactor}`,
+    type:         ramType(r.MemoryType),
+    form_factor:  ramFF(r.FormFactor),
     serial:       (r.SerialNumber || '').trim(),
   }))
 
-  const disks = diskRaw.map((d, i) => ({
-    model:      (d.Model || '').trim(),
-    interface:  d.InterfaceType,
-    size_gb:    Math.round((d.Size || 0) / 1073741824),
-    status:     d.Status,
-    serial:     (d.SerialNumber || '').trim(),
-    firmware:   d.FirmwareRevision,
-    partitions: d.Partitions,
-    free_gb:    volRaw[i] ? Math.round((volRaw[i].Free || 0) / 1073741824) : null,
-  }))
+  // Storage (basic per physical disk + detailed logical below)
+  const storage = collectStorageDetails()
 
   return {
     cpu: cpuRaw ? {
-      name:                  cpuRaw.Name,
-      manufacturer:          cpuRaw.Manufacturer,
-      architecture:          cpuRaw.AddressWidth === 64 ? 'x64' : 'x86',
-      cores_physical:        cpuRaw.NumberOfCores,
-      cores_logical:         cpuRaw.NumberOfLogicalProcessors,
-      max_clock_mhz:         cpuRaw.MaxClockSpeed,
-      current_clock_mhz:     cpuRaw.CurrentClockSpeed,
-      l2_cache_kb:           cpuRaw.L2CacheSize,
-      l3_cache_kb:           cpuRaw.L3CacheSize,
-      socket:                cpuRaw.SocketDesignation,
-      stepping:              cpuRaw.Stepping,
-      load_percent:          cpuRaw.LoadPercentage,
+      name:                   cpuRaw.Name,
+      manufacturer:           cpuRaw.Manufacturer,
+      architecture:           cpuRaw.AddressWidth === 64 ? 'x64' : 'x86',
+      cores_physical:         cpuRaw.NumberOfCores,
+      cores_logical:          cpuRaw.NumberOfLogicalProcessors,
+      max_clock_mhz:          cpuRaw.MaxClockSpeed,
+      current_clock_mhz:      cpuRaw.CurrentClockSpeed,
+      l2_cache_kb:            cpuRaw.L2CacheSize,
+      l3_cache_kb:            cpuRaw.L3CacheSize,
+      socket:                 cpuRaw.SocketDesignation,
+      stepping:               cpuRaw.Stepping,
+      load_percent:           cpuRaw.LoadPercentage,
       virtualization_enabled: cpuRaw.VirtualizationFirmwareEnabled,
-      status:                cpuRaw.Status,
-      revision:              cpuRaw.Revision,
-      temperature_c:         extractLhm('cpu package temp'),
-      voltage:               extractLhm('cpu core voltage'),
+      status:                 cpuRaw.Status,
+      revision:               cpuRaw.Revision,
+      temperature_c:          lhmFind('cpu package temp'),
+      voltage:                lhmFind('cpu core voltage'),
     } : null,
     ram,
     ram_total_gb: Math.round((sysRaw?.TotalPhysicalMemory || 0) / 1073741824),
-    disks,
+    disks: diskRaw.map((d, i) => ({
+      model:      (d.Model || '').trim(),
+      type:       diskType(d),
+      interface:  d.InterfaceType,
+      size_gb:    Math.round((d.Size || 0) / 1073741824),
+      status:     d.Status,
+      serial:     (d.SerialNumber || '').trim(),
+      firmware:   d.FirmwareRevision,
+      partitions: d.Partitions,
+      free_gb:    volRaw[i] ? Math.round((volRaw[i].Free || 0) / 1073741824) : null,
+    })),
+    logical_drives: storage.logical_drives,
+    partitions:     storage.partitions,
     gpu: gpuRaw.map(g => ({
       name:           g.Name,
       vram_mb:        Math.round((g.AdapterRAM || 0) / 1048576),
@@ -228,6 +572,7 @@ function collectHardware() {
       refresh_rate:   g.CurrentRefreshRate,
       compatibility:  g.AdapterCompatibility,
     })),
+    monitors: collectMonitors(),
     motherboard: moboRaw ? {
       manufacturer: moboRaw.Manufacturer,
       product:      moboRaw.Product,
@@ -240,6 +585,12 @@ function collectHardware() {
       release_date: biosRaw.ReleaseDate,
       serial:       biosRaw.SerialNumber,
     } : null,
+    system: sysRaw ? {
+      manufacturer: sysRaw.Manufacturer,
+      model:        sysRaw.Model,
+      domain:       sysRaw.Domain,
+      logged_user:  sysRaw.UserName,
+    } : null,
     os: osRaw ? {
       name:            osRaw.Caption,
       version:         osRaw.Version,
@@ -249,7 +600,6 @@ function collectHardware() {
       uptime_hours:    uptimeHours,
       registered_user: osRaw.RegisteredUser,
       computer_name:   osRaw.CSName,
-      domain:          sysRaw?.Domain,
     } : null,
     network_adapters: nicRaw.map(n => ({
       name:       n.Description,
@@ -259,25 +609,107 @@ function collectHardware() {
       dhcp:       n.DHCPEnabled,
       speed_mbps: Math.round((n.Speed || 0) / 1000000),
     })).filter(n => n.mac),
+    peripherals:  collectPeripherals(),
+    software:     collectSoftware(),
+    license_keys: collectLicenseKeys(),
   }
 }
 
-// ─── ARP scan ─────────────────────────────────────────────────────────────────
+// ─── REMOTE DEVICE INFO (domain-joined clients) ───────────────────────────────
+function getRemoteInfo(ip) {
+  const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', `
+    try {
+      $os  = Get-CimInstance -CN ${ip} Win32_OperatingSystem -EA Stop | Select-Object Caption,Version,OSArchitecture,BuildNumber
+      $cpu = Get-CimInstance -CN ${ip} Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,L3CacheSize
+      $mem = (Get-CimInstance -CN ${ip} Win32_ComputerSystem).TotalPhysicalMemory
+      $ram = Get-CimInstance -CN ${ip} Win32_PhysicalMemory | Select-Object DeviceLocator,Manufacturer,Capacity,Speed,MemoryType
+      $dsk = Get-CimInstance -CN ${ip} Win32_DiskDrive | Select-Object Model,InterfaceType,Size,MediaType
+      $gpu = Get-CimInstance -CN ${ip} Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate
+      $nic = Get-CimInstance -CN ${ip} Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled} | Select-Object Description,MACAddress,IPAddress,Speed
+      $mon = try { Get-WmiObject -CN ${ip} -NS root\\wmi -Class WmiMonitorBasicDisplayParams -EA Stop | Where-Object {$_.Active} | Select-Object MaxHorizontalImageSize,MaxVerticalImageSize } catch { $null }
+      $sw  = Get-ItemProperty "\\\\${ip}\\C$\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs" -EA SilentlyContinue
+      @{
+        os=$os; cpu=$cpu; ram_total_gb=[math]::Round($mem/1GB,0)
+        ram=$ram; disks=$dsk; gpu=$gpu; nics=$nic; monitors=$mon
+      } | ConvertTo-Json -Compress -Depth 4
+    } catch { '{}' }
+  `], { timeout: 20000, encoding: 'utf8' })
+
+  const raw = (r.stdout || '').trim()
+  if (!raw || raw === '{}') return null
+
+  try {
+    const d = JSON.parse(raw)
+    const osD   = Array.isArray(d.os)  ? d.os[0]  : d.os
+    const cpuD  = Array.isArray(d.cpu) ? d.cpu[0] : d.cpu
+    const gpuArr = Array.isArray(d.gpu) ? d.gpu : (d.gpu ? [d.gpu] : [])
+    const ramArr = Array.isArray(d.ram) ? d.ram : (d.ram ? [d.ram] : [])
+    const dskArr = Array.isArray(d.disks) ? d.disks : (d.disks ? [d.disks] : [])
+    const nicArr = Array.isArray(d.nics) ? d.nics : (d.nics ? [d.nics] : [])
+    const monArr = Array.isArray(d.monitors) ? d.monitors : (d.monitors ? [d.monitors] : [])
+
+    function ramType(t) {
+      return { 20:'DDR', 21:'DDR2', 24:'DDR3', 26:'DDR4', 34:'DDR5' }[t] || `DDR?`
+    }
+
+    // Build monitors from remote WMI
+    const monitors = monArr.map((m, i) => {
+      const g = gpuArr[i]
+      let sizeInches = null
+      if (m?.MaxHorizontalImageSize && m?.MaxVerticalImageSize) {
+        sizeInches = parseFloat((Math.sqrt(m.MaxHorizontalImageSize**2 + m.MaxVerticalImageSize**2) / 2.54).toFixed(1))
+      }
+      return {
+        index: i + 1,
+        size_inches: sizeInches,
+        resolution: g ? `${g.CurrentHorizontalResolution}x${g.CurrentVerticalResolution}` : null,
+        refresh_rate_hz: g?.CurrentRefreshRate,
+        gpu_name: g?.Name,
+      }
+    }).filter(m => m.size_inches || m.resolution)
+
+    return {
+      os: osD ? { name: osD.Caption, version: osD.Version, architecture: osD.OSArchitecture, build_number: osD.BuildNumber } : null,
+      cpu: cpuD ? { name: cpuD.Name, cores_physical: cpuD.NumberOfCores, cores_logical: cpuD.NumberOfLogicalProcessors, max_clock_mhz: cpuD.MaxClockSpeed, l3_cache_kb: cpuD.L3CacheSize } : null,
+      ram_total_gb: d.ram_total_gb,
+      ram: ramArr.map(r => ({
+        slot: r.DeviceLocator,
+        manufacturer: (r.Manufacturer||'').trim(),
+        capacity_gb: Math.round((r.Capacity||0)/1073741824),
+        speed_mhz: r.Speed,
+        type: ramType(r.MemoryType),
+      })),
+      disks: dskArr.map(dk => ({
+        model: dk.Model,
+        type: dk.InterfaceType,
+        size_gb: Math.round((dk.Size||0)/1073741824),
+      })),
+      gpu: gpuArr.map(g => ({
+        name: g.Name,
+        vram_mb: Math.round((g.AdapterRAM||0)/1048576),
+        driver_version: g.DriverVersion,
+        resolution: `${g.CurrentHorizontalResolution}x${g.CurrentVerticalResolution}`,
+        refresh_rate: g.CurrentRefreshRate,
+      })),
+      monitors,
+      network_adapters: nicArr.map(n => ({ name: n.Description, mac: n.MACAddress, ip: n.IPAddress||[] })).filter(n=>n.mac),
+    }
+  } catch { return null }
+}
+
+// ─── ARP SCAN ─────────────────────────────────────────────────────────────────
 function scanArp() {
   try {
-    const out  = execSync('arp -a', { timeout: 10000, encoding: 'utf8' })
-    const devs = []
-    for (const line of out.split('\n')) {
+    const out = execSync('arp -a', { timeout: 10000, encoding: 'utf8' })
+    return out.split('\n').map(line => {
       const m = line.match(/(\d+\.\d+\.\d+\.\d+)\s+([0-9a-f-]{17})\s+(\w+)/i)
-      if (m && m[3].toLowerCase() === 'dynamic') {
-        devs.push({ ip: m[1], mac: m[2].replace(/-/g, ':').toLowerCase() })
-      }
-    }
-    return devs
+      return m && m[3].toLowerCase() === 'dynamic'
+        ? { ip: m[1], mac: m[2].replace(/-/g, ':').toLowerCase() }
+        : null
+    }).filter(Boolean)
   } catch { return [] }
 }
 
-// ─── Resolve hostname ─────────────────────────────────────────────────────────
 function resolveHostname(ip) {
   try {
     const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
@@ -287,144 +719,107 @@ function resolveHostname(ip) {
   } catch { return null }
 }
 
-// ─── Remote WMI (domain-joined PCs only) ─────────────────────────────────────
-function getRemoteInfo(ip) {
-  try {
-    const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
-      `try{
-        $os  = Get-CimInstance -ComputerName ${ip} -ClassName Win32_OperatingSystem -ErrorAction Stop | Select-Object Caption,Version,OSArchitecture
-        $cpu = Get-CimInstance -ComputerName ${ip} -ClassName Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed
-        $mem = (Get-CimInstance -ComputerName ${ip} -ClassName Win32_ComputerSystem).TotalPhysicalMemory
-        $dsk = Get-CimInstance -ComputerName ${ip} -ClassName Win32_DiskDrive | Select-Object Model,InterfaceType,Size
-        @{os=$os;cpu=$cpu;ram_total_gb=[math]::Round($mem/1GB);disks=$dsk} | ConvertTo-Json -Compress
-      }catch{'{}'}`
-    ], { timeout: 12000, encoding: 'utf8' })
-    const raw = (r.stdout || '').trim()
-    if (!raw || raw === '{}') return null
-    const d = JSON.parse(raw)
-    return {
-      os:          one(d.os)  ? { name: one(d.os).Caption, version: one(d.os).Version, architecture: one(d.os).OSArchitecture } : null,
-      cpu:         one(d.cpu) ? { name: one(d.cpu).Name, cores_physical: one(d.cpu).NumberOfCores, cores_logical: one(d.cpu).NumberOfLogicalProcessors, max_clock_mhz: one(d.cpu).MaxClockSpeed } : null,
-      ram_total_gb: d.ram_total_gb,
-      disks:       arr(d.disks).map(dk => ({ model: dk.Model, interface: dk.InterfaceType, size_gb: Math.round((dk.Size || 0) / 1073741824) })),
-    }
-  } catch { return null }
-}
-
-// ─── Camera check ─────────────────────────────────────────────────────────────
+// ─── CAMERA CHECK ─────────────────────────────────────────────────────────────
 function checkCamera(camera) {
   return new Promise(resolve => {
     const req = http.request({
-      hostname: camera.ip,
-      port:     camera.port || 80,
-      path:     '/',
-      method:   'HEAD',
-      timeout:  3000,
-    }, res => {
-      resolve({ ...camera, is_online: true })
-      res.resume()
-    })
-    req.on('error', () => resolve({ ...camera, is_online: false }))
+      hostname: camera.ip, port: camera.port || 80,
+      path: '/', method: 'HEAD', timeout: 3000,
+    }, res => { resolve({ ...camera, is_online: true }); res.resume() })
+    req.on('error',   () => resolve({ ...camera, is_online: false }))
     req.on('timeout', () => { req.destroy(); resolve({ ...camera, is_online: false }) })
     req.end()
   })
 }
 
-// ─── Main collect loop ────────────────────────────────────────────────────────
-function log(msg) { console.log(`[${new Date().toISOString()}] ${msg}`) }
-
+// ─── COLLECT LOOP ─────────────────────────────────────────────────────────────
 async function collect() {
-  log('Starting collection cycle...')
+  log('─── Collection cycle start ───')
 
-  // 1. Local hardware
-  const hw         = collectHardware()
-  const localMac   = hw.network_adapters?.[0]?.mac   || `local-${AGENT_ID}`
-  const localIp    = hw.network_adapters?.[0]?.ip?.[0] || '127.0.0.1'
-  const hostname   = hw.os?.computer_name || os.hostname()
+  // 1. Local hardware (full)
+  const hw       = collectHardware()
+  const localMac = hw.network_adapters?.[0]?.mac    || `local-${AGENT_ID}`
+  const localIp  = hw.network_adapters?.[0]?.ip?.[0] || '127.0.0.1'
+  const hostname = hw.os?.computer_name              || os.hostname()
 
   try {
-    await fetchJson(`${SUPABASE_URL}/rest/v1/infrastructure_devices`, 'POST', {
-      mac_address:  localMac,
-      device_type:  'server',
+    await supaUpsert('infrastructure_devices', {
+      mac_address:   localMac,
+      device_type:   'server',
       hostname,
-      last_ip:      localIp,
-      last_seen:    new Date().toISOString(),
+      last_ip:       localIp,
+      last_seen:     new Date().toISOString(),
       hardware_info: hw,
-      is_server:    true,
+      is_server:     true,
     })
-    log(`  Server device upserted (${hostname} ${localIp})`)
-  } catch (e) { log(`  ERROR upserting server: ${e.message}`) }
+    log(`  Server upserted: ${hostname} (${localIp})`)
+  } catch (e) { log(`  ERROR server upsert: ${e.message}`) }
 
-  // 2. Heartbeat
+  // 2. Agent heartbeat
   try {
-    await fetchJson(`${SUPABASE_URL}/rest/v1/agent_status`, 'POST', {
+    await supaUpsert('agent_status', {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.0.0',
+      version:         '1.1.0',
       status:          'online',
     })
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
 
-  // 3. ARP scan
+  // 3. ARP scan + client info
   const arpDevs = scanArp()
-  log(`  ARP scan: ${arpDevs.length} dynamic entries`)
+  log(`  ARP: ${arpDevs.length} dynamic entries`)
 
-  const skipMacs = new Set([localMac])
   for (const dev of arpDevs) {
-    if (skipMacs.has(dev.mac)) continue
-    // Skip broadcast/multicast
+    if (dev.mac === localMac) continue
     const firstOctet = parseInt(dev.mac.split(':')[0], 16)
-    if (firstOctet & 0x01) continue
+    if (firstOctet & 0x01) continue  // skip multicast/broadcast
 
-    const dHostname   = resolveHostname(dev.ip)
-    const remoteInfo  = getRemoteInfo(dev.ip)
+    const clientHostname = resolveHostname(dev.ip)
+    const remoteInfo     = getRemoteInfo(dev.ip)
 
     try {
-      await fetchJson(`${SUPABASE_URL}/rest/v1/infrastructure_devices`, 'POST', {
+      await supaUpsert('infrastructure_devices', {
         mac_address:   dev.mac,
         device_type:   'unknown',
-        hostname:      dHostname || dev.ip,
+        hostname:      clientHostname || dev.ip,
         last_ip:       dev.ip,
         last_seen:     new Date().toISOString(),
         hardware_info: remoteInfo || {},
         is_server:     false,
       })
-    } catch (e) { log(`  ERROR upserting ${dev.ip}: ${e.message}`) }
+      log(`  Client: ${clientHostname || dev.ip} (${dev.mac})${remoteInfo ? ' +hardware' : ''}`)
+    } catch (e) { log(`  ERROR client ${dev.ip}: ${e.message}`) }
   }
 
   // 4. Cameras
   if (cfg.cameras?.length > 0) {
-    log(`  Checking ${cfg.cameras.length} camera(s)...`)
+    log(`  Cameras: checking ${cfg.cameras.length}...`)
     const results = await Promise.all(cfg.cameras.map(checkCamera))
-    const online  = results.filter(r => r.is_online).length
-    log(`  Cameras: ${online}/${results.length} online`)
-
-    for (const result of results) {
+    log(`  Cameras: ${results.filter(r => r.is_online).length}/${results.length} online`)
+    for (const r of results) {
       try {
         const payload = {
-          name:         result.name,
-          ip_address:   result.ip,
-          port:         result.port || 80,
-          is_online:    result.is_online,
-          last_checked: new Date().toISOString(),
-          ...(result.location ? { location: result.location } : {}),
+          name: r.name, ip_address: r.ip, port: r.port || 80,
+          is_online: r.is_online, last_checked: new Date().toISOString(),
+          ...(r.location ? { location: r.location } : {}),
+          ...(r.is_online ? { last_online: new Date().toISOString() } : {}),
         }
-        if (result.is_online) payload.last_online = new Date().toISOString()
-        await fetchJson(`${SUPABASE_URL}/rest/v1/cameras`, 'POST', payload)
-      } catch (e) { log(`  ERROR updating camera ${result.name}: ${e.message}`) }
+        await supaUpsert('cameras', payload)
+      } catch (e) { log(`  ERROR camera ${r.name}: ${e.message}`) }
     }
   }
 
-  log('Collection cycle complete.')
+  log('─── Collection cycle complete ───')
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.0.0`)
+// ─── START ────────────────────────────────────────────────────────────────────
+log(`OpsQuest Agent v1.1.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Supabase:  ${SUPABASE_URL}`)
 log(`Interval:  ${INTERVAL_MS / 1000}s`)
 log(`Cameras:   ${cfg.cameras?.length || 0}`)
+log('')
 
 collect().catch(e => log(`FATAL: ${e.message}`))
 setInterval(() => collect().catch(e => log(`ERROR: ${e.message}`)), INTERVAL_MS)

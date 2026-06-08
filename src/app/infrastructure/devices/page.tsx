@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import TopBar from '@/components/layout/TopBar'
-import { Monitor, Cpu, HardDrive, MemoryStick, Wifi, RefreshCw, Server, Laptop, Smartphone, Clock } from 'lucide-react'
+import {
+  Monitor, Cpu, HardDrive, MemoryStick, Wifi, RefreshCw,
+  Server, Laptop, Smartphone, Clock, Package, ShieldCheck, ShieldAlert, Key,
+  Mouse, Keyboard, Printer, Bluetooth, Usb,
+} from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -10,29 +14,21 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Device {
-  id: string
-  mac_address: string
-  device_type: string
-  hostname: string
-  last_ip: string
-  is_server: boolean
-  last_seen: string
-  hardware_info: HardwareInfo
+  id: string; mac_address: string; device_type: string
+  hostname: string; last_ip: string; is_server: boolean
+  last_seen: string; hardware_info: HardwareInfo
 }
-
 interface HardwareInfo {
-  cpu?: CpuInfo
-  ram?: RamSlot[]
-  ram_total_gb?: number
-  disks?: DiskInfo[]
-  gpu?: GpuInfo[]
-  motherboard?: MoboInfo
-  bios?: BiosInfo
-  os?: OsInfo
-  network_adapters?: NicInfo[]
+  cpu?: CpuInfo; ram?: RamSlot[]; ram_total_gb?: number
+  disks?: DiskInfo[]; logical_drives?: LogicalDrive[]; partitions?: Partition[]
+  gpu?: GpuInfo[]; monitors?: MonitorInfo[]
+  motherboard?: MoboInfo; bios?: BiosInfo; system?: SystemInfo
+  os?: OsInfo; network_adapters?: NicInfo[]
+  software?: SoftwareEntry[]; license_keys?: LicenseKeys
+  peripherals?: Peripherals
 }
-
 interface CpuInfo {
   name: string; manufacturer: string; architecture: string
   cores_physical: number; cores_logical: number
@@ -42,52 +38,56 @@ interface CpuInfo {
   virtualization_enabled: boolean; status: string; revision: number
   temperature_c?: number; voltage?: number
 }
-interface RamSlot {
-  slot: string; manufacturer: string; part_number: string
-  capacity_gb: number; speed_mhz: number; type: string; form_factor: string; serial: string
-}
-interface DiskInfo {
-  model: string; interface: string; size_gb: number
-  status: string; serial: string; firmware: string; free_gb: number | null
-}
-interface GpuInfo {
-  name: string; vram_mb: number; driver_version: string
-  resolution: string; refresh_rate: number; compatibility: string
-}
+interface RamSlot { slot: string; manufacturer: string; part_number: string; capacity_gb: number; speed_mhz: number; type: string; form_factor: string; serial: string }
+interface DiskInfo { model: string; type: string; interface: string; size_gb: number; status: string; serial: string; firmware: string; free_gb: number | null; partitions: number }
+interface LogicalDrive { drive: string; label: string; filesystem: string; size_gb: number; free_gb: number; used_gb: number; use_pct: number; type: string; serial: string }
+interface Partition { disk: number; index: number; name: string; type: string; primary: boolean; bootable: boolean; size_gb: number }
+interface GpuInfo { name: string; vram_mb: number; driver_version: string; resolution: string; refresh_rate: number; compatibility: string }
+interface MonitorInfo { index: number; size_inches: number | null; width_cm: number | null; height_cm: number | null; resolution: string | null; refresh_rate_hz: number | null; gpu_name: string | null; gpu_vram_mb: number | null; driver_version: string | null }
 interface MoboInfo { manufacturer: string; product: string; serial: string; version: string }
-interface BiosInfo  { manufacturer: string; version: string; release_date: string; serial: string }
-interface OsInfo {
-  name: string; version: string; architecture: string; build_number: string
-  install_date: string; last_boot: string; uptime_hours: number
-  registered_user: string; computer_name: string; domain: string
-}
-interface NicInfo {
-  name: string; mac: string; ip: string[]; gateway: string[]
-  dhcp: boolean; speed_mbps: number
+interface BiosInfo { manufacturer: string; version: string; release_date: string; serial: string }
+interface SystemInfo { manufacturer: string; model: string; domain: string; logged_user: string }
+interface OsInfo { name: string; version: string; architecture: string; build_number: string; last_boot: string; uptime_hours: number; registered_user: string; computer_name: string; domain?: string }
+interface NicInfo { name: string; mac: string; ip: string[]; gateway: string[]; dhcp: boolean; speed_mbps: number }
+interface SoftwareEntry { name: string; version: string | null; publisher: string | null; install_date: string | null; size_mb: number | null; is_licensed: boolean; license_category: string | null }
+interface LicenseKeys { windows_key?: string; windows_edition?: string; windows_activated?: string; ms_office?: string; autocad?: string }
+interface PeripheralMouse    { name: string; manufacturer: string | null; connection: string; hardware_type: string | null }
+interface PeripheralKeyboard { name: string; layout: string | null; type: string }
+interface PeripheralPrinter  { name: string; driver: string; port: string; type: string; is_default: boolean; status: string; server: string | null; share_name: string | null; location: string | null; offline: boolean }
+interface PeripheralStorage  { name: string; size_gb?: number; free_gb?: number; serial?: string; filesystem?: string; category: string }
+interface PeripheralBT       { name: string; manufacturer: string | null; description: string | null; status: string }
+interface PeripheralUSB      { name: string; manufacturer: string | null; service: string | null }
+interface Peripherals {
+  mice?: PeripheralMouse[]; keyboards?: PeripheralKeyboard[]
+  printers?: PeripheralPrinter[]; external_storage?: PeripheralStorage[]
+  bluetooth?: PeripheralBT[]; usb_devices?: PeripheralUSB[]
 }
 
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 function ago(ts: string) {
-  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
+  const d = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
+  if (d < 60) return `${d}s ago`
+  if (d < 3600) return `${Math.floor(d / 60)}m ago`
+  if (d < 86400) return `${Math.floor(d / 3600)}h ago`
+  return `${Math.floor(d / 86400)}d ago`
 }
 
-function Chip({ label, value, mono = false }: { label: string; value: string | number | undefined; mono?: boolean }) {
+function Chip({ label, value, mono = false, highlight }: { label: string; value?: string | number | null; mono?: boolean; highlight?: 'green' | 'red' | 'amber' }) {
   if (value === undefined || value === null || value === '') return null
+  const color = highlight === 'green' ? 'text-[#10b981]' : highlight === 'red' ? 'text-[#ef4444]' : highlight === 'amber' ? 'text-[#f59e0b]' : 'text-[#e2e8f0]'
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] text-[#475569] uppercase tracking-wider">{label}</span>
-      <span className={`text-xs text-[#e2e8f0] ${mono ? 'font-mono' : 'font-medium'}`}>{value}</span>
+      <span className={`text-xs ${mono ? 'font-mono' : 'font-medium'} ${color}`}>{value}</span>
     </div>
   )
 }
 
-function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+function Section({ title, icon: Icon, color = 'cyan', children }: { title: string; icon: React.ElementType; color?: string; children: React.ReactNode }) {
+  const colors: Record<string, string> = { cyan: 'text-[#00d4ff]', purple: 'text-[#a78bfa]', green: 'text-[#10b981]', amber: 'text-[#f59e0b]' }
   return (
     <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] p-4">
-      <h4 className="text-xs font-bold text-[#00d4ff] uppercase tracking-widest mb-3 flex items-center gap-2">
+      <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${colors[color] || colors.cyan}`}>
         <Icon className="w-3.5 h-3.5" /> {title}
       </h4>
       {children}
@@ -95,34 +95,216 @@ function Section({ title, icon: Icon, children }: { title: string; icon: React.E
   )
 }
 
+// ─── MONITOR SECTION ─────────────────────────────────────────────────────────
+function MonitorSection({ monitors }: { monitors: MonitorInfo[] }) {
+  return (
+    <Section title="Displays / Monitors" icon={Monitor} color="purple">
+      <div className="space-y-3">
+        {monitors.map((m, i) => (
+          <div key={i} className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-xs font-semibold text-[#94a3b8] mb-2">Display {m.index}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Chip label="Screen Size" value={m.size_inches ? `${m.size_inches}"` : 'Unknown'} />
+              <Chip label="Resolution" value={m.resolution} />
+              <Chip label="Refresh Rate" value={m.refresh_rate_hz ? `${m.refresh_rate_hz} Hz` : null} />
+              <Chip label="GPU" value={m.gpu_name} />
+              {m.gpu_vram_mb ? <Chip label="VRAM" value={`${m.gpu_vram_mb} MB`} /> : null}
+              {m.driver_version ? <Chip label="Driver" value={m.driver_version} mono /> : null}
+              {m.width_cm && m.height_cm ? (
+                <Chip label="Physical Size" value={`${m.width_cm}×${m.height_cm} cm`} />
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+// ─── PERIPHERALS SECTION ─────────────────────────────────────────────────────
+function PeripheralsSection({ p }: { p: Peripherals }) {
+  const hasMice   = (p.mice?.length ?? 0) > 0
+  const hasKb     = (p.keyboards?.length ?? 0) > 0
+  const hasPrint  = (p.printers?.length ?? 0) > 0
+  const hasExt    = (p.external_storage?.length ?? 0) > 0
+  const hasBT     = (p.bluetooth?.length ?? 0) > 0
+  const hasUSB    = (p.usb_devices?.length ?? 0) > 0
+  const total     = (p.mice?.length ?? 0) + (p.keyboards?.length ?? 0) + (p.printers?.length ?? 0) +
+                    (p.external_storage?.length ?? 0) + (p.bluetooth?.length ?? 0) + (p.usb_devices?.length ?? 0)
+
+  if (total === 0) return (
+    <Section title="Connected Peripherals" icon={Usb} color="green">
+      <p className="text-xs text-[#475569] italic">No peripherals detected</p>
+    </Section>
+  )
+
+  return (
+    <Section title={`Connected Peripherals (${total} device${total !== 1 ? 's' : ''})`} icon={Usb} color="green">
+      <div className="space-y-3">
+
+        {/* Mouse */}
+        {hasMice && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Mouse className="w-3 h-3" /> Mouse / Pointing Device ({p.mice!.length})
+            </p>
+            {p.mice!.map((m, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5 border-t border-[#1a2f4a] first:border-0">
+                <span className="text-xs text-[#e2e8f0]">{m.name}</span>
+                <div className="flex items-center gap-3">
+                  {m.manufacturer && <span className="text-[10px] text-[#64748b]">{m.manufacturer}</span>}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">{m.connection}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Keyboard */}
+        {hasKb && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Keyboard className="w-3 h-3" /> Keyboard ({p.keyboards!.length})
+            </p>
+            {p.keyboards!.map((k, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5 border-t border-[#1a2f4a] first:border-0">
+                <span className="text-xs text-[#e2e8f0]">{k.name}</span>
+                <div className="flex items-center gap-3">
+                  {k.layout && <span className="text-[10px] text-[#64748b]">Layout: {k.layout}</span>}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#7c3aed22] text-[#a78bfa]">{k.type}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Printers */}
+        {hasPrint && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#f59e0b] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Printer className="w-3 h-3" /> Printers ({p.printers!.length})
+            </p>
+            {p.printers!.map((pr, i) => (
+              <div key={i} className="py-2 border-t border-[#1a2f4a] first:border-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-[#e2e8f0]">{pr.name}</span>
+                  <div className="flex items-center gap-2">
+                    {pr.is_default && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#00d4ff22] text-[#00d4ff]">Default</span>}
+                    {pr.offline && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ef444422] text-[#ef4444]">Offline</span>}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${pr.type.includes('Network') ? 'bg-[#7c3aed22] text-[#a78bfa]' : 'bg-[#f59e0b22] text-[#f59e0b]'}`}>
+                      {pr.type}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+                  <Chip label="Driver"  value={pr.driver} />
+                  <Chip label="Port"    value={pr.port} mono />
+                  <Chip label="Status"  value={pr.status} highlight={pr.status === 'Idle' || pr.status === 'Printing' ? 'green' : 'amber'} />
+                  {pr.server    && <Chip label="Server"   value={pr.server} />}
+                  {pr.share_name && <Chip label="Share"   value={pr.share_name} />}
+                  {pr.location  && <Chip label="Location" value={pr.location} />}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* External Storage */}
+        {hasExt && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#00d4ff] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <HardDrive className="w-3 h-3" /> External Storage ({p.external_storage!.length})
+            </p>
+            {p.external_storage!.map((d, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5 border-t border-[#1a2f4a] first:border-0">
+                <div>
+                  <span className="text-xs text-[#e2e8f0]">{d.name}</span>
+                  {d.serial && <span className="text-[10px] text-[#475569] font-mono ml-2">{d.serial}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {d.size_gb !== undefined && <span className="text-[10px] text-[#94a3b8]">{d.size_gb} GB</span>}
+                  {d.free_gb !== undefined && <span className="text-[10px] text-[#10b981]">{d.free_gb} GB free</span>}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#00d4ff22] text-[#00d4ff]">{d.category}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Bluetooth */}
+        {hasBT && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#a78bfa] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Bluetooth className="w-3 h-3" /> Bluetooth Devices ({p.bluetooth!.length})
+            </p>
+            {p.bluetooth!.map((b, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5 border-t border-[#1a2f4a] first:border-0">
+                <div>
+                  <span className="text-xs text-[#e2e8f0]">{b.name}</span>
+                  {b.description && b.description !== b.name && <span className="text-[10px] text-[#64748b] ml-2">{b.description}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {b.manufacturer && <span className="text-[10px] text-[#64748b]">{b.manufacturer}</span>}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${b.status === 'OK' ? 'bg-[#10b98122] text-[#10b981]' : 'bg-[#64748b22] text-[#64748b]'}`}>
+                    {b.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Other USB devices */}
+        {hasUSB && (
+          <div className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+            <p className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Usb className="w-3 h-3" /> Other USB Devices ({p.usb_devices!.length})
+            </p>
+            <div className="max-h-40 overflow-y-auto space-y-0.5">
+              {p.usb_devices!.map((u, i) => (
+                <div key={i} className="flex items-center justify-between py-1 border-t border-[#0a1525] first:border-0">
+                  <span className="text-xs text-[#94a3b8]">{u.name}</span>
+                  {u.manufacturer && <span className="text-[10px] text-[#475569]">{u.manufacturer}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </Section>
+  )
+}
+
+// ─── CPU SECTION ─────────────────────────────────────────────────────────────
 function CpuSection({ cpu }: { cpu: CpuInfo }) {
   return (
-    <Section title="Processor" icon={Cpu}>
+    <Section title="Processor" icon={Cpu} color="cyan">
       <p className="text-sm font-semibold text-[#e2e8f0] mb-3">{cpu.name}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Chip label="Manufacturer" value={cpu.manufacturer} />
-        <Chip label="Architecture" value={cpu.architecture} />
-        <Chip label="Socket" value={cpu.socket} />
-        <Chip label="Physical Cores" value={cpu.cores_physical} />
-        <Chip label="Logical Processors" value={cpu.cores_logical} />
-        <Chip label="Max Clock" value={cpu.max_clock_mhz ? `${cpu.max_clock_mhz} MHz` : undefined} />
-        <Chip label="Current Clock" value={cpu.current_clock_mhz ? `${cpu.current_clock_mhz} MHz` : undefined} />
-        <Chip label="L2 Cache" value={cpu.l2_cache_kb ? `${cpu.l2_cache_kb} KB` : undefined} />
-        <Chip label="L3 Cache" value={cpu.l3_cache_kb ? `${(cpu.l3_cache_kb / 1024).toFixed(1)} MB` : undefined} />
-        <Chip label="Stepping" value={cpu.stepping} />
-        <Chip label="Revision" value={cpu.revision} />
-        <Chip label="Virtualization" value={cpu.virtualization_enabled ? 'Enabled' : 'Disabled'} />
-        {cpu.temperature_c !== undefined && <Chip label="Temperature" value={`${cpu.temperature_c} °C`} />}
+        <Chip label="Manufacturer"      value={cpu.manufacturer} />
+        <Chip label="Architecture"      value={cpu.architecture} />
+        <Chip label="Socket"            value={cpu.socket} />
+        <Chip label="Physical Cores"    value={cpu.cores_physical} />
+        <Chip label="Logical Threads"   value={cpu.cores_logical} />
+        <Chip label="Max Clock"         value={cpu.max_clock_mhz ? `${cpu.max_clock_mhz} MHz` : null} />
+        <Chip label="Current Clock"     value={cpu.current_clock_mhz ? `${cpu.current_clock_mhz} MHz` : null} />
+        <Chip label="L2 Cache"          value={cpu.l2_cache_kb ? `${cpu.l2_cache_kb} KB` : null} />
+        <Chip label="L3 Cache"          value={cpu.l3_cache_kb ? `${(cpu.l3_cache_kb / 1024).toFixed(1)} MB` : null} />
+        <Chip label="Stepping"          value={cpu.stepping} mono />
+        <Chip label="Revision"          value={cpu.revision} />
+        <Chip label="Virtualization"    value={cpu.virtualization_enabled ? 'Enabled' : 'Disabled'} highlight={cpu.virtualization_enabled ? 'green' : undefined} />
+        {cpu.temperature_c !== undefined && <Chip label="Temperature" value={`${cpu.temperature_c} °C`} highlight={cpu.temperature_c > 85 ? 'red' : cpu.temperature_c > 70 ? 'amber' : 'green'} />}
         {cpu.voltage !== undefined && <Chip label="Core Voltage" value={`${cpu.voltage} V`} />}
       </div>
       {cpu.load_percent !== undefined && (
         <div className="mt-3">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex justify-between mb-1">
             <span className="text-[10px] text-[#475569]">CPU Load</span>
             <span className="text-[10px] text-[#00d4ff]">{cpu.load_percent}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-[#1a2f4a]">
-            <div className="h-1.5 rounded-full bg-[#00d4ff]" style={{ width: `${cpu.load_percent}%` }} />
+            <div className="h-1.5 rounded-full bg-[#00d4ff] transition-all" style={{ width: `${cpu.load_percent}%` }} />
           </div>
         </div>
       )}
@@ -130,17 +312,18 @@ function CpuSection({ cpu }: { cpu: CpuInfo }) {
   )
 }
 
+// ─── RAM SECTION ─────────────────────────────────────────────────────────────
 function RamSection({ ram, total }: { ram: RamSlot[]; total?: number }) {
   return (
-    <Section title={`Memory — ${total ?? ram.reduce((s, r) => s + r.capacity_gb, 0)} GB Total`} icon={MemoryStick}>
-      <div className="space-y-3">
+    <Section title={`Memory — ${total ?? ram.reduce((s, r) => s + r.capacity_gb, 0)} GB Total`} icon={MemoryStick} color="cyan">
+      <div className="space-y-2">
         {ram.map((slot, i) => (
           <div key={i} className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
             <p className="text-xs font-semibold text-[#94a3b8] mb-2">{slot.slot}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <Chip label="Capacity" value={`${slot.capacity_gb} GB`} />
-              <Chip label="Speed" value={`${slot.speed_mhz} MHz`} />
-              <Chip label="Type" value={slot.type} />
+              <Chip label="Capacity"    value={`${slot.capacity_gb} GB`} />
+              <Chip label="Speed"       value={`${slot.speed_mhz} MHz`} />
+              <Chip label="Type"        value={slot.type} />
               <Chip label="Form Factor" value={slot.form_factor} />
               <Chip label="Manufacturer" value={slot.manufacturer} />
               <Chip label="Part Number" value={slot.part_number} mono />
@@ -152,57 +335,244 @@ function RamSection({ ram, total }: { ram: RamSlot[]; total?: number }) {
   )
 }
 
-function DiskSection({ disks }: { disks: DiskInfo[] }) {
+// ─── STORAGE SECTION ─────────────────────────────────────────────────────────
+function StorageSection({ disks, logical, partitions }: { disks: DiskInfo[]; logical?: LogicalDrive[]; partitions?: Partition[] }) {
+  const [showParts, setShowParts] = useState(false)
   return (
-    <Section title="Storage" icon={HardDrive}>
-      <div className="space-y-3">
+    <Section title="Storage" icon={HardDrive} color="cyan">
+      {/* Physical disks */}
+      <div className="space-y-3 mb-4">
         {disks.map((disk, i) => (
           <div key={i} className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
             <p className="text-xs font-semibold text-[#94a3b8] mb-2">{disk.model}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <Chip label="Size" value={`${disk.size_gb} GB`} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Chip label="Size"      value={`${disk.size_gb} GB`} />
+              <Chip label="Type"      value={disk.type} />
               <Chip label="Interface" value={disk.interface} />
-              <Chip label="Status" value={disk.status} />
-              <Chip label="Firmware" value={disk.firmware} mono />
-              {disk.free_gb !== null && <Chip label="Free Space" value={`${disk.free_gb} GB`} />}
-              {disk.free_gb !== null && disk.size_gb > 0 && (
-                <div className="col-span-3 mt-1">
-                  <div className="flex justify-between mb-0.5">
-                    <span className="text-[10px] text-[#475569]">Used</span>
-                    <span className="text-[10px] text-[#94a3b8]">
-                      {disk.size_gb - (disk.free_gb || 0)} / {disk.size_gb} GB
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[#1a2f4a]">
-                    <div
-                      className="h-1.5 rounded-full bg-[#7c3aed]"
-                      style={{ width: `${Math.round(((disk.size_gb - (disk.free_gb || 0)) / disk.size_gb) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+              <Chip label="Status"    value={disk.status} highlight={disk.status === 'OK' ? 'green' : 'red'} />
+              <Chip label="Firmware"  value={disk.firmware} mono />
+              <Chip label="Serial"    value={disk.serial} mono />
             </div>
           </div>
         ))}
       </div>
+
+      {/* Logical drives */}
+      {logical && logical.length > 0 && (
+        <>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2">Logical Drives</p>
+          <div className="space-y-2 mb-4">
+            {logical.map((d, i) => (
+              <div key={i} className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#00d4ff]">{d.drive}</span>
+                    <span className="text-[10px] text-[#64748b]">{d.label}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#64748b]">{d.filesystem}</span>
+                  </div>
+                  <span className="text-[10px] text-[#64748b]">{d.used_gb} / {d.size_gb} GB used</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[#1a2f4a] mb-2">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${d.use_pct > 90 ? 'bg-[#ef4444]' : d.use_pct > 75 ? 'bg-[#f59e0b]' : 'bg-[#7c3aed]'}`}
+                    style={{ width: `${d.use_pct}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Chip label="Total"    value={`${d.size_gb} GB`} />
+                  <Chip label="Free"     value={`${d.free_gb} GB`} highlight={d.use_pct > 90 ? 'red' : 'green'} />
+                  <Chip label="Used %"   value={`${d.use_pct}%`} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Partitions toggle */}
+      {partitions && partitions.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowParts(s => !s)}
+            className="text-[10px] text-[#475569] hover:text-[#00d4ff] transition-colors mb-2"
+          >
+            {showParts ? '▲ Hide' : '▶ Show'} {partitions.length} partition{partitions.length !== 1 ? 's' : ''}
+          </button>
+          {showParts && (
+            <div className="rounded-lg overflow-hidden border border-[#1a2f4a]">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="bg-[#060b18] text-[#475569]">
+                    {['Disk', 'Index', 'Name', 'Type', 'Size', 'Primary', 'Bootable'].map(h => (
+                      <th key={h} className="text-left px-3 py-2 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {partitions.map((p, i) => (
+                    <tr key={i} className="border-t border-[#1a2f4a] text-[#94a3b8]">
+                      <td className="px-3 py-1.5">{p.disk}</td>
+                      <td className="px-3 py-1.5">{p.index}</td>
+                      <td className="px-3 py-1.5 font-mono">{p.name}</td>
+                      <td className="px-3 py-1.5">{p.type}</td>
+                      <td className="px-3 py-1.5">{p.size_gb} GB</td>
+                      <td className="px-3 py-1.5">{p.primary ? '✓' : '—'}</td>
+                      <td className="px-3 py-1.5">{p.bootable ? <span className="text-[#10b981]">Boot</span> : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </Section>
   )
 }
 
+// ─── SOFTWARE SECTION ────────────────────────────────────────────────────────
+function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[]; licenseKeys?: LicenseKeys }) {
+  const [swTab, setSwTab] = useState<'licensed' | 'all'>('licensed')
+  const [search, setSearch] = useState('')
+
+  const licensed   = software.filter(s => s.is_licensed)
+  const unlicensed = software.filter(s => !s.is_licensed)
+
+  const filtered = (swTab === 'licensed' ? licensed : software).filter(s =>
+    search === '' || s.name.toLowerCase().includes(search.toLowerCase()) ||
+    (s.publisher || '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Group licensed by category
+  const licGroups: Record<string, SoftwareEntry[]> = {}
+  for (const s of licensed) {
+    const cat = s.license_category || 'Other'
+    if (!licGroups[cat]) licGroups[cat] = []
+    licGroups[cat].push(s)
+  }
+
+  return (
+    <Section title={`Software (${software.length} installed · ${licensed.length} licensed)`} icon={Package} color="amber">
+
+      {/* License keys */}
+      {licenseKeys && (
+        <div className="rounded-lg bg-[#060b18] border border-[#f59e0b22] p-3 mb-4">
+          <p className="text-[10px] font-bold text-[#f59e0b] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <Key className="w-3 h-3" /> License Keys & Activation
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {licenseKeys.windows_edition  && <Chip label="Windows Edition"    value={licenseKeys.windows_edition} />}
+            {licenseKeys.windows_key      && <Chip label="Windows Key"        value={licenseKeys.windows_key} mono />}
+            {licenseKeys.windows_activated && <Chip label="Windows Activation" value={licenseKeys.windows_activated} highlight={licenseKeys.windows_activated === 'Activated' ? 'green' : 'amber'} />}
+            {licenseKeys.ms_office        && <Chip label="MS Office / 365"    value={licenseKeys.ms_office} highlight={licenseKeys.ms_office === 'Activated' ? 'green' : 'amber'} />}
+            {licenseKeys.autocad          && <Chip label="AutoCAD Key"         value={licenseKeys.autocad} mono />}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex bg-[#060b18] rounded-lg border border-[#1a2f4a] p-0.5">
+          <button onClick={() => setSwTab('licensed')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${swTab === 'licensed' ? 'bg-[#f59e0b] text-[#060b18]' : 'text-[#64748b] hover:text-[#94a3b8]'}`}>
+            <ShieldCheck className="w-3 h-3 inline mr-1" />Licensed ({licensed.length})
+          </button>
+          <button onClick={() => setSwTab('all')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${swTab === 'all' ? 'bg-[#7c3aed] text-white' : 'text-[#64748b] hover:text-[#94a3b8]'}`}>
+            All Software ({software.length})
+          </button>
+        </div>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="flex-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-1.5 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#f59e0b]"
+        />
+      </div>
+
+      {/* Licensed grouped view */}
+      {swTab === 'licensed' && search === '' ? (
+        <div className="space-y-3">
+          {Object.entries(licGroups).map(([cat, apps]) => (
+            <div key={cat} className="rounded-lg bg-[#060b18] border border-[#f59e0b22] p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-3 h-3 text-[#10b981]" />
+                <span className="text-xs font-bold text-[#f59e0b]">{cat}</span>
+              </div>
+              {apps.map((app, i) => (
+                <div key={i} className="flex items-center justify-between py-1 border-t border-[#1a2f4a] first:border-0">
+                  <span className="text-xs text-[#e2e8f0]">{app.name}</span>
+                  <div className="flex items-center gap-3">
+                    {app.version && <span className="text-[10px] text-[#64748b] font-mono">{app.version}</span>}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">Licensed</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          {licensed.length === 0 && (
+            <div className="text-center py-6 text-xs text-[#475569]">
+              <ShieldAlert className="w-5 h-5 mx-auto mb-1 opacity-40" />
+              No licensed software detected from the configured list
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Flat list for all or search results */
+        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
+          <div className="max-h-80 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-[#060b18]">
+                <tr className="border-b border-[#1a2f4a]">
+                  {['Name', 'Version', 'Publisher', 'Status'].map(h => (
+                    <th key={h} className="text-left px-3 py-2 text-[#475569] font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s, i) => (
+                  <tr key={i} className="border-b border-[#0a1525] hover:bg-[#ffffff04] transition-colors">
+                    <td className="px-3 py-2 text-[#e2e8f0]">{s.name}</td>
+                    <td className="px-3 py-2 text-[#64748b] font-mono text-[10px]">{s.version || '—'}</td>
+                    <td className="px-3 py-2 text-[#64748b] text-[10px]">{s.publisher || '—'}</td>
+                    <td className="px-3 py-2">
+                      {s.is_licensed ? (
+                        <span className="flex items-center gap-1 text-[10px] text-[#10b981]">
+                          <ShieldCheck className="w-3 h-3" /> {s.license_category}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#475569]">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-3 py-2 bg-[#060b18] border-t border-[#1a2f4a] text-[10px] text-[#475569]">
+            Showing {filtered.length} of {swTab === 'licensed' ? licensed.length : software.length} apps
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ─── SERVER CARD ─────────────────────────────────────────────────────────────
 function ServerCard({ device }: { device: Device }) {
-  const hw = device.hardware_info
+  const hw     = device.hardware_info
   const online = (Date.now() - new Date(device.last_seen).getTime()) < 180000
 
   return (
     <div className="rounded-xl border border-[#00d4ff22] bg-[#0d1f35] p-5">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#00d4ff11] flex items-center justify-center">
             <Server className="w-5 h-5 text-[#00d4ff]" />
           </div>
           <div>
-            <p className="text-sm font-bold text-[#e2e8f0]">{device.hostname || 'Server'}</p>
-            <p className="text-xs text-[#475569]">{device.last_ip} · {device.mac_address}</p>
+            <p className="text-sm font-bold text-[#e2e8f0]">{device.hostname}</p>
+            <p className="text-xs text-[#475569] font-mono">{device.last_ip} · {device.mac_address}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -213,108 +583,164 @@ function ServerCard({ device }: { device: Device }) {
         </div>
       </div>
 
-      {hw.os && (
+      {/* OS + System overview */}
+      {(hw.os || hw.system) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 p-3 rounded-lg bg-[#060b18] border border-[#1a2f4a]">
-          <Chip label="OS" value={hw.os.name} />
-          <Chip label="Build" value={hw.os.build_number} />
-          <Chip label="Uptime" value={hw.os.uptime_hours !== undefined ? `${hw.os.uptime_hours}h` : undefined} />
-          <Chip label="Domain" value={hw.os.domain} />
+          {hw.os     && <Chip label="OS"            value={hw.os.name} />}
+          {hw.os     && <Chip label="Build"          value={hw.os.build_number} mono />}
+          {hw.os     && <Chip label="Uptime"         value={hw.os.uptime_hours !== undefined ? `${hw.os.uptime_hours}h` : null} />}
+          {hw.system && <Chip label="System Model"  value={hw.system.model ? `${hw.system.manufacturer} ${hw.system.model}` : hw.system.manufacturer} />}
+          {hw.os     && <Chip label="Domain"        value={hw.os.domain} />}
+          {hw.system && <Chip label="Logged User"   value={hw.system.logged_user} />}
         </div>
       )}
 
       <div className="space-y-4">
-        {hw.cpu        && <CpuSection cpu={hw.cpu} />}
-        {hw.ram?.length  ? <RamSection ram={hw.ram} total={hw.ram_total_gb} /> : null}
-        {hw.disks?.length ? <DiskSection disks={hw.disks} /> : null}
+        {hw.cpu                && <CpuSection cpu={hw.cpu} />}
+        {hw.ram?.length        ? <RamSection ram={hw.ram} total={hw.ram_total_gb} /> : null}
+        {hw.disks?.length      ? <StorageSection disks={hw.disks} logical={hw.logical_drives} partitions={hw.partitions} /> : null}
+        {hw.monitors?.length   ? <MonitorSection monitors={hw.monitors} /> : null}
 
         {hw.gpu?.length ? (
-          <Section title="GPU / Display" icon={Monitor}>
+          <Section title="GPU / Display" icon={Monitor} color="purple">
             {hw.gpu.map((g, i) => (
               <div key={i} className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
-                <Chip label="GPU" value={g.name} />
-                <Chip label="VRAM" value={g.vram_mb ? `${g.vram_mb} MB` : undefined} />
-                <Chip label="Driver" value={g.driver_version} mono />
-                <Chip label="Resolution" value={g.resolution} />
-                <Chip label="Refresh Rate" value={g.refresh_rate ? `${g.refresh_rate} Hz` : undefined} />
+                <Chip label="GPU"         value={g.name} />
+                <Chip label="VRAM"        value={g.vram_mb ? `${g.vram_mb} MB` : null} />
+                <Chip label="Driver"      value={g.driver_version} mono />
+                <Chip label="Resolution"  value={g.resolution} />
+                <Chip label="Refresh Rate" value={g.refresh_rate ? `${g.refresh_rate} Hz` : null} />
               </div>
             ))}
           </Section>
         ) : null}
 
         {(hw.motherboard || hw.bios) && (
-          <Section title="Motherboard / BIOS" icon={Cpu}>
+          <Section title="Motherboard / BIOS" icon={Cpu} color="cyan">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {hw.motherboard && <>
                 <Chip label="Board Manufacturer" value={hw.motherboard.manufacturer} />
-                <Chip label="Board Model" value={hw.motherboard.product} />
-                <Chip label="Board Version" value={hw.motherboard.version} />
+                <Chip label="Board Model"        value={hw.motherboard.product} />
+                <Chip label="Board Version"      value={hw.motherboard.version} />
               </>}
               {hw.bios && <>
-                <Chip label="BIOS Vendor" value={hw.bios.manufacturer} />
+                <Chip label="BIOS Vendor"  value={hw.bios.manufacturer} />
                 <Chip label="BIOS Version" value={hw.bios.version} mono />
-                <Chip label="BIOS Date" value={hw.bios.release_date} />
+                <Chip label="BIOS Date"    value={hw.bios.release_date} />
               </>}
             </div>
           </Section>
         )}
 
         {hw.network_adapters?.length ? (
-          <Section title="Network Adapters" icon={Wifi}>
+          <Section title="Network Adapters" icon={Wifi} color="green">
             <div className="space-y-2">
               {hw.network_adapters.map((nic, i) => (
                 <div key={i} className="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
-                  <Chip label="Adapter" value={nic.name} />
-                  <Chip label="MAC" value={nic.mac} mono />
-                  <Chip label="IP" value={nic.ip?.join(', ')} mono />
-                  <Chip label="Gateway" value={nic.gateway?.join(', ')} mono />
-                  <Chip label="Speed" value={nic.speed_mbps ? `${nic.speed_mbps} Mbps` : undefined} />
-                  <Chip label="DHCP" value={nic.dhcp ? 'Yes' : 'Static'} />
+                  <Chip label="Adapter"  value={nic.name} />
+                  <Chip label="MAC"      value={nic.mac} mono />
+                  <Chip label="IP"       value={nic.ip?.join(', ')} mono />
+                  <Chip label="Gateway"  value={nic.gateway?.join(', ')} mono />
+                  <Chip label="Speed"    value={nic.speed_mbps ? `${nic.speed_mbps} Mbps` : null} />
+                  <Chip label="DHCP"     value={nic.dhcp ? 'Yes' : 'Static'} />
                 </div>
               ))}
             </div>
           </Section>
+        ) : null}
+
+        {hw.peripherals && (
+          <PeripheralsSection p={hw.peripherals} />
+        )}
+
+        {hw.software?.length ? (
+          <SoftwareSection software={hw.software} licenseKeys={hw.license_keys} />
         ) : null}
       </div>
     </div>
   )
 }
 
-function ClientRow({ device }: { device: Device }) {
-  const hw = device.hardware_info
+// ─── CLIENT ROW ──────────────────────────────────────────────────────────────
+function ClientCard({ device }: { device: Device }) {
+  const [expanded, setExpanded] = useState(false)
+  const hw     = device.hardware_info
   const online = (Date.now() - new Date(device.last_seen).getTime()) < 300000
   const IconComp = device.device_type === 'mobile' ? Smartphone : Laptop
 
+  const licensed = hw.software?.filter(s => s.is_licensed) || []
+
   return (
-    <div className="rounded-xl border border-[#1a2f4a] bg-[#0d1f35] p-4">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-[#7c3aed11] flex items-center justify-center">
+    <div className="rounded-xl border border-[#1a2f4a] bg-[#0d1f35]">
+      {/* Summary row */}
+      <div
+        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-[#ffffff03] transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="w-8 h-8 rounded-lg bg-[#7c3aed11] flex items-center justify-center shrink-0">
           <IconComp className="w-4 h-4 text-[#a78bfa]" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#e2e8f0] truncate">{device.hostname || device.last_ip}</p>
           <p className="text-[11px] text-[#475569] font-mono">{device.mac_address} · {device.last_ip}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#475569]'}`} />
-          <span className="text-[10px] text-[#475569]">{ago(device.last_seen)}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          {licensed.length > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">
+              {licensed.length} licensed app{licensed.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#475569]'}`} />
+            <span className="text-[10px] text-[#475569]">{ago(device.last_seen)}</span>
+          </div>
+          <span className="text-[#475569] text-xs">{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {hw.os    && <Chip label="OS" value={hw.os.name} />}
-        {hw.cpu   && <Chip label="CPU" value={hw.cpu.name} />}
+
+      {/* Quick summary bar */}
+      <div className="grid grid-cols-4 gap-0 border-t border-[#1a2f4a] px-4 py-2">
+        {hw.os && <Chip label="OS" value={hw.os.name?.replace('Microsoft Windows', 'Windows')} />}
+        {hw.cpu && <Chip label="CPU" value={hw.cpu.name?.split(' ').slice(0, 3).join(' ')} />}
         {hw.ram_total_gb && <Chip label="RAM" value={`${hw.ram_total_gb} GB`} />}
-        {hw.disks?.[0] && <Chip label="Disk" value={`${hw.disks[0].size_gb} GB ${hw.disks[0].interface}`} />}
+        {hw.disks?.[0] && <Chip label="Storage" value={`${hw.disks[0].size_gb} GB ${hw.disks[0].type || hw.disks[0].interface}`} />}
       </div>
-      {!hw.cpu && !hw.os && (
-        <p className="text-xs text-[#475569] italic mt-1">Remote WMI not available — showing MAC/IP only</p>
+
+      {/* Expanded hardware */}
+      {expanded && (
+        <div className="border-t border-[#1a2f4a] p-4 space-y-4">
+          {!hw.cpu && !hw.os && (
+            <p className="text-xs text-[#475569] italic">Remote WMI unavailable — MAC/IP only (device may not be domain-joined)</p>
+          )}
+          {hw.cpu   && <CpuSection cpu={hw.cpu} />}
+          {hw.ram?.length ? <RamSection ram={hw.ram} total={hw.ram_total_gb} /> : null}
+          {hw.disks?.length ? <StorageSection disks={hw.disks} logical={hw.logical_drives} partitions={hw.partitions} /> : null}
+          {hw.monitors?.length ? <MonitorSection monitors={hw.monitors} /> : null}
+          {hw.gpu?.length ? (
+            <Section title="GPU" icon={Monitor} color="purple">
+              {hw.gpu.map((g, i) => (
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <Chip label="GPU" value={g.name} />
+                  <Chip label="VRAM" value={g.vram_mb ? `${g.vram_mb} MB` : null} />
+                  <Chip label="Resolution" value={g.resolution} />
+                </div>
+              ))}
+            </Section>
+          ) : null}
+          {hw.peripherals && <PeripheralsSection p={hw.peripherals} />}
+          {hw.software?.length ? (
+            <SoftwareSection software={hw.software} licenseKeys={hw.license_keys} />
+          ) : null}
+        </div>
       )}
     </div>
   )
 }
 
+// ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function DevicesPage() {
-  const [devices, setDevices] = useState<Device[]>([])
-  const [loading, setLoading] = useState(true)
+  const [devices, setDevices]   = useState<Device[]>([])
+  const [loading, setLoading]   = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   async function load() {
@@ -323,7 +749,7 @@ export default function DevicesPage() {
       .from('infrastructure_devices')
       .select('*')
       .order('is_server', { ascending: false })
-      .order('last_seen', { ascending: false })
+      .order('last_seen',  { ascending: false })
     setDevices((data as Device[]) || [])
     setLoading(false)
     setRefreshing(false)
@@ -340,14 +766,15 @@ export default function DevicesPage() {
 
   return (
     <>
-      <TopBar title="Device Monitor" subtitle={`${devices.length} device${devices.length !== 1 ? 's' : ''} — full hardware inventory`} />
+      <TopBar title="Device Monitor" subtitle={`${devices.length} device${devices.length !== 1 ? 's' : ''} — hardware · software · licenses`} />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-4xl mx-auto space-y-6">
 
           <div className="flex items-center justify-between">
             <div className="flex gap-4 text-xs text-[#64748b]">
-              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />Online &lt;3 min</span>
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />Online (&lt;3 min)</span>
               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#475569]" />Offline</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#10b981]" />Licensed software detected</span>
             </div>
             <button
               onClick={load}
@@ -367,25 +794,24 @@ export default function DevicesPage() {
           ) : devices.length === 0 ? (
             <div className="text-center py-20 rounded-xl border border-[#1a2f4a] bg-[#0d1f35]">
               <Server className="w-10 h-10 mx-auto mb-3 text-[#475569]" />
-              <p className="text-[#64748b] font-medium">No devices detected yet</p>
-              <p className="text-xs text-[#475569] mt-1">Run agent.exe on your server and wait ~60 seconds</p>
+              <p className="text-[#64748b] font-medium">No devices yet</p>
+              <p className="text-xs text-[#475569] mt-1">Run agent.exe as Administrator on your server</p>
             </div>
           ) : (
             <>
               {server && (
                 <div>
-                  <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">Server Hardware</h2>
+                  <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">Server</h2>
                   <ServerCard device={server} />
                 </div>
               )}
-
               {clients.length > 0 && (
                 <div>
                   <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">
-                    Connected Clients ({clients.length})
+                    Connected Clients ({clients.length}) — click to expand
                   </h2>
                   <div className="space-y-3">
-                    {clients.map(d => <ClientRow key={d.id} device={d} />)}
+                    {clients.map(d => <ClientCard key={d.id} device={d} />)}
                   </div>
                 </div>
               )}
