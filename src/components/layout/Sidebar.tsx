@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
-  Trophy, FileText, ChevronRight, Shield, LogOut, LogIn, Loader2, Server,
+  Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -42,9 +43,9 @@ export default function Sidebar() {
           <motion.div
             animate={{ boxShadow: ['0 0 8px #00d4ff22', '0 0 20px #00d4ff44', '0 0 8px #00d4ff22'] }}
             transition={{ duration: 2.5, repeat: Infinity }}
-            className="relative w-9 h-9 rounded-lg bg-[#00d4ff11] border border-[#00d4ff33] flex items-center justify-center"
+            className="relative w-9 h-9 rounded-lg bg-[#00d4ff11] border border-[#00d4ff33] flex items-center justify-center overflow-hidden"
           >
-            <Shield className="w-5 h-5 text-[#00d4ff]" />
+            <Image src="/opsquest-logo.svg" alt="OpsQuest" width={28} height={28} priority />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#10b981] border-2 border-[#0a1525]" />
           </motion.div>
           <div>

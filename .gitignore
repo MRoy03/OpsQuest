@@ -41,7 +41,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# agent build artifacts (exe stays local, never push)
+# agent build artifacts and secrets (stay local, never push)
 agent/node_modules/
 agent/dist/
 agent/*.exe
+agent/config.json

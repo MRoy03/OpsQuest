@@ -1,1 +1,44 @@
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Monitor body -->
+  <rect x="4" y="6" width="32" height="22" rx="2.5" fill="#1a2f4a"/>
+  <!-- Screen -->
+  <rect x="6" y="8" width="28" height="18" rx="1.5" fill="#060b18"/>
+  <!-- Code lines -->
+  <rect x="8" y="10.5" width="6" height="1.8" rx="0.5" fill="#c084fc"/>
+  <rect x="15" y="10.5" width="9" height="1.8" rx="0.5" fill="#00d4ff"/>
+  <rect x="10" y="14" width="4" height="1.8" rx="0.5" fill="#10b981"/>
+  <rect x="15" y="14" width="8" height="1.8" rx="0.5" fill="#00d4ff" opacity="0.8"/>
+  <rect x="24" y="14" width="6" height="1.8" rx="0.5" fill="#f59e0b" opacity="0.8"/>
+  <rect x="10" y="17.5" width="3" height="1.8" rx="0.5" fill="#c084fc"/>
+  <rect x="14" y="17.5" width="7" height="1.8" rx="0.5" fill="#10b981"/>
+  <rect x="10" y="21" width="11" height="1.8" rx="0.5" fill="#10b981" opacity="0.6"/>
+  <rect x="22" y="21" width="2" height="1.8" rx="0.3" fill="#00d4ff"/>
+  <!-- Status bar -->
+  <rect x="6" y="24" width="28" height="2" fill="#0d1f35"/>
+  <rect x="7" y="24.4" width="5" height="1.2" rx="0.3" fill="#10b981" opacity="0.7"/>
+  <!-- Stand -->
+  <rect x="18" y="28" width="4" height="4" fill="#1a2f4a"/>
+  <rect x="13" y="32" width="14" height="2" rx="1" fill="#1a2f4a"/>
+  <!-- Keyboard -->
+  <rect x="4" y="36" width="26" height="8" rx="1.5" fill="#152238"/>
+  <rect x="5.5" y="37.5" width="3" height="2" rx="0.4" fill="#0d1f35"/>
+  <rect x="9.5" y="37.5" width="3" height="2" rx="0.4" fill="#0d1f35"/>
+  <rect x="13.5" y="37.5" width="3" height="2" rx="0.4" fill="#0d1f35"/>
+  <rect x="17.5" y="37.5" width="3" height="2" rx="0.4" fill="#0d1f35"/>
+  <rect x="21.5" y="37.5" width="3" height="2" rx="0.4" fill="#0d1f35"/>
+  <rect x="5.5" y="40.5" width="22" height="2" rx="0.4" fill="#0d1f35"/>
+  <!-- Server rack (right) -->
+  <rect x="33" y="10" width="11" height="22" rx="1.5" fill="#152238"/>
+  <rect x="34.5" y="11.5" width="8" height="3" rx="0.6" fill="#0d1f35"/>
+  <circle cx="41" cy="13" r="1" fill="#10b981"/>
+  <rect x="34.5" y="16" width="8" height="3" rx="0.6" fill="#0d1f35"/>
+  <circle cx="41" cy="17.5" r="1" fill="#00d4ff"/>
+  <rect x="34.5" y="20.5" width="8" height="3" rx="0.6" fill="#0d1f35"/>
+  <circle cx="41" cy="22" r="1" fill="#f59e0b"/>
+  <rect x="34.5" y="25" width="8" height="3" rx="0.6" fill="#0d1f35"/>
+  <circle cx="41" cy="26.5" r="1" fill="#10b981"/>
+  <!-- Mouse -->
+  <rect x="33" y="36" width="10" height="13" rx="5" fill="#152238"/>
+  <line x1="38" y1="36" x2="38" y2="41.5" stroke="#0d1f35" stroke-width="1"/>
+  <rect x="36.8" y="38" width="2.4" height="3.5" rx="1.2" fill="#00d4ff" opacity="0.4"/>
+</svg>
