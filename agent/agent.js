@@ -32,10 +32,12 @@ if (!cfg.supabase_url) {
   process.exit(1)
 }
 
-const SUPABASE_URL = cfg.supabase_url.replace(/\/$/, '')
-const SUPABASE_KEY = cfg.supabase_anon_key
-const AGENT_ID     = cfg.agent_id || os.hostname()
-const INTERVAL_MS  = (cfg.scan_interval_seconds || 60) * 1000
+const SUPABASE_URL  = cfg.supabase_url.replace(/\/$/, '')
+const SUPABASE_KEY  = cfg.supabase_anon_key
+const AGENT_ID      = cfg.agent_id || os.hostname()
+const INTERVAL_MS   = (cfg.scan_interval_seconds || 60) * 1000
+const IS_SERVER     = cfg.is_server !== false        // default true
+const SCAN_NETWORK  = cfg.scan_network !== false     // default true (set false on client machines)
 
 // ─── LICENSED SOFTWARE DEFINITIONS ───────────────────────────────────────────
 const LICENSED_DEFS = [
@@ -107,6 +109,45 @@ async function supaUpsert(table, row) {
     body: JSON.stringify(Array.isArray(row) ? row : [row]),
   })
   if (!resp.ok) throw new Error(`Supabase ${table} ${resp.status}: ${await resp.text()}`)
+}
+
+// For ARP-discovered clients: insert if new, then patch only network fields.
+// NEVER overwrites hardware_info — preserves data written by the client's own agent.
+async function supaNetworkUpdate(mac, ip, hostname) {
+  // Step 1: insert skeleton row if mac doesn't exist yet
+  await nodeFetch(`${SUPABASE_URL}/rest/v1/infrastructure_devices`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer':        'resolution=ignore-duplicates,return=minimal',
+    },
+    body: JSON.stringify([{
+      mac_address: mac, device_type: 'unknown',
+      hostname: hostname || null, last_ip: ip,
+      last_seen: new Date().toISOString(), is_server: false,
+    }]),
+  })
+  // Step 2: patch only network fields — hardware_info is untouched
+  const patch = await nodeFetch(
+    `${SUPABASE_URL}/rest/v1/infrastructure_devices?mac_address=eq.${encodeURIComponent(mac)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify({
+        last_ip:   ip,
+        last_seen: new Date().toISOString(),
+        ...(hostname ? { hostname } : {}),
+      }),
+    }
+  )
+  if (!patch.ok) throw new Error(`Supabase PATCH ${patch.status}: ${await patch.text()}`)
 }
 
 // ─── POWERSHELL ───────────────────────────────────────────────────────────────
@@ -732,28 +773,39 @@ function checkCamera(camera) {
   })
 }
 
+// ─── DEVICE TYPE DETECTION ────────────────────────────────────────────────────
+function detectDeviceType() {
+  if (cfg.device_type) return cfg.device_type
+  try {
+    const bat = ps(`Get-CimInstance Win32_Battery | Select-Object -First 1 Name | ConvertTo-Json -Compress`)
+    if (bat) return 'laptop'
+  } catch { /* no battery */ }
+  return IS_SERVER ? 'server' : 'desktop'
+}
+
 // ─── COLLECT LOOP ─────────────────────────────────────────────────────────────
 async function collect() {
   log('─── Collection cycle start ───')
 
-  // 1. Local hardware (full)
-  const hw       = collectHardware()
-  const localMac = hw.network_adapters?.[0]?.mac    || `local-${AGENT_ID}`
-  const localIp  = hw.network_adapters?.[0]?.ip?.[0] || '127.0.0.1'
-  const hostname = hw.os?.computer_name              || os.hostname()
+  // 1. Local hardware (full — runs on every machine)
+  const hw         = collectHardware()
+  const localMac   = hw.network_adapters?.[0]?.mac     || `local-${AGENT_ID}`
+  const localIp    = hw.network_adapters?.[0]?.ip?.[0] || '127.0.0.1'
+  const hostname   = hw.os?.computer_name               || os.hostname()
+  const deviceType = detectDeviceType()
 
   try {
     await supaUpsert('infrastructure_devices', {
       mac_address:   localMac,
-      device_type:   'server',
+      device_type:   deviceType,
       hostname,
       last_ip:       localIp,
       last_seen:     new Date().toISOString(),
       hardware_info: hw,
-      is_server:     true,
+      is_server:     IS_SERVER,
     })
-    log(`  Server upserted: ${hostname} (${localIp})`)
-  } catch (e) { log(`  ERROR server upsert: ${e.message}`) }
+    log(`  Device upserted: ${hostname} (${localIp}) [${deviceType}]`)
+  } catch (e) { log(`  ERROR device upsert: ${e.message}`) }
 
   // 2. Agent heartbeat
   try {
@@ -761,39 +813,31 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.1.0',
+      version:         '1.3.0',
       status:          'online',
     })
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
 
-  // 3. ARP scan + client info
-  const arpDevs = scanArp()
-  log(`  ARP: ${arpDevs.length} dynamic entries`)
+  // 3. ARP scan — only on server/gateway machine, skipped on clients
+  if (SCAN_NETWORK) {
+    const arpDevs = scanArp()
+    log(`  ARP: ${arpDevs.length} dynamic entries`)
 
-  for (const dev of arpDevs) {
-    if (dev.mac === localMac) continue
-    const firstOctet = parseInt(dev.mac.split(':')[0], 16)
-    if (firstOctet & 0x01) continue  // skip multicast/broadcast
+    for (const dev of arpDevs) {
+      if (dev.mac === localMac) continue
+      const firstOctet = parseInt(dev.mac.split(':')[0], 16)
+      if (firstOctet & 0x01) continue  // skip multicast/broadcast
 
-    const clientHostname = resolveHostname(dev.ip)
-    const remoteInfo     = getRemoteInfo(dev.ip)
-
-    try {
-      await supaUpsert('infrastructure_devices', {
-        mac_address:   dev.mac,
-        device_type:   'unknown',
-        hostname:      clientHostname || dev.ip,
-        last_ip:       dev.ip,
-        last_seen:     new Date().toISOString(),
-        hardware_info: remoteInfo || {},
-        is_server:     false,
-      })
-      log(`  Client: ${clientHostname || dev.ip} (${dev.mac})${remoteInfo ? ' +hardware' : ''}`)
-    } catch (e) { log(`  ERROR client ${dev.ip}: ${e.message}`) }
+      const clientHostname = resolveHostname(dev.ip)
+      try {
+        await supaNetworkUpdate(dev.mac, dev.ip, clientHostname)
+        log(`  ARP seen: ${clientHostname || dev.ip} (${dev.mac})`)
+      } catch (e) { log(`  ERROR ARP ${dev.ip}: ${e.message}`) }
+    }
   }
 
-  // 4. Cameras
-  if (cfg.cameras?.length > 0) {
+  // 4. Cameras — only on server
+  if (IS_SERVER && cfg.cameras?.length > 0) {
     log(`  Cameras: checking ${cfg.cameras.length}...`)
     const results = await Promise.all(cfg.cameras.map(checkCamera))
     log(`  Cameras: ${results.filter(r => r.is_online).length}/${results.length} online`)
@@ -814,8 +858,9 @@ async function collect() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.1.0`)
+log(`OpsQuest Agent v1.3.0`)
 log(`Agent ID:  ${AGENT_ID}`)
+log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
 log(`Interval:  ${INTERVAL_MS / 1000}s`)
 log(`Cameras:   ${cfg.cameras?.length || 0}`)

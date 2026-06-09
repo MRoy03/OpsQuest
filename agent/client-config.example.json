@@ -1,0 +1,9 @@
+{
+  "supabase_url": "https://YOUR_PROJECT_ID.supabase.co",
+  "supabase_anon_key": "YOUR_ANON_KEY_HERE",
+  "agent_id": "client-HOSTNAME",
+  "is_server": false,
+  "scan_network": false,
+  "scan_interval_seconds": 300,
+  "cameras": []
+}
