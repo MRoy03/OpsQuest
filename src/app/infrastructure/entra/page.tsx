@@ -58,6 +58,7 @@ export default function EntraPage() {
   const [loading, setLoading]   = useState(false)
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [error, setError]       = useState<string | null>(null)
+  const [p2Required, setP2Required] = useState(false)
 
   const load = useCallback(async (scope: string) => {
     setLoading(true)
@@ -71,7 +72,10 @@ export default function EntraPage() {
       if (scope === 'overview')    setOverview(json.overview)
       if (scope === 'users')       setUsers(json.data || [])
       if (scope === 'devices')     setDevices(json.data || [])
-      if (scope === 'risky_users') setRisky(json.data || [])
+      if (scope === 'risky_users') {
+        setRisky(json.data || [])
+        if (json.p2_required) setP2Required(true)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Fetch failed')
     } finally {
@@ -135,7 +139,8 @@ export default function EntraPage() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${
+                disabled={loading}
+                className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   tab === t.key
                     ? 'bg-[#7c3aed] text-white'
                     : 'text-[#64748b] hover:text-[#94a3b8]'
@@ -145,8 +150,9 @@ export default function EntraPage() {
               </button>
             ))}
             <button
+              disabled={loading}
               onClick={() => load(tab === 'users' ? 'users' : tab === 'devices' ? 'devices' : tab === 'risky' ? 'risky_users' : 'overview')}
-              className="px-3 py-2 rounded-lg text-[#475569] hover:text-[#00d4ff] transition-colors"
+              className="px-3 py-2 rounded-lg text-[#475569] hover:text-[#00d4ff] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -253,7 +259,13 @@ export default function EntraPage() {
 
           {/* Risky users */}
           {tab === 'risky' && (
-            risky.length === 0 && !loading
+            p2Required
+              ? <div className="text-center py-16 rounded-xl border border-[#f59e0b33] bg-[#f59e0b08]">
+                  <ShieldAlert className="w-8 h-8 text-[#f59e0b] mx-auto mb-2" />
+                  <p className="text-sm font-medium text-[#f59e0b]">Requires Entra ID P2 License</p>
+                  <p className="text-xs text-[#64748b] mt-1 max-w-xs mx-auto">Identity Protection (risky users) is only available with Microsoft Entra ID P2 / Microsoft 365 E5. Your tenant is on a lower plan.</p>
+                </div>
+              : risky.length === 0 && !loading
               ? <div className="text-center py-16 rounded-xl border border-[#10b98122] bg-[#10b98108]">
                   <CheckCircle className="w-8 h-8 text-[#10b981] mx-auto mb-2" />
                   <p className="text-sm font-medium text-[#10b981]">No risky users detected</p>

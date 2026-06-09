@@ -55,15 +55,23 @@ export async function GET(req: NextRequest) {
 
     if (scope === 'users') {
       const data = await graphGet(
-        '/users?$select=id,displayName,mail,userPrincipalName,accountEnabled,department,jobTitle,assignedLicenses,createdDateTime&$top=100',
+        '/users?$select=id,displayName,mail,userPrincipalName,accountEnabled,department,jobTitle,assignedLicenses,createdDateTime&$top=999',
         token
       )
       return NextResponse.json({ configured: true, data: data.value })
     }
 
     if (scope === 'risky_users') {
-      const data = await graphGet('/identityProtection/riskyUsers?$top=50', token)
-      return NextResponse.json({ configured: true, data: data.value })
+      try {
+        const data = await graphGet('/identityProtection/riskyUsers?$top=999', token)
+        return NextResponse.json({ configured: true, data: data.value })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : ''
+        if (msg.includes('403') || msg.includes('Forbidden') || msg.includes('not licensed')) {
+          return NextResponse.json({ configured: true, data: [], p2_required: true })
+        }
+        throw e
+      }
     }
 
     if (scope === 'signin_logs') {
@@ -76,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     if (scope === 'devices') {
       const data = await graphGet(
-        '/devices?$select=id,displayName,operatingSystem,operatingSystemVersion,isCompliant,isManaged,trustType,registrationDateTime&$top=100',
+        '/devices?$select=id,displayName,operatingSystem,operatingSystemVersion,isCompliant,isManaged,trustType,registrationDateTime&$top=999',
         token
       )
       return NextResponse.json({ configured: true, data: data.value })
@@ -90,11 +98,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ configured: true, data: data.value })
     }
 
-    // Overview: fetch users + devices counts in parallel
+    // Overview: fetch users + devices counts in parallel (riskyUsers needs P2 — graceful fallback)
     const [usersResp, devicesResp, riskyResp] = await Promise.allSettled([
       graphGet('/users?$select=id,accountEnabled,assignedLicenses&$top=999', token),
       graphGet('/devices?$select=id,isCompliant,isManaged&$top=999', token),
-      graphGet('/identityProtection/riskyUsers?$filter=riskState eq \'atRisk\'&$top=100', token),
+      graphGet('/identityProtection/riskyUsers?$filter=riskState eq \'atRisk\'&$top=999', token),
     ])
 
     const users   = usersResp.status   === 'fulfilled' ? usersResp.value.value   : []

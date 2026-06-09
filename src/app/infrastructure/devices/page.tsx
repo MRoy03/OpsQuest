@@ -7,12 +7,6 @@ import {
   Server, Laptop, Smartphone, Clock, Package, ShieldCheck, ShieldAlert, Key,
   Mouse, Keyboard, Printer, Bluetooth, Usb,
 } from 'lucide-react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Device {
@@ -745,12 +739,11 @@ export default function DevicesPage() {
 
   async function load() {
     setRefreshing(true)
-    const { data } = await supabase
-      .from('infrastructure_devices')
-      .select('*')
-      .order('is_server', { ascending: false })
-      .order('last_seen',  { ascending: false })
-    setDevices((data as Device[]) || [])
+    try {
+      const resp = await fetch('/api/infrastructure/devices')
+      const json = await resp.json()
+      setDevices((json.data as Device[]) || [])
+    } catch { /* silent */ }
     setLoading(false)
     setRefreshing(false)
   }
