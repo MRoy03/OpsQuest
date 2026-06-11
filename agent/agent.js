@@ -1,6 +1,6 @@
 'use strict'
 /**
- * OpsQuest Server Agent v1.2.0
+ * OpsQuest Agent v1.4.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
@@ -97,8 +97,12 @@ function nodeFetch(url, options = {}) {
   })
 }
 
-async function supaUpsert(table, row) {
-  const resp = await nodeFetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+// conflictCol: the unique column to use for ON CONFLICT resolution
+async function supaUpsert(table, row, conflictCol) {
+  const url = conflictCol
+    ? `${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflictCol}`
+    : `${SUPABASE_URL}/rest/v1/${table}`
+  const resp = await nodeFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
@@ -794,18 +798,30 @@ async function collect() {
   const hostname   = hw.os?.computer_name               || os.hostname()
   const deviceType = detectDeviceType()
 
+  // Try upsert with agent_id (requires ALTER TABLE migration), fall back silently
+  const deviceRow = {
+    mac_address:   localMac,
+    device_type:   deviceType,
+    hostname,
+    last_ip:       localIp,
+    last_seen:     new Date().toISOString(),
+    hardware_info: hw,
+    is_server:     IS_SERVER,
+    agent_id:      AGENT_ID,
+  }
   try {
-    await supaUpsert('infrastructure_devices', {
-      mac_address:   localMac,
-      device_type:   deviceType,
-      hostname,
-      last_ip:       localIp,
-      last_seen:     new Date().toISOString(),
-      hardware_info: hw,
-      is_server:     IS_SERVER,
-    })
+    await supaUpsert('infrastructure_devices', deviceRow, 'mac_address')
     log(`  Device upserted: ${hostname} (${localIp}) [${deviceType}]`)
-  } catch (e) { log(`  ERROR device upsert: ${e.message}`) }
+  } catch (e) {
+    if (e.message.includes('PGRST204') || e.message.includes('agent_id')) {
+      // agent_id column not yet added — retry without it
+      try {
+        const { agent_id: _omit, ...rowNoAgentId } = deviceRow
+        await supaUpsert('infrastructure_devices', rowNoAgentId, 'mac_address')
+        log(`  Device upserted (run SQL to add agent_id col): ${hostname}`)
+      } catch (e2) { log(`  ERROR device upsert: ${e2.message}`) }
+    } else { log(`  ERROR device upsert: ${e.message}`) }
+  }
 
   // 2. Agent heartbeat
   try {
@@ -813,9 +829,9 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.3.0',
+      version:         '1.4.0',
       status:          'online',
-    })
+    }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
 
   // 3. ARP scan — only on server/gateway machine, skipped on clients
@@ -849,7 +865,7 @@ async function collect() {
           ...(r.location ? { location: r.location } : {}),
           ...(r.is_online ? { last_online: new Date().toISOString() } : {}),
         }
-        await supaUpsert('cameras', payload)
+        await supaUpsert('cameras', payload, 'name')
       } catch (e) { log(`  ERROR camera ${r.name}: ${e.message}`) }
     }
   }
@@ -857,14 +873,101 @@ async function collect() {
   log('─── Collection cycle complete ───')
 }
 
+// ─── COMMAND EXECUTION ────────────────────────────────────────────────────────
+function psStr(command) {
+  const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    timeout: 90000, encoding: 'utf8',
+  })
+  return ((r.stdout || '') + (r.stderr || '')).trim().slice(0, 4000)
+}
+
+async function cmdUpdate(id, status, result) {
+  try {
+    await nodeFetch(
+      `${SUPABASE_URL}/rest/v1/agent_commands?id=eq.${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify({
+          status,
+          result: result !== null ? result : undefined,
+          ...(status === 'done' || status === 'failed'
+            ? { completed_at: new Date().toISOString() }
+            : {}),
+        }),
+      }
+    )
+  } catch (e) { log(`  cmdUpdate error: ${e.message}`) }
+}
+
+async function executeCommand(cmd) {
+  log(`  CMD [${cmd.id.slice(0, 8)}] ${cmd.command_type} — ${JSON.stringify(cmd.payload)}`)
+  await cmdUpdate(cmd.id, 'running', null)
+  try {
+    let result = ''
+    const p = cmd.payload || {}
+    const safe = s => (s || '').replace(/"/g, "'").replace(/[`$]/g, '')
+
+    if (cmd.command_type === 'uninstall') {
+      const name = safe(p.name)
+      result = psStr(`
+        $r = winget uninstall --name "${name}" --silent --accept-source-agreements 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0) { "winget: OK\n" + $r }
+        else {
+          $pkg = Get-Package "${name}" -ErrorAction SilentlyContinue
+          if ($pkg) { "msi: OK\n" + ($pkg | Uninstall-Package -Force 2>&1 | Out-String) }
+          else { "Not found via winget or WMI: ${name}\n" + $r }
+        }
+      `)
+    } else if (cmd.command_type === 'winget_upgrade') {
+      const id = safe(p.winget_id || p.name)
+      result = psStr(`winget upgrade --id "${id}" --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-String`)
+    } else if (cmd.command_type === 'stop_service') {
+      result = psStr(`Stop-Service -Name "${safe(p.name)}" -Force -PassThru 2>&1 | Out-String`)
+    } else if (cmd.command_type === 'start_service') {
+      result = psStr(`Start-Service -Name "${safe(p.name)}" -PassThru 2>&1 | Out-String`)
+    } else {
+      result = `Unknown command type: ${cmd.command_type}`
+    }
+
+    await cmdUpdate(cmd.id, 'done', result)
+    log(`  CMD done [${cmd.id.slice(0, 8)}]: ${result.slice(0, 80)}`)
+  } catch (e) {
+    await cmdUpdate(cmd.id, 'failed', e.message)
+    log(`  CMD failed [${cmd.id.slice(0, 8)}]: ${e.message}`)
+  }
+}
+
+async function pollCommands() {
+  try {
+    const resp = await nodeFetch(
+      `${SUPABASE_URL}/rest/v1/agent_commands?agent_id=eq.${encodeURIComponent(AGENT_ID)}&status=eq.pending&order=created_at.asc&limit=5`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    )
+    if (!resp.ok) return
+    const cmds = await resp.json()
+    if (!Array.isArray(cmds) || cmds.length === 0) return
+    log(`  ${cmds.length} pending command(s) queued`)
+    for (const cmd of cmds) await executeCommand(cmd)
+  } catch (e) { log(`  CMD poll error: ${e.message}`) }
+}
+
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.3.0`)
+log(`OpsQuest Agent v1.4.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
-log(`Interval:  ${INTERVAL_MS / 1000}s`)
+log(`Interval:  ${INTERVAL_MS / 1000}s | Commands: polling every 15s`)
 log(`Cameras:   ${cfg.cameras?.length || 0}`)
 log('')
 
 collect().catch(e => log(`FATAL: ${e.message}`))
 setInterval(() => collect().catch(e => log(`ERROR: ${e.message}`)), INTERVAL_MS)
+
+pollCommands().catch(e => log(`CMD poll error: ${e.message}`))
+setInterval(() => pollCommands().catch(e => log(`CMD poll error: ${e.message}`)), 15000)

@@ -5,14 +5,23 @@ import TopBar from '@/components/layout/TopBar'
 import {
   Monitor, Cpu, HardDrive, MemoryStick, Wifi, RefreshCw,
   Server, Laptop, Smartphone, Clock, Package, ShieldCheck, ShieldAlert, Key,
-  Mouse, Keyboard, Printer, Bluetooth, Usb,
+  Mouse, Keyboard, Printer, Bluetooth, Usb, Download, ChevronDown, ChevronUp,
+  Terminal, Trash2, CheckCircle, XCircle, Loader2, AlertCircle,
 } from 'lucide-react'
+import { generateDevicesReport } from '@/lib/generateDevicesReport'
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Device {
   id: string; mac_address: string; device_type: string
   hostname: string; last_ip: string; is_server: boolean
-  last_seen: string; hardware_info: HardwareInfo
+  last_seen: string; hardware_info: HardwareInfo; agent_id?: string
+}
+
+interface AgentCommand {
+  id: string; agent_id: string; command_type: string
+  payload: { name: string; winget_id?: string }
+  status: 'pending' | 'running' | 'done' | 'failed'
+  result?: string; created_at: string; completed_at?: string
 }
 interface HardwareInfo {
   cpu?: CpuInfo; ram?: RamSlot[]; ram_total_gb?: number
@@ -425,19 +434,24 @@ function StorageSection({ disks, logical, partitions }: { disks: DiskInfo[]; log
 }
 
 // ─── SOFTWARE SECTION ────────────────────────────────────────────────────────
-function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[]; licenseKeys?: LicenseKeys }) {
-  const [swTab, setSwTab] = useState<'licensed' | 'all'>('licensed')
+function SoftwareSection({
+  software, licenseKeys, agentId, onCommandQueued,
+}: {
+  software: SoftwareEntry[]; licenseKeys?: LicenseKeys
+  agentId?: string; onCommandQueued?: () => void
+}) {
+  const [swTab, setSwTab]   = useState<'licensed' | 'all'>('licensed')
   const [search, setSearch] = useState('')
+  const [confirm, setConfirm] = useState<{ name: string } | null>(null)
+  const [queuing, setQueuing] = useState(false)
 
-  const licensed   = software.filter(s => s.is_licensed)
-  const unlicensed = software.filter(s => !s.is_licensed)
+  const licensed = software.filter(s => s.is_licensed)
 
   const filtered = (swTab === 'licensed' ? licensed : software).filter(s =>
     search === '' || s.name.toLowerCase().includes(search.toLowerCase()) ||
     (s.publisher || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  // Group licensed by category
   const licGroups: Record<string, SoftwareEntry[]> = {}
   for (const s of licensed) {
     const cat = s.license_category || 'Other'
@@ -445,8 +459,60 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
     licGroups[cat].push(s)
   }
 
+  async function queueUninstall(name: string) {
+    if (!agentId) return
+    setQueuing(true)
+    try {
+      await fetch('/api/infrastructure/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type: 'uninstall', payload: { name } }),
+      })
+      onCommandQueued?.()
+    } finally {
+      setQueuing(false)
+      setConfirm(null)
+    }
+  }
+
+  function UninstallBtn({ name }: { name: string }) {
+    if (!agentId) return null
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); setConfirm({ name }) }}
+        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] text-[#ef4444] bg-[#ef444411] hover:bg-[#ef444422] transition-all"
+        title="Uninstall on remote machine"
+      >
+        <Trash2 className="w-2.5 h-2.5" /> Uninstall
+      </button>
+    )
+  }
+
   return (
     <Section title={`Software (${software.length} installed · ${licensed.length} licensed)`} icon={Package} color="amber">
+
+      {/* Confirm dialog */}
+      {confirm && (
+        <div className="mb-4 p-3 rounded-lg border border-[#ef444433] bg-[#ef444408]">
+          <p className="text-xs text-[#e2e8f0] mb-1">
+            Uninstall <span className="font-semibold text-[#ef4444]">{confirm.name}</span> on <span className="font-mono text-[#94a3b8]">{agentId}</span>?
+          </p>
+          <p className="text-[10px] text-[#64748b] mb-3">The agent will execute winget/WMI uninstall. This cannot be undone.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => queueUninstall(confirm.name)}
+              disabled={queuing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[#ef4444] text-white hover:bg-[#dc2626] disabled:opacity-50"
+            >
+              {queuing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              {queuing ? 'Queuing…' : 'Confirm Uninstall'}
+            </button>
+            <button onClick={() => setConfirm(null)} className="px-3 py-1.5 rounded-md text-xs text-[#64748b] hover:text-[#e2e8f0] hover:bg-[#ffffff08]">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* License keys */}
       {licenseKeys && (
@@ -455,16 +521,16 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
             <Key className="w-3 h-3" /> License Keys & Activation
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {licenseKeys.windows_edition  && <Chip label="Windows Edition"    value={licenseKeys.windows_edition} />}
-            {licenseKeys.windows_key      && <Chip label="Windows Key"        value={licenseKeys.windows_key} mono />}
+            {licenseKeys.windows_edition   && <Chip label="Windows Edition"    value={licenseKeys.windows_edition} />}
+            {licenseKeys.windows_key       && <Chip label="Windows Key"        value={licenseKeys.windows_key} mono />}
             {licenseKeys.windows_activated && <Chip label="Windows Activation" value={licenseKeys.windows_activated} highlight={licenseKeys.windows_activated === 'Activated' ? 'green' : 'amber'} />}
-            {licenseKeys.ms_office        && <Chip label="MS Office / 365"    value={licenseKeys.ms_office} highlight={licenseKeys.ms_office === 'Activated' ? 'green' : 'amber'} />}
-            {licenseKeys.autocad          && <Chip label="AutoCAD Key"         value={licenseKeys.autocad} mono />}
+            {licenseKeys.ms_office         && <Chip label="MS Office / 365"    value={licenseKeys.ms_office} highlight={licenseKeys.ms_office === 'Activated' ? 'green' : 'amber'} />}
+            {licenseKeys.autocad           && <Chip label="AutoCAD Key"        value={licenseKeys.autocad} mono />}
           </div>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs + search */}
       <div className="flex items-center gap-2 mb-3">
         <div className="flex bg-[#060b18] rounded-lg border border-[#1a2f4a] p-0.5">
           <button onClick={() => setSwTab('licensed')}
@@ -473,12 +539,12 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
           </button>
           <button onClick={() => setSwTab('all')}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${swTab === 'all' ? 'bg-[#7c3aed] text-white' : 'text-[#64748b] hover:text-[#94a3b8]'}`}>
-            All Software ({software.length})
+            All ({software.length})
           </button>
         </div>
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search..."
+          placeholder="Search software..."
           className="flex-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-1.5 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#f59e0b]"
         />
       </div>
@@ -493,11 +559,12 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
                 <span className="text-xs font-bold text-[#f59e0b]">{cat}</span>
               </div>
               {apps.map((app, i) => (
-                <div key={i} className="flex items-center justify-between py-1 border-t border-[#1a2f4a] first:border-0">
+                <div key={i} className="group flex items-center justify-between py-1 border-t border-[#1a2f4a] first:border-0">
                   <span className="text-xs text-[#e2e8f0]">{app.name}</span>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     {app.version && <span className="text-[10px] text-[#64748b] font-mono">{app.version}</span>}
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">Licensed</span>
+                    <UninstallBtn name={app.name} />
                   </div>
                 </div>
               ))}
@@ -511,20 +578,19 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
           )}
         </div>
       ) : (
-        /* Flat list for all or search results */
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
           <div className="max-h-80 overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#060b18]">
                 <tr className="border-b border-[#1a2f4a]">
-                  {['Name', 'Version', 'Publisher', 'Status'].map(h => (
+                  {['Name', 'Version', 'Publisher', 'Status', ...(agentId ? ['Action'] : [])].map(h => (
                     <th key={h} className="text-left px-3 py-2 text-[#475569] font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s, i) => (
-                  <tr key={i} className="border-b border-[#0a1525] hover:bg-[#ffffff04] transition-colors">
+                  <tr key={i} className="group border-b border-[#0a1525] hover:bg-[#ffffff04] transition-colors">
                     <td className="px-3 py-2 text-[#e2e8f0]">{s.name}</td>
                     <td className="px-3 py-2 text-[#64748b] font-mono text-[10px]">{s.version || '—'}</td>
                     <td className="px-3 py-2 text-[#64748b] text-[10px]">{s.publisher || '—'}</td>
@@ -533,10 +599,13 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
                         <span className="flex items-center gap-1 text-[10px] text-[#10b981]">
                           <ShieldCheck className="w-3 h-3" /> {s.license_category}
                         </span>
-                      ) : (
-                        <span className="text-[10px] text-[#475569]">—</span>
-                      )}
+                      ) : <span className="text-[10px] text-[#475569]">—</span>}
                     </td>
+                    {agentId && (
+                      <td className="px-3 py-2">
+                        <UninstallBtn name={s.name} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -544,6 +613,7 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
           </div>
           <div className="px-3 py-2 bg-[#060b18] border-t border-[#1a2f4a] text-[10px] text-[#475569]">
             Showing {filtered.length} of {swTab === 'licensed' ? licensed.length : software.length} apps
+            {agentId && <span className="ml-2 text-[#475569]">· Hover row to uninstall</span>}
           </div>
         </div>
       )}
@@ -552,7 +622,7 @@ function SoftwareSection({ software, licenseKeys }: { software: SoftwareEntry[];
 }
 
 // ─── SERVER CARD ─────────────────────────────────────────────────────────────
-function ServerCard({ device }: { device: Device }) {
+function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueued?: () => void }) {
   const hw     = device.hardware_info
   const online = (Date.now() - new Date(device.last_seen).getTime()) < 180000
 
@@ -648,7 +718,11 @@ function ServerCard({ device }: { device: Device }) {
         )}
 
         {hw.software?.length ? (
-          <SoftwareSection software={hw.software} licenseKeys={hw.license_keys} />
+          <SoftwareSection
+            software={hw.software} licenseKeys={hw.license_keys}
+            agentId={device.agent_id || device.hostname || undefined}
+            onCommandQueued={onCommandQueued}
+          />
         ) : null}
       </div>
     </div>
@@ -656,8 +730,9 @@ function ServerCard({ device }: { device: Device }) {
 }
 
 // ─── CLIENT ROW ──────────────────────────────────────────────────────────────
-function ClientCard({ device }: { device: Device }) {
+function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device; forceExpanded?: boolean; onCommandQueued?: () => void }) {
   const [expanded, setExpanded] = useState(false)
+  const isOpen = forceExpanded || expanded
   const hw     = device.hardware_info
   const online = (Date.now() - new Date(device.last_seen).getTime()) < 300000
   const IconComp = device.device_type === 'mobile' ? Smartphone : Laptop
@@ -688,7 +763,7 @@ function ClientCard({ device }: { device: Device }) {
             <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#475569]'}`} />
             <span className="text-[10px] text-[#475569]">{ago(device.last_seen)}</span>
           </div>
-          <span className="text-[#475569] text-xs">{expanded ? '▲' : '▼'}</span>
+          {!forceExpanded && <span className="text-[#475569] text-xs">{isOpen ? '▲' : '▼'}</span>}
         </div>
       </div>
 
@@ -701,7 +776,7 @@ function ClientCard({ device }: { device: Device }) {
       </div>
 
       {/* Expanded hardware */}
-      {expanded && (
+      {isOpen && (
         <div className="border-t border-[#1a2f4a] p-4 space-y-4">
           {!hw.cpu && !hw.os && (
             <p className="text-xs text-[#475569] italic">Remote WMI unavailable — MAC/IP only (device may not be domain-joined)</p>
@@ -723,8 +798,137 @@ function ClientCard({ device }: { device: Device }) {
           ) : null}
           {hw.peripherals && <PeripheralsSection p={hw.peripherals} />}
           {hw.software?.length ? (
-            <SoftwareSection software={hw.software} licenseKeys={hw.license_keys} />
+            <SoftwareSection
+              software={hw.software} licenseKeys={hw.license_keys}
+              agentId={device.agent_id || device.hostname || undefined}
+              onCommandQueued={onCommandQueued}
+            />
           ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── COMMANDS PANEL ──────────────────────────────────────────────────────────
+function CommandsPanel({ refresh }: { refresh: number }) {
+  const [cmds, setCmds] = useState<AgentCommand[]>([])
+  const [open, setOpen] = useState(false)
+  const [result, setResult] = useState<AgentCommand | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const r = await fetch('/api/infrastructure/commands')
+        const j = await r.json()
+        setCmds(j.data || [])
+      } catch { /* silent */ }
+    }
+    load()
+  }, [refresh])
+
+  // Auto-poll while pending/running commands exist
+  useEffect(() => {
+    const hasPending = cmds.some(c => c.status === 'pending' || c.status === 'running')
+    if (!hasPending) return
+    const t = setInterval(async () => {
+      try {
+        const r = await fetch('/api/infrastructure/commands')
+        const j = await r.json()
+        setCmds(j.data || [])
+      } catch { /* silent */ }
+    }, 4000)
+    return () => clearInterval(t)
+  }, [cmds])
+
+  if (cmds.length === 0) return null
+
+  const pending = cmds.filter(c => c.status === 'pending' || c.status === 'running').length
+  const failed  = cmds.filter(c => c.status === 'failed').length
+
+  function StatusIcon({ status }: { status: string }) {
+    if (status === 'pending')  return <Clock      className="w-3.5 h-3.5 text-[#f59e0b]" />
+    if (status === 'running')  return <Loader2    className="w-3.5 h-3.5 text-[#00d4ff] animate-spin" />
+    if (status === 'done')     return <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" />
+    return <XCircle className="w-3.5 h-3.5 text-[#ef4444]" />
+  }
+  function StatusColor(status: string) {
+    if (status === 'pending') return 'text-[#f59e0b]'
+    if (status === 'running') return 'text-[#00d4ff]'
+    if (status === 'done')    return 'text-[#10b981]'
+    return 'text-[#ef4444]'
+  }
+
+  return (
+    <div className="rounded-xl border border-[#1a2f4a] bg-[#0d1f35] overflow-hidden">
+      <div
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[#ffffff03]"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-[#a78bfa]" />
+          <span className="text-xs font-semibold text-[#e2e8f0]">Remote Commands</span>
+          {pending > 0 && (
+            <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#00d4ff22] text-[#00d4ff]">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />{pending} active
+            </span>
+          )}
+          {failed > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ef444422] text-[#ef4444]">
+              {failed} failed
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-[#475569]">{cmds.length} command{cmds.length !== 1 ? 's' : ''}</span>
+          <span className="text-[#475569] text-xs">{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div className="border-t border-[#1a2f4a]">
+          {/* Result modal */}
+          {result && (
+            <div className="m-3 p-3 rounded-lg bg-[#060b18] border border-[#1a2f4a]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-[#a78bfa] uppercase tracking-wider">
+                  {result.command_type} — {result.payload.name} on {result.agent_id}
+                </span>
+                <button onClick={() => setResult(null)} className="text-[#475569] hover:text-[#e2e8f0] text-xs">✕</button>
+              </div>
+              <pre className="text-[11px] text-[#94a3b8] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
+                {result.result || '(no output)'}
+              </pre>
+            </div>
+          )}
+          <div className="divide-y divide-[#0a1525]">
+            {cmds.map(cmd => (
+              <div key={cmd.id} className="flex items-center gap-3 px-4 py-2.5">
+                <StatusIcon status={cmd.status} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#e2e8f0] truncate">{cmd.payload.name}</span>
+                    <span className="text-[10px] px-1.5 py-px rounded bg-[#7c3aed22] text-[#a78bfa] shrink-0">{cmd.command_type}</span>
+                  </div>
+                  <span className="text-[10px] text-[#475569] font-mono">{cmd.agent_id}</span>
+                </div>
+                <span className={`text-[10px] font-medium shrink-0 ${StatusColor(cmd.status)}`}>
+                  {cmd.status}
+                </span>
+                {cmd.result && (
+                  <button
+                    onClick={() => setResult(cmd)}
+                    className="text-[10px] text-[#475569] hover:text-[#a78bfa] shrink-0"
+                  >
+                    View output
+                  </button>
+                )}
+                <span className="text-[10px] text-[#334155] shrink-0">
+                  {new Date(cmd.created_at).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -733,9 +937,11 @@ function ClientCard({ device }: { device: Device }) {
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function DevicesPage() {
-  const [devices, setDevices]   = useState<Device[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const [devices, setDevices]         = useState<Device[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [refreshing, setRefreshing]   = useState(false)
+  const [expandAll, setExpandAll]     = useState(false)
+  const [cmdRefresh, setCmdRefresh]   = useState(0)
 
   async function load() {
     setRefreshing(true)
@@ -754,28 +960,52 @@ export default function DevicesPage() {
     return () => clearInterval(t)
   }, [])
 
-  const server  = devices.find(d => d.is_server)
+  const servers = devices.filter(d => d.is_server)
   const clients = devices.filter(d => !d.is_server)
+  const agentsOnline = devices.filter(d => (Date.now() - new Date(d.last_seen).getTime()) < 180000).length
 
   return (
     <>
-      <TopBar title="Device Monitor" subtitle={`${devices.length} device${devices.length !== 1 ? 's' : ''} — hardware · software · licenses`} />
+      <TopBar
+        title="Device Monitor"
+        subtitle={`${devices.length} device${devices.length !== 1 ? 's' : ''} · ${agentsOnline} agent${agentsOnline !== 1 ? 's' : ''} online — hardware · software · licenses`}
+      />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-4xl mx-auto space-y-6">
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex gap-4 text-xs text-[#64748b]">
               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />Online (&lt;3 min)</span>
               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#475569]" />Offline</span>
-              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#10b981]" />Licensed software detected</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#10b981]" />Licensed</span>
             </div>
-            <button
-              onClick={load}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00d4ff11] border border-[#00d4ff22] text-[#00d4ff] text-xs hover:bg-[#00d4ff22] transition-colors"
-            >
-              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              {clients.length > 0 && (
+                <button
+                  onClick={() => setExpandAll(e => !e)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#7c3aed11] border border-[#7c3aed33] text-[#a78bfa] text-xs hover:bg-[#7c3aed22] transition-colors"
+                >
+                  {expandAll ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {expandAll ? 'Collapse All' : 'Expand All'}
+                </button>
+              )}
+              {devices.length > 0 && (
+                <button
+                  onClick={() => generateDevicesReport(devices)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#10b98111] border border-[#10b98133] text-[#10b981] text-xs hover:bg-[#10b98122] transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  HTML Report
+                </button>
+              )}
+              <button
+                onClick={load}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00d4ff11] border border-[#00d4ff22] text-[#00d4ff] text-xs hover:bg-[#00d4ff22] transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -788,26 +1018,40 @@ export default function DevicesPage() {
             <div className="text-center py-20 rounded-xl border border-[#1a2f4a] bg-[#0d1f35]">
               <Server className="w-10 h-10 mx-auto mb-3 text-[#475569]" />
               <p className="text-[#64748b] font-medium">No devices yet</p>
-              <p className="text-xs text-[#475569] mt-1">Run agent.exe as Administrator on your server</p>
+              <p className="text-xs text-[#475569] mt-1">Run agent.exe as Administrator on any machine</p>
             </div>
           ) : (
             <>
-              {server && (
+              {servers.length > 0 && (
                 <div>
-                  <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">Server</h2>
-                  <ServerCard device={server} />
+                  <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">
+                    Server{servers.length > 1 ? `s (${servers.length})` : ''}
+                  </h2>
+                  <div className="space-y-4">
+                    {servers.map(d => (
+                      <ServerCard key={d.id} device={d} onCommandQueued={() => setCmdRefresh(n => n + 1)} />
+                    ))}
+                  </div>
                 </div>
               )}
               {clients.length > 0 && (
                 <div>
-                  <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">
-                    Connected Clients ({clients.length}) — click to expand
-                  </h2>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xs font-bold text-[#475569] uppercase tracking-widest">
+                      Agent Clients ({clients.length})
+                    </h2>
+                    <span className="text-[10px] text-[#475569]">
+                      {clients.filter(d => d.hardware_info?.cpu).length} with full hardware · click row to expand
+                    </span>
+                  </div>
                   <div className="space-y-3">
-                    {clients.map(d => <ClientCard key={d.id} device={d} />)}
+                    {clients.map(d => (
+                      <ClientCard key={d.id} device={d} forceExpanded={expandAll} onCommandQueued={() => setCmdRefresh(n => n + 1)} />
+                    ))}
                   </div>
                 </div>
               )}
+              <CommandsPanel refresh={cmdRefresh} />
             </>
           )}
         </div>

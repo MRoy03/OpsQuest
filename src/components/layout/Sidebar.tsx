@@ -11,15 +11,17 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
 
+const ADMIN_EMAIL = 'roy62125@gmail.com'
+
 const NAV_ITEMS = [
-  { href: '/', label: 'Command Center', icon: LayoutDashboard },
-  { href: '/solver', label: 'Problem Solver', icon: Zap },
-  { href: '/tickets', label: 'Ticket War Room', icon: Ticket },
-  { href: '/predictor', label: 'Issue Predictor', icon: Activity },
-  { href: '/admin', label: 'Knowledge Lab', icon: BookOpen },
-  { href: '/gamification', label: 'Achievements', icon: Trophy },
-  { href: '/docs', label: 'Documentation', icon: FileText },
-  { href: '/infrastructure', label: 'Infrastructure', icon: Server },
+  { href: '/',              label: 'Command Center', icon: LayoutDashboard, adminOnly: false },
+  { href: '/solver',        label: 'Problem Solver', icon: Zap,             adminOnly: false },
+  { href: '/tickets',       label: 'Ticket War Room',icon: Ticket,          adminOnly: false },
+  { href: '/predictor',     label: 'Issue Predictor',icon: Activity,        adminOnly: false },
+  { href: '/admin',         label: 'Knowledge Lab',  icon: BookOpen,        adminOnly: false },
+  { href: '/gamification',  label: 'Achievements',   icon: Trophy,          adminOnly: false },
+  { href: '/docs',          label: 'Documentation',  icon: FileText,        adminOnly: false },
+  { href: '/infrastructure',label: 'Infrastructure', icon: Server,          adminOnly: true  },
 ]
 
 export default function Sidebar() {
@@ -27,8 +29,10 @@ export default function Sidebar() {
   const router = useRouter()
   const { user, loading, signOut } = useAuth()
 
+  const isAdmin     = user?.email === ADMIN_EMAIL
   const displayName = user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'Operator'
-  const initials = displayName.slice(0, 2).toUpperCase()
+  const initials    = displayName.slice(0, 2).toUpperCase()
+  const visibleNav  = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
 
   async function handleSignOut() {
     await signOut()
@@ -57,7 +61,7 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }, idx) => {
+        {visibleNav.map(({ href, label, icon: Icon }, idx) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <motion.div
@@ -97,7 +101,10 @@ export default function Sidebar() {
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-[#e2e8f0] truncate">{displayName}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-[#e2e8f0] truncate">{displayName}</p>
+                  {isAdmin && <span className="text-[8px] px-1 py-px rounded bg-[#00d4ff22] text-[#00d4ff] font-bold tracking-wider shrink-0">ADMIN</span>}
+                </div>
                 <p className="text-[10px] text-[#475569] truncate">{user.email}</p>
               </div>
             </div>
