@@ -112,7 +112,7 @@ function DeviceActivityCard({ device }: { device: DeviceActivity }) {
                     <td className="px-3 py-2 text-[#64748b] max-w-[200px] truncate">{e.window_title || '—'}</td>
                     <td className="px-3 py-2 text-[#10b981] font-mono">{fmtTime(e.usage_seconds)}</td>
                     <td className="px-3 py-2 text-[#475569]">
-                      {e.last_active ? new Date(e.last_active).toLocaleTimeString() : '—'}
+                      {(() => { const d = e.last_active ? new Date(e.last_active) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString() : '—' })()}
                     </td>
                   </tr>
                 ))}

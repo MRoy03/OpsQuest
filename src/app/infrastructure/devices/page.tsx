@@ -130,11 +130,14 @@ function HardwareSparkline({ agentId }: { agentId: string }) {
     </div>
   )
 
-  const chartData = data.map(d => ({
-    t: new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    cpu: d.cpu_load ?? 0,
-    ram: d.ram_total_gb > 0 ? Math.round((d.ram_used_gb / d.ram_total_gb) * 100) : 0,
-  }))
+  const chartData = data.map(d => {
+    const dt = new Date(d.recorded_at)
+    return {
+      t: isNaN(dt.getTime()) ? '' : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      cpu: d.cpu_load ?? 0,
+      ram: d.ram_total_gb > 0 ? Math.round((d.ram_used_gb / d.ram_total_gb) * 100) : 0,
+    }
+  }).filter(d => d.t !== '')
   const id = agentId.replace(/[^a-z0-9]/gi, '')
 
   return (

@@ -790,19 +790,32 @@ function detectDeviceType() {
 // ─── ACTIVITY TRACKING ───────────────────────────────────────────────────────
 const activityState = {}  // { appName: { seconds, window_title, last_active } }
 
+// System processes to exclude from activity tracking
+const SYSTEM_PROCS = new Set([
+  'system','idle','registry','smss','csrss','wininit','winlogon','services','lsass',
+  'svchost','dwm','fontdrvhost','conhost','runtimebroker','searchindexer','searchhost',
+  'wmiprvse','spoolsv','securityhealthservice','sgrmbroker','msdtc','taskhostw',
+  'sihost','ctfmon','dllhost','shellexperiencehost','startmenuexperiencehost',
+  'textinputhost','memcompression','vmmem','msiexec','audiodg','uhssvc',
+  'unsecapp','wbemcons','wbemprovider','agent','nssm',
+])
+
 function sampleActivity() {
+  // NOTE: Services run in Session 0 — MainWindowTitle is not visible for user processes.
+  // Instead we track all non-system user-space processes by name as a proxy for app usage.
   try {
     const procs = arr(ps(
-      `Get-Process | Where-Object {$_.MainWindowTitle -and $_.MainWindowTitle.Trim() -ne ''} | ` +
-      `Select-Object ProcessName,@{N='T';E={$_.MainWindowTitle.Trim()}} | ConvertTo-Json -Compress`
+      `Get-Process | Where-Object { $_.Id -gt 4 } | ` +
+      `Select-Object ProcessName | Sort-Object ProcessName -Unique | ConvertTo-Json -Compress`
     ))
     for (const p of procs) {
       if (!p || !p.ProcessName) continue
-      const app = (p.ProcessName + '.exe').toLowerCase()
+      const lower = p.ProcessName.toLowerCase()
+      if (SYSTEM_PROCS.has(lower)) continue
+      const app = lower + '.exe'
       if (!activityState[app]) activityState[app] = { seconds: 0, window_title: '', last_active: null }
       activityState[app].seconds += 15
-      activityState[app].window_title = (p.T || '').slice(0, 200)
-      activityState[app].last_active  = new Date().toISOString()
+      activityState[app].last_active = new Date().toISOString()
     }
   } catch (e) { log(`  Activity sample: ${e.message}`) }
 }
@@ -862,25 +875,38 @@ async function pushHardwareHistory(hw) {
 // ─── EVENT LOG COLLECTION ────────────────────────────────────────────────────
 let lastEventCollect = null
 
+function parseWmiDate(raw) {
+  if (!raw) return new Date().toISOString()
+  // PowerShell ConvertTo-Json serialises DateTime as /Date(ms)/ in PS5, ISO string in PS7
+  if (typeof raw === 'string' && raw.includes('/Date(')) {
+    const m = raw.match(/\((\d+)/)
+    return m ? new Date(parseInt(m[1])).toISOString() : new Date().toISOString()
+  }
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+}
+
 async function collectEventLogs() {
   try {
-    const since = lastEventCollect
-      ? lastEventCollect.toISOString()
-      : new Date(Date.now() - INTERVAL_MS - 120000).toISOString()
+    const secondsBack = Math.ceil((lastEventCollect
+      ? (Date.now() - lastEventCollect.getTime())
+      : INTERVAL_MS + 120000) / 1000)
     lastEventCollect = new Date()
     log('  Collecting Windows Event Logs...')
     const events = arr(ps(`
       try {
-        $s = [DateTime]::Parse('${since}').ToLocalTime()
+        $s = (Get-Date).AddSeconds(-${secondsBack})
         Get-WinEvent -FilterHashtable @{LogName='System','Application';Level=1,2,3;StartTime=$s} -MaxEvents 100 -EA SilentlyContinue |
-          Select-Object Id,TimeCreated,LevelDisplayName,ProviderName,LogName,
+          Select-Object Id,
+            @{N='TC';E={$_.TimeCreated.ToString('o')}},
+            LevelDisplayName,ProviderName,LogName,
             @{N='Msg';E={($_.Message -replace '[\\r\\n]+',' ').Substring(0,[Math]::Min(($_.Message -replace '[\\r\\n]+',' ').Length,500))}} |
           ConvertTo-Json -Compress -Depth 2
       } catch { '[]' }
     `))
     const rows = arr(events).filter(e => e && e.Id).map(e => ({
       agent_id:   AGENT_ID,
-      event_time: e.TimeCreated ? new Date(parseInt((e.TimeCreated.match(/\d+/) || ['0'])[0])).toISOString() : new Date().toISOString(),
+      event_time: parseWmiDate(e.TC),
       level:      e.LevelDisplayName || 'Information',
       log_name:   e.LogName   || 'Application',
       source:     e.ProviderName || 'Unknown',
