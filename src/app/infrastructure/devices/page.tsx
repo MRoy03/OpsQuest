@@ -9,6 +9,7 @@ import {
   Terminal, Trash2, CheckCircle, XCircle, Loader2, AlertCircle,
 } from 'lucide-react'
 import { generateDevicesReport } from '@/lib/generateDevicesReport'
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface Device {
@@ -73,6 +74,102 @@ function ago(ts: string) {
   if (d < 3600) return `${Math.floor(d / 60)}m ago`
   if (d < 86400) return `${Math.floor(d / 3600)}h ago`
   return `${Math.floor(d / 86400)}d ago`
+}
+
+// ─── HEALTH SCORE ─────────────────────────────────────────────────────────────
+function computeHealthScore(device: Device): number {
+  const hw = device.hardware_info
+  if (!hw?.cpu && !hw?.os) return -1
+  let score = 100
+  const seenMin = (Date.now() - new Date(device.last_seen).getTime()) / 60000
+  if (seenMin > 60) return 0
+  if (seenMin > 10) score -= 20
+  for (const d of (hw.logical_drives || [])) {
+    if (d.use_pct > 90) score -= 20
+    else if (d.use_pct > 80) score -= 10
+  }
+  const cpuLoad = hw.cpu?.load_percent ?? 0
+  if (cpuLoad > 90) score -= 20
+  else if (cpuLoad > 70) score -= 10
+  if (hw.license_keys?.windows_activated === 'Not Activated / Unknown') score -= 10
+  if ((hw.os?.uptime_hours ?? 0) > 720) score -= 5
+  return Math.max(0, Math.min(100, score))
+}
+
+function HealthBadge({ device }: { device: Device }) {
+  const score = computeHealthScore(device)
+  if (score < 0) return null
+  const color = score >= 90 ? '#10b981' : score >= 70 ? '#f59e0b' : score >= 50 ? '#f97316' : '#ef4444'
+  const bg    = score >= 90 ? '#10b98118' : score >= 70 ? '#f59e0b18' : score >= 50 ? '#f9731618' : '#ef444418'
+  return (
+    <div title={`Device health: ${score}/100`}
+      style={{ borderColor: `${color}44`, background: bg, color }}
+      className="flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold shrink-0"
+    >
+      <span>{score}</span><span className="text-[9px] opacity-70">/100</span>
+    </div>
+  )
+}
+
+// ─── HARDWARE SPARKLINE ───────────────────────────────────────────────────────
+interface HistoryPoint { agent_id: string; recorded_at: string; cpu_load: number; ram_used_gb: number; ram_total_gb: number }
+
+function HardwareSparkline({ agentId }: { agentId: string }) {
+  const [data, setData] = useState<HistoryPoint[]>([])
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/infrastructure/history?agent_id=${encodeURIComponent(agentId)}&hours=4`)
+      .then(r => r.json()).then(j => { setData(j.data || []); setReady(true) }).catch(() => setReady(true))
+  }, [agentId])
+
+  if (!ready) return null
+  if (data.length < 3) return (
+    <div className="rounded-lg border border-[#1a2f4a] bg-[#060b18] px-3 py-2 text-[10px] text-[#334155] text-center">
+      No history yet — upgrade to agent v1.5.0
+    </div>
+  )
+
+  const chartData = data.map(d => ({
+    t: new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    cpu: d.cpu_load ?? 0,
+    ram: d.ram_total_gb > 0 ? Math.round((d.ram_used_gb / d.ram_total_gb) * 100) : 0,
+  }))
+  const id = agentId.replace(/[^a-z0-9]/gi, '')
+
+  return (
+    <div className="rounded-lg border border-[#1a2f4a] bg-[#060b18] px-3 py-2">
+      <div className="flex items-center gap-4 mb-1 text-[10px] text-[#475569]">
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#00d4ff] inline-block rounded" />CPU %</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#a78bfa] inline-block rounded" />RAM %</span>
+        <span className="ml-auto opacity-60">Last 4h · {data.length} points</span>
+      </div>
+      <div className="h-16">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 2, right: 2, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id={`cg${id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={`rg${id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="t" hide />
+            <Tooltip
+              contentStyle={{ background: '#0a1525', border: '1px solid #1a2f4a', borderRadius: 6, fontSize: 10 }}
+              formatter={(v: number, name: string) => [`${v}%`, name === 'cpu' ? 'CPU' : 'RAM']}
+              labelStyle={{ color: '#64748b', fontSize: 10 }}
+            />
+            <Area type="monotone" dataKey="cpu" stroke="#00d4ff" strokeWidth={1.5} fill={`url(#cg${id})`} dot={false} isAnimationActive={false} />
+            <Area type="monotone" dataKey="ram" stroke="#a78bfa" strokeWidth={1.5} fill={`url(#rg${id})`} dot={false} isAnimationActive={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
 }
 
 function Chip({ label, value, mono = false, highlight }: { label: string; value?: string | number | null; mono?: boolean; highlight?: 'green' | 'red' | 'amber' }) {
@@ -639,13 +736,23 @@ function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueu
             <p className="text-xs text-[#475569] font-mono">{device.last_ip} · {device.mac_address}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#ef4444]'}`} />
-          <span className={`text-xs ${online ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-            {online ? 'Online' : ago(device.last_seen)}
-          </span>
+        <div className="flex items-center gap-2">
+          <HealthBadge device={device} />
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#ef4444]'}`} />
+            <span className={`text-xs ${online ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+              {online ? 'Online' : ago(device.last_seen)}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Hardware history sparkline */}
+      {(device.agent_id || device.hostname) && (
+        <div className="mb-4">
+          <HardwareSparkline agentId={device.agent_id || device.hostname} />
+        </div>
+      )}
 
       {/* OS + System overview */}
       {(hw.os || hw.system) && (
@@ -753,10 +860,11 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
           <p className="text-sm font-semibold text-[#e2e8f0] truncate">{device.hostname || device.last_ip}</p>
           <p className="text-[11px] text-[#475569] font-mono">{device.mac_address} · {device.last_ip}</p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <HealthBadge device={device} />
           {licensed.length > 0 && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">
-              {licensed.length} licensed app{licensed.length !== 1 ? 's' : ''}
+              {licensed.length} lic
             </span>
           )}
           <div className="flex items-center gap-1.5">
@@ -778,6 +886,9 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
       {/* Expanded hardware */}
       {isOpen && (
         <div className="border-t border-[#1a2f4a] p-4 space-y-4">
+          {(device.agent_id || device.hostname) && (
+            <HardwareSparkline agentId={device.agent_id || device.hostname} />
+          )}
           {!hw.cpu && !hw.os && (
             <p className="text-xs text-[#475569] italic">Remote WMI unavailable — MAC/IP only (device may not be domain-joined)</p>
           )}

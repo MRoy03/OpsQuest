@@ -7,6 +7,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
+  AlertTriangle, Monitor,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -21,7 +22,9 @@ const NAV_ITEMS = [
   { href: '/admin',         label: 'Knowledge Lab',  icon: BookOpen,        adminOnly: false },
   { href: '/gamification',  label: 'Achievements',   icon: Trophy,          adminOnly: false },
   { href: '/docs',          label: 'Documentation',  icon: FileText,        adminOnly: false },
-  { href: '/infrastructure',label: 'Infrastructure', icon: Server,          adminOnly: true  },
+  { href: '/infrastructure',          label: 'Infrastructure',  icon: Server,        adminOnly: true  },
+  { href: '/infrastructure/events',   label: 'Event Logs',      icon: AlertTriangle, adminOnly: true  },
+  { href: '/infrastructure/activity', label: 'Activity Monitor', icon: Monitor,       adminOnly: true  },
 ]
 
 export default function Sidebar() {

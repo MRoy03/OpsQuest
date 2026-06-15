@@ -787,6 +787,117 @@ function detectDeviceType() {
   return IS_SERVER ? 'server' : 'desktop'
 }
 
+// ─── ACTIVITY TRACKING ───────────────────────────────────────────────────────
+const activityState = {}  // { appName: { seconds, window_title, last_active } }
+
+function sampleActivity() {
+  try {
+    const procs = arr(ps(
+      `Get-Process | Where-Object {$_.MainWindowTitle -and $_.MainWindowTitle.Trim() -ne ''} | ` +
+      `Select-Object ProcessName,@{N='T';E={$_.MainWindowTitle.Trim()}} | ConvertTo-Json -Compress`
+    ))
+    for (const p of procs) {
+      if (!p || !p.ProcessName) continue
+      const app = (p.ProcessName + '.exe').toLowerCase()
+      if (!activityState[app]) activityState[app] = { seconds: 0, window_title: '', last_active: null }
+      activityState[app].seconds += 15
+      activityState[app].window_title = (p.T || '').slice(0, 200)
+      activityState[app].last_active  = new Date().toISOString()
+    }
+  } catch (e) { log(`  Activity sample: ${e.message}`) }
+}
+
+async function flushActivity() {
+  const today = new Date().toISOString().slice(0, 10)
+  const toFlush = Object.entries(activityState).filter(([, v]) => v.seconds > 0)
+  if (!toFlush.length) return
+  log(`  Activity flush: ${toFlush.length} app(s)`)
+  for (const [app_name, stat] of toFlush) {
+    try {
+      const getResp = await nodeFetch(
+        `${SUPABASE_URL}/rest/v1/app_activity?agent_id=eq.${encodeURIComponent(AGENT_ID)}&app_name=eq.${encodeURIComponent(app_name)}&date=eq.${today}&select=id,usage_seconds`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      )
+      const rows = await getResp.json()
+      if (Array.isArray(rows) && rows[0]) {
+        await nodeFetch(`${SUPABASE_URL}/rest/v1/app_activity?id=eq.${encodeURIComponent(rows[0].id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ usage_seconds: (rows[0].usage_seconds || 0) + stat.seconds, window_title: stat.window_title, last_active: stat.last_active }),
+        })
+      } else {
+        await nodeFetch(`${SUPABASE_URL}/rest/v1/app_activity`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+          body: JSON.stringify([{ agent_id: AGENT_ID, app_name, window_title: stat.window_title, date: today, usage_seconds: stat.seconds, last_active: stat.last_active }]),
+        })
+      }
+      stat.seconds = 0
+    } catch (e) { log(`  Activity flush (${app_name}): ${e.message}`) }
+  }
+}
+
+// ─── HARDWARE HISTORY ────────────────────────────────────────────────────────
+async function pushHardwareHistory(hw) {
+  try {
+    const freeKB = ps(`(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory`)
+    const freeGB = typeof freeKB === 'number' ? freeKB / 1048576 : 0
+    const total  = hw.ram_total_gb || 0
+    await nodeFetch(`${SUPABASE_URL}/rest/v1/hardware_history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+      body: JSON.stringify([{
+        agent_id:       AGENT_ID,
+        recorded_at:    new Date().toISOString(),
+        cpu_load:       hw.cpu?.load_percent ?? 0,
+        ram_used_gb:    parseFloat((total - freeGB).toFixed(2)),
+        ram_total_gb:   total,
+        disk_snapshots: (hw.logical_drives || []).map(d => ({ drive: d.drive, free_gb: d.free_gb, used_gb: d.used_gb, size_gb: d.size_gb, use_pct: d.use_pct })),
+      }]),
+    })
+    log('  Hardware history saved')
+  } catch (e) { log(`  Hardware history: ${e.message}`) }
+}
+
+// ─── EVENT LOG COLLECTION ────────────────────────────────────────────────────
+let lastEventCollect = null
+
+async function collectEventLogs() {
+  try {
+    const since = lastEventCollect
+      ? lastEventCollect.toISOString()
+      : new Date(Date.now() - INTERVAL_MS - 120000).toISOString()
+    lastEventCollect = new Date()
+    log('  Collecting Windows Event Logs...')
+    const events = arr(ps(`
+      try {
+        $s = [DateTime]::Parse('${since}').ToLocalTime()
+        Get-WinEvent -FilterHashtable @{LogName='System','Application';Level=1,2,3;StartTime=$s} -MaxEvents 100 -EA SilentlyContinue |
+          Select-Object Id,TimeCreated,LevelDisplayName,ProviderName,LogName,
+            @{N='Msg';E={($_.Message -replace '[\\r\\n]+',' ').Substring(0,[Math]::Min(($_.Message -replace '[\\r\\n]+',' ').Length,500))}} |
+          ConvertTo-Json -Compress -Depth 2
+      } catch { '[]' }
+    `))
+    const rows = arr(events).filter(e => e && e.Id).map(e => ({
+      agent_id:   AGENT_ID,
+      event_time: e.TimeCreated ? new Date(parseInt((e.TimeCreated.match(/\d+/) || ['0'])[0])).toISOString() : new Date().toISOString(),
+      level:      e.LevelDisplayName || 'Information',
+      log_name:   e.LogName   || 'Application',
+      source:     e.ProviderName || 'Unknown',
+      event_id:   e.Id,
+      message:    e.Msg || '',
+    }))
+    if (!rows.length) return
+    log(`  Event Logs: ${rows.length} event(s)`)
+    const resp = await nodeFetch(`${SUPABASE_URL}/rest/v1/event_logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+    })
+    if (!resp.ok) log(`  Event logs error: ${resp.status}`)
+  } catch (e) { log(`  Event logs: ${e.message}`) }
+}
+
 // ─── COLLECT LOOP ─────────────────────────────────────────────────────────────
 async function collect() {
   log('─── Collection cycle start ───')
@@ -829,10 +940,19 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.4.0',
+      version:         '1.5.0',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
+
+  // 3b. Hardware history snapshot
+  await pushHardwareHistory(hw).catch(e => log(`  ERROR hw history: ${e.message}`))
+
+  // 3c. Windows event logs
+  await collectEventLogs().catch(e => log(`  ERROR event logs: ${e.message}`))
+
+  // 3d. App activity flush
+  await flushActivity().catch(e => log(`  ERROR activity flush: ${e.message}`))
 
   // 3. ARP scan — only on server/gateway machine, skipped on clients
   if (SCAN_NETWORK) {
@@ -958,16 +1078,21 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.4.0`)
+log(`OpsQuest Agent v1.5.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
-log(`Interval:  ${INTERVAL_MS / 1000}s | Commands: polling every 15s`)
+log(`Interval:  ${INTERVAL_MS / 1000}s | Commands + activity sampling: every 15s`)
 log(`Cameras:   ${cfg.cameras?.length || 0}`)
 log('')
 
 collect().catch(e => log(`FATAL: ${e.message}`))
 setInterval(() => collect().catch(e => log(`ERROR: ${e.message}`)), INTERVAL_MS)
 
-pollCommands().catch(e => log(`CMD poll error: ${e.message}`))
-setInterval(() => pollCommands().catch(e => log(`CMD poll error: ${e.message}`)), 15000)
+// 15-second tasks: command polling + activity sampling
+function poll15s() {
+  pollCommands().catch(e => log(`CMD poll: ${e.message}`))
+  sampleActivity()
+}
+poll15s()
+setInterval(poll15s, 15000)
