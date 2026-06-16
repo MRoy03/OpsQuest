@@ -41,28 +41,185 @@ const SCAN_NETWORK  = cfg.scan_network !== false     // default true (set false 
 
 // ─── LICENSED SOFTWARE DEFINITIONS ───────────────────────────────────────────
 const LICENSED_DEFS = [
-  { category: 'Microsoft Office Suite',  patterns: ['microsoft office', 'microsoft 365 apps', 'office 16', 'office 19', 'office 20', 'office, 20'] },
-  { category: 'Microsoft Word',          patterns: ['microsoft word'] },
-  { category: 'Microsoft Excel',         patterns: ['microsoft excel'] },
-  { category: 'Microsoft PowerPoint',    patterns: ['microsoft powerpoint'] },
-  { category: 'Microsoft Access',        patterns: ['microsoft access'] },
-  { category: 'Microsoft Publisher',     patterns: ['microsoft publisher'] },
-  { category: 'Microsoft OneNote',       patterns: ['microsoft onenote', 'onenote for windows'] },
-  { category: 'Microsoft Outlook',       patterns: ['microsoft outlook'] },
-  { category: 'Microsoft Teams',         patterns: ['microsoft teams'] },
-  { category: 'OneDrive',                patterns: ['microsoft onedrive', 'onedrive'] },
-  { category: 'AutoCAD',                 patterns: ['autodesk autocad', 'autocad 20', 'autocad lt 20', 'autocad'] },
-  { category: 'Adobe Acrobat / Reader',  patterns: ['adobe acrobat', 'adobe reader'] },
-  { category: 'Claude',                  patterns: ['claude for desktop', 'claude'] },
+  // Microsoft 365 / Office
+  { category: 'Microsoft Office Suite',    patterns: ['microsoft office', 'microsoft 365 apps', 'office 16', 'office 19', 'office 20', 'office, 20', 'office professional', 'office standard', 'office home'] },
+  { category: 'Microsoft Word',            patterns: ['microsoft word'] },
+  { category: 'Microsoft Excel',           patterns: ['microsoft excel'] },
+  { category: 'Microsoft PowerPoint',      patterns: ['microsoft powerpoint'] },
+  { category: 'Microsoft Access',          patterns: ['microsoft access'] },
+  { category: 'Microsoft Publisher',       patterns: ['microsoft publisher'] },
+  { category: 'Microsoft OneNote',         patterns: ['microsoft onenote', 'onenote for windows'] },
+  { category: 'Microsoft Outlook',         patterns: ['microsoft outlook'] },
+  { category: 'Microsoft Teams',           patterns: ['microsoft teams'] },
+  { category: 'Microsoft Project',         patterns: ['microsoft project', 'ms project'] },
+  { category: 'Microsoft Visio',           patterns: ['microsoft visio', 'visio professional', 'visio standard'] },
+  { category: 'Microsoft SharePoint',      patterns: ['microsoft sharepoint'] },
+  { category: 'OneDrive',                  patterns: ['microsoft onedrive', 'onedrive'] },
+  // Microsoft Dev / Server
+  { category: 'Visual Studio',             patterns: ['microsoft visual studio', 'visual studio professional', 'visual studio enterprise', 'visual studio community'] },
+  { category: 'SQL Server',                patterns: ['microsoft sql server', 'sql server 20', 'sql server management studio', 'ssms'] },
+  { category: 'Windows Server',            patterns: ['windows server 20'] },
+  // Adobe Creative Cloud
+  { category: 'Adobe Creative Cloud',      patterns: ['adobe creative cloud', 'creative cloud'] },
+  { category: 'Adobe Photoshop',           patterns: ['adobe photoshop'] },
+  { category: 'Adobe Illustrator',         patterns: ['adobe illustrator'] },
+  { category: 'Adobe Premiere',            patterns: ['adobe premiere'] },
+  { category: 'Adobe After Effects',       patterns: ['adobe after effects'] },
+  { category: 'Adobe InDesign',            patterns: ['adobe indesign'] },
+  { category: 'Adobe Lightroom',           patterns: ['adobe lightroom', 'lightroom classic', 'lightroom cc'] },
+  { category: 'Adobe Acrobat / Reader',    patterns: ['adobe acrobat', 'adobe reader', 'acrobat dc', 'acrobat reader dc'] },
+  { category: 'Adobe Substance',           patterns: ['adobe substance', 'substance painter', 'substance designer'] },
+  { category: 'Adobe Audition',            patterns: ['adobe audition'] },
+  { category: 'Adobe Animate',             patterns: ['adobe animate', 'adobe flash'] },
+  { category: 'Adobe XD',                  patterns: ['adobe xd'] },
+  { category: 'Adobe Dreamweaver',         patterns: ['adobe dreamweaver'] },
+  // Autodesk
+  { category: 'AutoCAD',                   patterns: ['autodesk autocad', 'autocad 20', 'autocad lt', 'autocad mechanical', 'autocad electrical'] },
+  { category: 'Autodesk Revit',            patterns: ['autodesk revit', 'revit 20'] },
+  { category: 'Autodesk Inventor',         patterns: ['autodesk inventor'] },
+  { category: '3ds Max',                   patterns: ['autodesk 3ds max', '3ds max 20'] },
+  { category: 'Autodesk Maya',             patterns: ['autodesk maya'] },
+  { category: 'Autodesk Fusion',           patterns: ['autodesk fusion', 'fusion 360'] },
+  { category: 'Civil 3D',                  patterns: ['autodesk civil 3d', 'civil 3d 20'] },
+  // Security / EDR / AV
+  { category: 'Sophos',                    patterns: ['sophos'] },
+  { category: 'Kaspersky',                 patterns: ['kaspersky'] },
+  { category: 'Norton / Symantec',         patterns: ['norton', 'symantec endpoint', 'norton 360', 'norton antivirus'] },
+  { category: 'McAfee / Trellix',          patterns: ['mcafee', 'trellix', 'mcafee endpoint'] },
+  { category: 'ESET',                      patterns: ['eset nod32', 'eset endpoint', 'eset smart security', 'eset internet security'] },
+  { category: 'Bitdefender',               patterns: ['bitdefender'] },
+  { category: 'CrowdStrike Falcon',        patterns: ['crowdstrike', 'falcon sensor', 'falcon agent'] },
+  { category: 'SentinelOne',               patterns: ['sentinelone', 'sentinel agent'] },
+  { category: 'Carbon Black',              patterns: ['carbon black', 'vmware carbon black', 'cb defense', 'cb response'] },
+  { category: 'Malwarebytes',              patterns: ['malwarebytes'] },
+  { category: 'Webroot',                   patterns: ['webroot'] },
+  { category: 'Trend Micro',              patterns: ['trend micro', 'officescan', 'apex one', 'worry-free'] },
+  { category: 'Cylance',                   patterns: ['cylance'] },
+  { category: 'Darktrace',                 patterns: ['darktrace'] },
+  { category: 'Qualys',                    patterns: ['qualys'] },
+  { category: 'Nessus / Tenable',         patterns: ['nessus', 'tenable'] },
+  // Remote Desktop / RMM
+  { category: 'TeamViewer',               patterns: ['teamviewer'] },
+  { category: 'AnyDesk',                  patterns: ['anydesk'] },
+  { category: 'LogMeIn',                  patterns: ['logmein', 'logme in'] },
+  { category: 'Splashtop',                patterns: ['splashtop'] },
+  { category: 'ConnectWise',              patterns: ['connectwise', 'screenconnect'] },
+  { category: 'Citrix',                   patterns: ['citrix receiver', 'citrix workspace', 'citrix virtual', 'xendesktop', 'xenapp'] },
+  { category: 'VMware Horizon',           patterns: ['vmware horizon', 'horizon client', 'horizon view'] },
+  { category: 'Dameware',                 patterns: ['dameware'] },
+  // JetBrains IDEs
+  { category: 'JetBrains IntelliJ IDEA',  patterns: ['intellij idea'] },
+  { category: 'JetBrains WebStorm',       patterns: ['webstorm'] },
+  { category: 'JetBrains PyCharm',        patterns: ['pycharm'] },
+  { category: 'JetBrains Rider',          patterns: ['rider'] },
+  { category: 'JetBrains DataGrip',       patterns: ['datagrip'] },
+  { category: 'JetBrains CLion',          patterns: ['clion'] },
+  { category: 'JetBrains GoLand',         patterns: ['goland'] },
+  { category: 'JetBrains PhpStorm',       patterns: ['phpstorm'] },
+  { category: 'JetBrains Toolbox',        patterns: ['jetbrains toolbox'] },
+  // Collaboration / Communication
+  { category: 'Zoom',                     patterns: ['zoom', 'zoom meetings'] },
+  { category: 'Webex',                    patterns: ['cisco webex', 'webex meetings', 'webex teams'] },
+  { category: 'GoToMeeting',              patterns: ['gotomeeting', 'goto meeting', 'logmein gotowebinar'] },
+  { category: 'Slack',                    patterns: ['slack'] },
+  { category: 'Discord',                  patterns: ['discord'] },
+  // Accounting / ERP / CRM
+  { category: 'QuickBooks',               patterns: ['quickbooks', 'intuit quickbooks'] },
+  { category: 'Sage',                     patterns: ['sage accounting', 'sage 50', 'sage 100', 'sage 200', 'sage 300', 'sage x3'] },
+  { category: 'SAP',                      patterns: ['sap businessone', 'sap hana', 'sap gui', 'sap client'] },
+  { category: 'Salesforce',               patterns: ['salesforce'] },
+  { category: 'Xero',                     patterns: ['xero'] },
+  { category: 'Tally',                    patterns: ['tally.erp', 'tallyprime', 'tally erp'] },
+  { category: 'MYOB',                     patterns: ['myob'] },
+  { category: 'Dynamics 365',             patterns: ['microsoft dynamics', 'dynamics 365', 'dynamics nav', 'dynamics ax'] },
+  { category: 'NetSuite',                 patterns: ['netsuite'] },
+  // Database tools
+  { category: 'SQL Server Management Studio', patterns: ['sql server management studio', 'ssms'] },
+  { category: 'Oracle Database',          patterns: ['oracle database', 'oracle 19c', 'oracle 21c', 'oracle 12c', 'oracle client'] },
+  { category: 'MySQL Workbench',          patterns: ['mysql workbench'] },
+  { category: 'DBeaver',                  patterns: ['dbeaver enterprise', 'dbeaver ultimate'] },
+  // Virtualization
+  { category: 'VMware Workstation',       patterns: ['vmware workstation', 'vmware pro', 'vmware player pro'] },
+  { category: 'VMware vSphere',           patterns: ['vmware vsphere', 'vmware vcenter', 'vsphere client'] },
+  { category: 'Hyper-V',                  patterns: ['microsoft hyper-v'] },
+  { category: 'Parallels',                patterns: ['parallels desktop', 'parallels access'] },
+  // Design / GIS
+  { category: 'CorelDRAW',               patterns: ['coreldraw', 'corel draw'] },
+  { category: 'Corel Painter',            patterns: ['corel painter'] },
+  { category: 'Figma',                    patterns: ['figma'] },
+  { category: 'Sketch',                   patterns: ['sketch'] },
+  { category: 'Blender',                  patterns: ['blender'] },
+  { category: 'SketchUp',                 patterns: ['sketchup', 'trimble sketchup'] },
+  { category: 'ArcGIS',                   patterns: ['arcgis', 'esri arcgis', 'arcmap', 'arcpro'] },
+  // Media / Video
+  { category: 'DaVinci Resolve Studio',   patterns: ['davinci resolve studio'] },
+  { category: 'Vegas Pro',                patterns: ['vegas pro', 'magix vegas'] },
+  { category: 'Final Cut Pro',            patterns: ['final cut pro'] },
+  { category: 'Avid Media Composer',      patterns: ['avid media composer', 'media composer'] },
+  { category: 'OBS Studio',               patterns: ['obs studio'] },
+  // CAD / Engineering
+  { category: 'SolidWorks',               patterns: ['solidworks', 'ds solidworks'] },
+  { category: 'CATIA',                    patterns: ['catia'] },
+  { category: 'MATLAB',                   patterns: ['matlab', 'mathworks matlab'] },
+  { category: 'LabVIEW',                  patterns: ['labview', 'national instruments labview'] },
+  { category: 'MicroStation',             patterns: ['microstation', 'bentley microstation'] },
+  // Backup / Storage
+  { category: 'Veeam',                    patterns: ['veeam backup', 'veeam agent', 'veeam explorer'] },
+  { category: 'Acronis',                  patterns: ['acronis', 'acronis true image', 'acronis cyber protect'] },
+  { category: 'Veritas Backup Exec',      patterns: ['veritas backup', 'backup exec', 'symantec backup'] },
+  // Other
+  { category: 'WinZip',                   patterns: ['winzip'] },
+  { category: 'WinRAR',                   patterns: ['winrar'] },
+  { category: 'Claude',                   patterns: ['claude for desktop'] },
 ]
 
-function classifySoftware(name) {
+// Publishers whose products are always commercial
+const COMMERCIAL_PUBLISHERS = [
+  'adobe', 'autodesk', 'microsoft', 'symantec', 'sophos', 'kaspersky', 'eset',
+  'mcafee', 'trellix', 'bitdefender', 'trend micro', 'crowdstrike', 'sentinelone',
+  'vmware', 'citrix', 'teamviewer', 'anydesk', 'logmein', 'splashtop',
+  'jetbrains', 'embarcadero', 'corel', 'malwarebytes', 'veeam', 'acronis',
+  'veritas', 'quest software', 'solarwinds', 'dynatrace', 'datadog', 'new relic',
+  'intuit', 'sage', 'sap', 'oracle', 'salesforce', 'servicenow',
+  'autodesk', 'dassault systemes', 'ptc inc', 'siemens', 'bentley systems',
+  'mathworks', 'national instruments', 'ni systems', 'esri',
+  'avid', 'blackmagic design', 'magix', 'nemetschek',
+  'winzip computing', 'win.rar gmbh', 'rarlab',
+]
+
+// Names that indicate freeware / open source even if publisher looks commercial
+const FREEWARE_PATTERNS = [
+  '7-zip', 'vlc', 'audacity', 'gimp', 'inkscape', 'libreoffice', 'openoffice',
+  'thunderbird', 'firefox', 'chromium', 'obs studio',
+  'notepad++', 'putty', 'winscp', 'filezilla', 'handbrake', 'kdenlive',
+  'python', 'node.js', 'git ', 'git for windows', 'java se runtime',
+  'openjdk', 'eclipse', 'visual studio code', 'vs code', 'dbeaver community',
+  'mysql community', 'postgresql', 'mariadb', 'sqlite', 'mongodb community',
+  'vmware player', 'virtualbox',
+]
+
+function classifySoftware(name, publisher) {
   const lower = (name || '').toLowerCase()
+  const pub   = (publisher || '').toLowerCase()
+
+  // Freeware / open source check first
+  if (FREEWARE_PATTERNS.some(p => lower.includes(p))) {
+    return { is_licensed: false, license_category: 'Freeware / Open Source' }
+  }
+
+  // Named product match
   for (const def of LICENSED_DEFS) {
     if (def.patterns.some(p => lower.includes(p.toLowerCase()))) {
       return { is_licensed: true, license_category: def.category }
     }
   }
+
+  // Publisher-based fallback
+  if (COMMERCIAL_PUBLISHERS.some(p => pub.includes(p))) {
+    const brand = publisher ? publisher.split(' ')[0] : 'Commercial'
+    return { is_licensed: true, license_category: `${brand} (commercial)` }
+  }
+
   return { is_licensed: false, license_category: null }
 }
 
@@ -288,7 +445,7 @@ function collectSoftware() {
     publisher:    s.p  || null,
     install_date: s.d  || null,
     size_mb:      s.s  ? Math.round(s.s / 1024) : null,
-    ...classifySoftware(s.n),
+    ...classifySoftware(s.n, s.p),
   }))
 }
 
@@ -1002,7 +1159,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.5.3',
+      version:         '1.5.4',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
@@ -1120,13 +1277,14 @@ async function executeCommand(cmd) {
         result = `Unsupported script type: ${ext}. Allowed: ps1, bat, cmd`
       } else {
         const tmpPath = `C:\\Windows\\Temp\\oq_${cmd.id.slice(0, 8)}.${ext}`
-        // Write script to temp file (UTF-8 no BOM)
-        psStr(`[System.IO.File]::WriteAllText('${tmpPath}', ${JSON.stringify(p.script || '')}, [System.Text.UTF8Encoding]::new($false))`)
-        if (ext === 'ps1') {
-          result = psStr(`& powershell -ExecutionPolicy Bypass -File '${tmpPath}' 2>&1 | Out-String; Remove-Item '${tmpPath}' -EA SilentlyContinue`)
-        } else {
-          result = psStr(`cmd /c "${tmpPath}" 2>&1 | Out-String; Remove-Item '${tmpPath}' -EA SilentlyContinue`)
-        }
+        // Write via fs — avoids nested powershell-inside-powershell which hangs in Session 0
+        fs.writeFileSync(tmpPath, p.script || '', { encoding: 'utf8' })
+        const r = ext === 'ps1'
+          ? spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmpPath], { timeout: 90000, encoding: 'utf8' })
+          : spawnSync('cmd', ['/c', tmpPath], { timeout: 90000, encoding: 'utf8' })
+        try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+        const out = ((r.stdout || '') + (r.stderr || '')).trim().slice(0, 4000)
+        result = out || `[Exit: ${r.status ?? 'timeout'} — no output]`
       }
     } else {
       result = `Unknown command type: ${cmd.command_type}`

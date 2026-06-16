@@ -925,17 +925,67 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
   )
 }
 
+// ─── QUICK COMMANDS LIBRARY ──────────────────────────────────────────────────
+const QUICK_COMMANDS: Record<string, { label: string; type: 'ps1' | 'bat'; desc: string; cmd: string }[]> = {
+  Network: [
+    { label: 'IP Configuration',    type: 'bat', desc: 'All adapter IPs, MACs, DNS, gateway',  cmd: 'ipconfig /all' },
+    { label: 'Network Adapters',    type: 'ps1', desc: 'Name, status, MAC, speed',              cmd: "Get-NetAdapter | Select-Object Name,Status,MacAddress,LinkSpeed | Format-Table -AutoSize" },
+    { label: 'Open Connections',    type: 'ps1', desc: 'Established TCP with owning process',   cmd: "Get-NetTCPConnection -State Established | Select-Object LocalAddress,LocalPort,RemoteAddress,RemotePort,@{N='Process';E={(Get-Process -Id $_.OwningProcess -EA SilentlyContinue).ProcessName}} | Sort-Object RemoteAddress | Format-Table -AutoSize" },
+    { label: 'DNS Cache',           type: 'ps1', desc: 'Cached DNS entries',                    cmd: "Get-DnsClientCache | Select-Object Entry,RecordName,Data | Format-Table -AutoSize" },
+    { label: 'ARP Table',           type: 'bat', desc: 'IP-to-MAC mapping on local network',    cmd: 'arp -a' },
+    { label: 'Route Table',         type: 'bat', desc: 'IP routing table',                      cmd: 'route print' },
+    { label: 'Ping Gateway',        type: 'ps1', desc: 'Ping default gateway 4 times',          cmd: "$gw=(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop; Test-Connection $gw -Count 4 | Format-Table -AutoSize" },
+    { label: 'Firewall Rules',      type: 'ps1', desc: 'Enabled inbound firewall rules',        cmd: "Get-NetFirewallRule -Enabled True -Direction Inbound | Select-Object DisplayName,Profile,Action | Format-Table -AutoSize" },
+    { label: 'Wi-Fi Profiles',      type: 'bat', desc: 'Saved wireless network profiles',       cmd: 'netsh wlan show profiles' },
+    { label: 'Open Ports (Listen)', type: 'bat', desc: 'Listening ports with PID',              cmd: 'netstat -ano | findstr LISTENING' },
+  ],
+  Hardware: [
+    { label: 'CPU Details',         type: 'ps1', desc: 'Cores, speed, load, temp',              cmd: "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,LoadPercentage | Format-List" },
+    { label: 'RAM Slots',           type: 'ps1', desc: 'Physical memory modules info',          cmd: "Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel,Manufacturer,Capacity,Speed | Format-Table -AutoSize" },
+    { label: 'Disk Info',           type: 'ps1', desc: 'Physical disk health and type',         cmd: "Get-PhysicalDisk | Select-Object FriendlyName,MediaType,Size,HealthStatus,OperationalStatus | Format-Table -AutoSize" },
+    { label: 'Drive Space',         type: 'ps1', desc: 'Used / free / total per drive letter',  cmd: "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{N='Used(GB)';E={[math]::Round($_.Used/1GB,2)}},@{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}},@{N='Total(GB)';E={[math]::Round(($_.Used+$_.Free)/1GB,2)}} | Format-Table -AutoSize" },
+    { label: 'GPU Info',            type: 'ps1', desc: 'GPU name, VRAM, driver version',        cmd: "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoModeDescription | Format-List" },
+    { label: 'SMART / Reliability', type: 'ps1', desc: 'Disk temperature and error counts',     cmd: "Get-Disk | Get-StorageReliabilityCounter | Select-Object DeviceId,Temperature,ReadErrorsTotal,WriteErrorsTotal | Format-Table -AutoSize" },
+    { label: 'Battery Status',      type: 'ps1', desc: 'Charge level and estimated runtime',    cmd: "Get-CimInstance Win32_Battery | Select-Object Name,BatteryStatus,EstimatedChargeRemaining,EstimatedRunTime | Format-Table -AutoSize" },
+    { label: 'Monitors',            type: 'ps1', desc: 'Connected display resolutions',         cmd: "Get-CimInstance Win32_VideoController | Select-Object Name,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate | Format-Table -AutoSize" },
+  ],
+  OS: [
+    { label: 'System Info',         type: 'ps1', desc: 'PC name, OS version, architecture',     cmd: "Get-ComputerInfo | Select-Object CsName,WindowsProductName,OsVersion,OsArchitecture,BiosVersion,OsLastBootUpTime | Format-List" },
+    { label: 'Uptime',              type: 'ps1', desc: 'Last boot time and hours running',       cmd: "$b=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime; \"Boot: $b\"; \"Uptime: $([math]::Round((New-TimeSpan $b (Get-Date)).TotalHours,1)) hours\"" },
+    { label: 'Running Services',    type: 'ps1', desc: 'All currently running services',         cmd: "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Name,DisplayName,StartType | Sort-Object Name | Format-Table -AutoSize" },
+    { label: 'Stopped Auto Svcs',   type: 'ps1', desc: 'Auto-start services that are stopped',   cmd: "Get-Service | Where-Object {$_.Status -eq 'Stopped' -and $_.StartType -eq 'Automatic'} | Select-Object Name,DisplayName | Format-Table -AutoSize" },
+    { label: 'Scheduled Tasks',     type: 'ps1', desc: 'Enabled scheduled tasks',                cmd: "Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} | Select-Object TaskName,TaskPath,State | Format-Table -AutoSize" },
+    { label: 'Recent Errors',       type: 'ps1', desc: 'Last 20 System event errors',            cmd: "Get-EventLog -LogName System -EntryType Error -Newest 20 | Select-Object TimeGenerated,Source,Message | Format-Table -AutoSize -Wrap" },
+    { label: 'Startup Programs',    type: 'ps1', desc: 'Programs that run at login',             cmd: "Get-CimInstance Win32_StartupCommand | Select-Object Name,Command,Location,User | Format-Table -AutoSize" },
+    { label: 'Windows Updates',     type: 'ps1', desc: 'Last 15 installed hotfixes/updates',     cmd: "Get-HotFix | Sort-Object InstalledOn -Desc | Select-Object -First 15 | Format-Table -AutoSize" },
+    { label: 'Local Users',         type: 'ps1', desc: 'Local user accounts and last login',     cmd: "Get-LocalUser | Select-Object Name,Enabled,LastLogon,PasswordLastSet | Format-Table -AutoSize" },
+    { label: 'Logged-on Users',     type: 'bat', desc: 'Who is currently logged on',             cmd: 'query user' },
+    { label: 'Environment Vars',    type: 'ps1', desc: 'All system environment variables',       cmd: "Get-ChildItem Env: | Sort-Object Name | Format-Table -AutoSize" },
+  ],
+  Memory: [
+    { label: 'RAM Usage',           type: 'ps1', desc: 'Total / free / used / percentage',      cmd: "$os=Get-CimInstance Win32_OperatingSystem; \"Total: $([math]::Round($os.TotalVisibleMemorySize/1MB,2)) GB`nFree:  $([math]::Round($os.FreePhysicalMemory/1MB,2)) GB`nUsed:  $([math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/1MB,2)) GB`nUsage: $([math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize*100,1))%\"" },
+    { label: 'Top 20 by Memory',    type: 'ps1', desc: 'Processes sorted by RAM (Working Set)',  cmd: "Get-Process | Sort-Object WorkingSet64 -Desc | Select-Object -First 20 Name,Id,@{N='RAM(MB)';E={[math]::Round($_.WorkingSet64/1MB,1)}},@{N='CPU';E={[math]::Round($_.CPU,1)}} | Format-Table -AutoSize" },
+    { label: 'Top 20 by CPU',       type: 'ps1', desc: 'Processes sorted by CPU time',          cmd: "Get-Process | Sort-Object CPU -Desc | Select-Object -First 20 Name,Id,@{N='CPU(s)';E={[math]::Round($_.CPU,2)}},@{N='RAM(MB)';E={[math]::Round($_.WorkingSet64/1MB,1)}} | Format-Table -AutoSize" },
+    { label: 'Virtual Memory',      type: 'ps1', desc: 'Page file size and free space',          cmd: "Get-CimInstance Win32_OperatingSystem | Select-Object @{N='PageFile(GB)';E={[math]::Round($_.SizeStoredInPagingFiles/1MB,2)}},@{N='PageFree(GB)';E={[math]::Round($_.FreeSpaceInPagingFiles/1MB,2)}} | Format-List" },
+    { label: 'Page File Location',  type: 'ps1', desc: 'Page file usage and peak',               cmd: "Get-CimInstance Win32_PageFileUsage | Select-Object Name,CurrentUsage,AllocatedBaseSize,PeakUsage | Format-Table -AutoSize" },
+    { label: 'Handle Count',        type: 'ps1', desc: 'Processes with most open handles',       cmd: "Get-Process | Sort-Object Handles -Desc | Select-Object -First 20 Name,Id,Handles,Threads | Format-Table -AutoSize" },
+  ],
+}
+
 // ─── SCRIPT RUNNER ───────────────────────────────────────────────────────────
 function ScriptRunner({ devices, onCommandQueued }: { devices: Device[]; onCommandQueued: () => void }) {
-  const [open, setOpen]     = useState(false)
+  const [open, setOpen]       = useState(false)
   const [agentId, setAgentId] = useState('')
-  const [tab, setTab]       = useState<'script' | 'package' | 'service'>('script')
-  const [script, setScript] = useState('')
-  const [ext, setExt]       = useState<'ps1' | 'bat'>('ps1')
-  const [name, setName]     = useState('')
-  const [action, setAction] = useState('uninstall')
+  const [tab, setTab]         = useState<'script' | 'package' | 'service'>('script')
+  const [script, setScript]   = useState('')
+  const [ext, setExt]         = useState<'ps1' | 'bat'>('ps1')
+  const [name, setName]       = useState('')
+  const [action, setAction]   = useState('uninstall')
   const [queuing, setQueuing] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [libOpen, setLibOpen] = useState(false)
+  const [libCat, setLibCat]   = useState<string>('Network')
+  const [copied, setCopied]   = useState<string | null>(null)
 
   const agents = devices
     .filter(d => d.agent_id || d.hostname)
@@ -1068,6 +1118,79 @@ function ScriptRunner({ devices, onCommandQueued }: { devices: Device[]; onComma
             {queuing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Terminal className="w-3.5 h-3.5" />}
             {queuing ? 'Queuing…' : 'Send to Agent'}
           </button>
+
+          {/* ── Quick Commands Library ── */}
+          <div className="border-t border-[#1a2f4a] pt-4 mt-2">
+            <div className="flex items-center justify-between cursor-pointer mb-2" onClick={() => setLibOpen(o => !o)}>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[#475569] uppercase tracking-wider font-semibold">Quick Commands Library</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00d4ff11] text-[#00d4ff] border border-[#00d4ff22]">{Object.values(QUICK_COMMANDS).flat().length} commands</span>
+              </div>
+              {libOpen ? <ChevronUp className="w-3.5 h-3.5 text-[#475569]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#475569]" />}
+            </div>
+
+            {libOpen && (
+              <div className="space-y-3">
+                <div className="flex gap-1 flex-wrap">
+                  {Object.keys(QUICK_COMMANDS).map(cat => (
+                    <button key={cat} onClick={() => setLibCat(cat)}
+                      className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all ${libCat === cat ? 'bg-[#00d4ff22] border border-[#00d4ff33] text-[#00d4ff]' : 'bg-[#060b18] border border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-1.5">
+                  {QUICK_COMMANDS[libCat]?.map((qc, i) => (
+                    <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-[#060b18] border border-[#1a2f4a] hover:border-[#2a3f5a] transition-all">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[#e2e8f0] text-xs font-medium">{qc.label}</span>
+                          <span className={`text-[9px] px-1 py-px rounded font-mono ${qc.type === 'ps1' ? 'bg-[#7c3aed22] text-[#a78bfa]' : 'bg-[#f59e0b22] text-[#f59e0b]'}`}>.{qc.type}</span>
+                        </div>
+                        <p className="text-[10px] text-[#475569]">{qc.desc}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(qc.cmd); setCopied(`${libCat}-${i}`); setTimeout(() => setCopied(null), 1500) }}
+                          className="px-2 py-1 rounded text-[10px] bg-[#1a2f4a] text-[#64748b] hover:text-[#e2e8f0] transition-all">
+                          {copied === `${libCat}-${i}` ? '✓' : 'Copy'}
+                        </button>
+                        <button
+                          onClick={() => { setTab('script'); setScript(qc.cmd); setExt(qc.type) }}
+                          className="px-2 py-1 rounded text-[10px] bg-[#a78bfa22] text-[#a78bfa] border border-[#a78bfa33] hover:bg-[#a78bfa33] transition-all">
+                          Use
+                        </button>
+                        {agentId && (
+                          <button
+                            onClick={async () => {
+                              setQueuing(true)
+                              try {
+                                const r = await fetch('/api/infrastructure/commands', {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ agent_id: agentId, command_type: 'run_script', payload: { script: qc.cmd, extension: qc.type, name: `${qc.label}.${qc.type}` } }),
+                                })
+                                const j = await r.json()
+                                if (r.ok) { setFeedback({ ok: true, msg: `"${qc.label}" queued — results appear in Commands below.` }); onCommandQueued() }
+                                else setFeedback({ ok: false, msg: j.error || 'Failed' })
+                              } catch { setFeedback({ ok: false, msg: 'Network error' }) }
+                              setQueuing(false)
+                            }}
+                            disabled={queuing}
+                            className="px-2 py-1 rounded text-[10px] bg-[#10b98122] text-[#10b981] border border-[#10b98133] hover:bg-[#10b98133] disabled:opacity-40 transition-all">
+                            Run
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {!agentId && (
+                  <p className="text-[10px] text-[#475569] italic">Select a Target Agent above to enable the Run buttons</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
