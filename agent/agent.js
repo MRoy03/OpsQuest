@@ -804,11 +804,15 @@ const SYSTEM_PROCS = new Set([
 function sampleActivity() {
   // Services run in Session 0: MainWindowTitle unavailable. Use CPU delta to
   // classify active (consuming CPU) vs background (running but idle).
+  // Also collect instance count and memory for task-manager style display.
   try {
     const procs = arr(ps(
       `Get-Process | Where-Object {$_.Id -gt 4} | ` +
       `Group-Object ProcessName | ` +
-      `Select-Object Name,@{N='CPU';E={[math]::Round(($_.Group|Measure-Object CPU -Sum).Sum,3)}} | ` +
+      `Select-Object Name,` +
+      `@{N='I';E={$_.Count}},` +
+      `@{N='CPU';E={[math]::Round(($_.Group|Measure-Object CPU -Sum).Sum,3)}},` +
+      `@{N='Mem';E={[math]::Round(($_.Group|Measure-Object WorkingSet64 -Sum).Sum/1MB,1)}} | ` +
       `ConvertTo-Json -Compress`
     ))
     const now = new Date().toISOString()
@@ -821,9 +825,11 @@ function sampleActivity() {
       const cpuNow   = typeof p.CPU === 'number' ? p.CPU : 0
       snap[app]      = cpuNow
       const cpuDelta = Math.max(0, cpuNow - (prevCpuSnapshot[app] || 0))
-      const isActive = cpuDelta > 0.2   // >0.2 CPU-sec consumed in last 15s → active
-      if (!activityState[app]) activityState[app] = { seconds: 0, active_seconds: 0, last_active: null, category: 'background' }
-      activityState[app].seconds += 15
+      const isActive = cpuDelta > 0.2
+      if (!activityState[app]) activityState[app] = { seconds: 0, active_seconds: 0, last_active: null, category: 'background', instances: 1, memory_mb: 0 }
+      activityState[app].seconds    += 15
+      activityState[app].instances   = typeof p.I   === 'number' ? p.I   : 1
+      activityState[app].memory_mb   = typeof p.Mem === 'number' ? p.Mem : 0
       if (isActive) {
         activityState[app].active_seconds += 15
         activityState[app].last_active     = now
@@ -855,6 +861,8 @@ async function flushActivity() {
             active_seconds: (rows[0].active_seconds || 0) + stat.active_seconds,
             category:       stat.category,
             last_active:    stat.last_active,
+            instances:      stat.instances  || 1,
+            memory_mb:      stat.memory_mb  || 0,
           }),
         })
       } else {
@@ -867,6 +875,8 @@ async function flushActivity() {
             active_seconds: stat.active_seconds,
             category:       stat.category,
             last_active:    stat.last_active,
+            instances:      stat.instances  || 1,
+            memory_mb:      stat.memory_mb  || 0,
           }]),
         })
       }
@@ -992,7 +1002,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.5.0',
+      version:         '1.5.3',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }

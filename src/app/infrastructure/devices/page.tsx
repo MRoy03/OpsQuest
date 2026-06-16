@@ -925,6 +925,155 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
   )
 }
 
+// ─── SCRIPT RUNNER ───────────────────────────────────────────────────────────
+function ScriptRunner({ devices, onCommandQueued }: { devices: Device[]; onCommandQueued: () => void }) {
+  const [open, setOpen]     = useState(false)
+  const [agentId, setAgentId] = useState('')
+  const [tab, setTab]       = useState<'script' | 'package' | 'service'>('script')
+  const [script, setScript] = useState('')
+  const [ext, setExt]       = useState<'ps1' | 'bat'>('ps1')
+  const [name, setName]     = useState('')
+  const [action, setAction] = useState('uninstall')
+  const [queuing, setQueuing] = useState(false)
+  const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  const agents = devices
+    .filter(d => d.agent_id || d.hostname)
+    .map(d => ({ id: d.agent_id || d.hostname || '', label: `${d.hostname || d.last_ip} — ${d.is_server ? 'Server' : 'Client'}` }))
+
+  const canSubmit = !!agentId && !queuing && (tab === 'script' ? script.trim().length > 0 : name.trim().length > 0)
+
+  async function submit() {
+    if (!canSubmit) return
+    setQueuing(true); setFeedback(null)
+    try {
+      let payload: Record<string, string>
+      let command_type: string
+      if (tab === 'script') {
+        command_type = 'run_script'; payload = { script, extension: ext, name: `script.${ext}` }
+      } else if (tab === 'package') {
+        command_type = action === 'upgrade' ? 'winget_upgrade' : 'uninstall'; payload = { name }
+      } else {
+        command_type = action === 'stop' ? 'stop_service' : 'start_service'; payload = { name }
+      }
+      const r = await fetch('/api/infrastructure/commands', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type, payload }),
+      })
+      const j = await r.json()
+      if (r.ok) { setFeedback({ ok: true, msg: 'Queued — agent picks up within 15s. See Commands below.' }); onCommandQueued() }
+      else       { setFeedback({ ok: false, msg: j.error || 'Request failed' }) }
+    } catch (e: unknown) {
+      setFeedback({ ok: false, msg: e instanceof Error ? e.message : 'Network error' })
+    } finally { setQueuing(false) }
+  }
+
+  return (
+    <div className="rounded-xl border border-[#a78bfa33] bg-[#0d1f35] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[#ffffff03]" onClick={() => setOpen(o => !o)}>
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-[#a78bfa]" />
+          <span className="text-xs font-semibold text-[#e2e8f0]">Script Runner & Remote Commands</span>
+          <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#a78bfa22] text-[#a78bfa] font-bold uppercase tracking-wider">Manual</span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-[#475569]" /> : <ChevronDown className="w-4 h-4 text-[#475569]" />}
+      </div>
+
+      {open && (
+        <div className="border-t border-[#1a2f4a] p-4 space-y-4">
+
+          {/* Target agent */}
+          <div>
+            <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1.5">Target Agent</p>
+            <select value={agentId} onChange={e => setAgentId(e.target.value)}
+              className="w-full bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] focus:outline-none focus:border-[#a78bfa44]">
+              <option value="">— Select machine —</option>
+              {agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          </div>
+
+          {/* Type tabs */}
+          <div className="flex gap-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg p-0.5 w-fit">
+            {(['script', 'package', 'service'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${tab === t ? 'bg-[#a78bfa22] border border-[#a78bfa33] text-[#a78bfa]' : 'text-[#475569] hover:text-[#94a3b8]'}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Script */}
+          {tab === 'script' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                {(['ps1', 'bat'] as const).map(e => (
+                  <button key={e} onClick={() => setExt(e)}
+                    className={`px-3 py-1 rounded text-xs font-mono transition-all ${ext === e ? 'bg-[#a78bfa] text-white' : 'bg-[#060b18] border border-[#1a2f4a] text-[#64748b] hover:text-[#e2e8f0]'}`}>
+                    .{e}
+                  </button>
+                ))}
+                <span className="text-[10px] text-[#334155] ml-1">Runs as SYSTEM · max 90s timeout</span>
+              </div>
+              <textarea value={script} onChange={e => setScript(e.target.value)} rows={9}
+                placeholder={ext === 'ps1'
+                  ? `# PowerShell — runs as SYSTEM on target machine\nGet-ComputerInfo | Select-Object CsName,WindowsProductName,OsArchitecture\nGet-Service | Where-Object {$_.Status -eq 'Stopped'} | Select-Object Name,DisplayName`
+                  : `@echo off\necho Machine: %COMPUTERNAME%\necho User: %USERNAME%\nipconfig /all`}
+                className="w-full bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] font-mono placeholder-[#2a3f5a] focus:outline-none focus:border-[#a78bfa44] resize-y"
+              />
+            </div>
+          )}
+
+          {/* Package */}
+          {tab === 'package' && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {(['uninstall', 'upgrade'] as const).map(a => (
+                  <button key={a} onClick={() => setAction(a)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${action === a ? 'bg-[#a78bfa22] border border-[#a78bfa33] text-[#a78bfa]' : 'bg-[#060b18] border border-[#1a2f4a] text-[#64748b] hover:text-[#e2e8f0]'}`}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. VLC media player"
+                className="w-full bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#a78bfa44]" />
+              <p className="text-[10px] text-[#475569]">Uses winget — enter exact display name from Add/Remove Programs</p>
+            </div>
+          )}
+
+          {/* Service */}
+          {tab === 'service' && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {(['start', 'stop'] as const).map(a => (
+                  <button key={a} onClick={() => setAction(a)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${action === a ? 'bg-[#a78bfa22] border border-[#a78bfa33] text-[#a78bfa]' : 'bg-[#060b18] border border-[#1a2f4a] text-[#64748b] hover:text-[#e2e8f0]'}`}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Spooler"
+                className="w-full bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#a78bfa44]" />
+              <p className="text-[10px] text-[#475569]">Use the service Name (not Display Name) from services.msc</p>
+            </div>
+          )}
+
+          {feedback && (
+            <div className={`text-xs px-3 py-2 rounded-lg border ${feedback.ok ? 'bg-[#10b98118] border-[#10b98133] text-[#10b981]' : 'bg-[#ef444418] border-[#ef444433] text-[#ef4444]'}`}>
+              {feedback.msg}
+            </div>
+          )}
+
+          <button onClick={submit} disabled={!canSubmit}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#a78bfa] text-white text-xs font-semibold hover:bg-[#9063fa] disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+            {queuing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Terminal className="w-3.5 h-3.5" />}
+            {queuing ? 'Queuing…' : 'Send to Agent'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── COMMANDS PANEL ──────────────────────────────────────────────────────────
 function CommandsPanel({ refresh }: { refresh: number }) {
   const [cmds, setCmds] = useState<AgentCommand[]>([])
@@ -1166,6 +1315,7 @@ export default function DevicesPage() {
                   </div>
                 </div>
               )}
+              <ScriptRunner devices={devices} onCommandQueued={() => setCmdRefresh(n => n + 1)} />
               <CommandsPanel refresh={cmdRefresh} />
             </>
           )}
