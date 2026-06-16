@@ -6,7 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const ALLOWED_TYPES = ['uninstall', 'winget_upgrade', 'stop_service', 'start_service']
+const ALLOWED_TYPES = ['uninstall', 'winget_upgrade', 'stop_service', 'start_service', 'run_script']
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -15,8 +15,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   if (!ALLOWED_TYPES.includes(command_type))
     return NextResponse.json({ error: 'Invalid command type' }, { status: 400 })
-  if (typeof payload.name !== 'string' || payload.name.trim() === '')
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+  // run_script uses payload.script; all others use payload.name
+  if (command_type === 'run_script') {
+    if (typeof payload.script !== 'string' || payload.script.trim() === '')
+      return NextResponse.json({ error: 'payload.script required for run_script' }, { status: 400 })
+  } else {
+    if (typeof payload.name !== 'string' || payload.name.trim() === '')
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+  }
 
   const { data, error } = await supabase
     .from('agent_commands')

@@ -788,9 +788,10 @@ function detectDeviceType() {
 }
 
 // ─── ACTIVITY TRACKING ───────────────────────────────────────────────────────
-const activityState = {}  // { appName: { seconds, window_title, last_active } }
+// activityState[app] = { seconds, active_seconds, last_active, category }
+const activityState  = {}
+let   prevCpuSnapshot = {}  // { app: totalCpuSeconds } — for delta calculation
 
-// System processes to exclude from activity tracking
 const SYSTEM_PROCS = new Set([
   'system','idle','registry','smss','csrss','wininit','winlogon','services','lsass',
   'svchost','dwm','fontdrvhost','conhost','runtimebroker','searchindexer','searchhost',
@@ -801,34 +802,47 @@ const SYSTEM_PROCS = new Set([
 ])
 
 function sampleActivity() {
-  // NOTE: Services run in Session 0 — MainWindowTitle is not visible for user processes.
-  // Instead we track all non-system user-space processes by name as a proxy for app usage.
+  // Services run in Session 0: MainWindowTitle unavailable. Use CPU delta to
+  // classify active (consuming CPU) vs background (running but idle).
   try {
     const procs = arr(ps(
-      `Get-Process | Where-Object { $_.Id -gt 4 } | ` +
-      `Select-Object ProcessName | Sort-Object ProcessName -Unique | ConvertTo-Json -Compress`
+      `Get-Process | Where-Object {$_.Id -gt 4} | ` +
+      `Group-Object ProcessName | ` +
+      `Select-Object Name,@{N='CPU';E={[math]::Round(($_.Group|Measure-Object CPU -Sum).Sum,3)}} | ` +
+      `ConvertTo-Json -Compress`
     ))
+    const now = new Date().toISOString()
+    const snap = {}
     for (const p of procs) {
-      if (!p || !p.ProcessName) continue
-      const lower = p.ProcessName.toLowerCase()
+      if (!p || !p.Name) continue
+      const lower = p.Name.toLowerCase()
       if (SYSTEM_PROCS.has(lower)) continue
-      const app = lower + '.exe'
-      if (!activityState[app]) activityState[app] = { seconds: 0, window_title: '', last_active: null }
+      const app      = lower + '.exe'
+      const cpuNow   = typeof p.CPU === 'number' ? p.CPU : 0
+      snap[app]      = cpuNow
+      const cpuDelta = Math.max(0, cpuNow - (prevCpuSnapshot[app] || 0))
+      const isActive = cpuDelta > 0.2   // >0.2 CPU-sec consumed in last 15s → active
+      if (!activityState[app]) activityState[app] = { seconds: 0, active_seconds: 0, last_active: null, category: 'background' }
       activityState[app].seconds += 15
-      activityState[app].last_active = new Date().toISOString()
+      if (isActive) {
+        activityState[app].active_seconds += 15
+        activityState[app].last_active     = now
+        activityState[app].category        = 'active'
+      }
     }
+    prevCpuSnapshot = snap
   } catch (e) { log(`  Activity sample: ${e.message}`) }
 }
 
 async function flushActivity() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today   = new Date().toISOString().slice(0, 10)
   const toFlush = Object.entries(activityState).filter(([, v]) => v.seconds > 0)
   if (!toFlush.length) return
   log(`  Activity flush: ${toFlush.length} app(s)`)
   for (const [app_name, stat] of toFlush) {
     try {
       const getResp = await nodeFetch(
-        `${SUPABASE_URL}/rest/v1/app_activity?agent_id=eq.${encodeURIComponent(AGENT_ID)}&app_name=eq.${encodeURIComponent(app_name)}&date=eq.${today}&select=id,usage_seconds`,
+        `${SUPABASE_URL}/rest/v1/app_activity?agent_id=eq.${encodeURIComponent(AGENT_ID)}&app_name=eq.${encodeURIComponent(app_name)}&date=eq.${today}&select=id,usage_seconds,active_seconds`,
         { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
       )
       const rows = await getResp.json()
@@ -836,16 +850,28 @@ async function flushActivity() {
         await nodeFetch(`${SUPABASE_URL}/rest/v1/app_activity?id=eq.${encodeURIComponent(rows[0].id)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ usage_seconds: (rows[0].usage_seconds || 0) + stat.seconds, window_title: stat.window_title, last_active: stat.last_active }),
+          body: JSON.stringify({
+            usage_seconds:  (rows[0].usage_seconds  || 0) + stat.seconds,
+            active_seconds: (rows[0].active_seconds || 0) + stat.active_seconds,
+            category:       stat.category,
+            last_active:    stat.last_active,
+          }),
         })
       } else {
         await nodeFetch(`${SUPABASE_URL}/rest/v1/app_activity`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
-          body: JSON.stringify([{ agent_id: AGENT_ID, app_name, window_title: stat.window_title, date: today, usage_seconds: stat.seconds, last_active: stat.last_active }]),
+          body: JSON.stringify([{
+            agent_id: AGENT_ID, app_name, date: today,
+            usage_seconds:  stat.seconds,
+            active_seconds: stat.active_seconds,
+            category:       stat.category,
+            last_active:    stat.last_active,
+          }]),
         })
       }
-      stat.seconds = 0
+      stat.seconds        = 0
+      stat.active_seconds = 0
     } catch (e) { log(`  Activity flush (${app_name}): ${e.message}`) }
   }
 }
@@ -1077,6 +1103,21 @@ async function executeCommand(cmd) {
       result = psStr(`Stop-Service -Name "${safe(p.name)}" -Force -PassThru 2>&1 | Out-String`)
     } else if (cmd.command_type === 'start_service') {
       result = psStr(`Start-Service -Name "${safe(p.name)}" -PassThru 2>&1 | Out-String`)
+    } else if (cmd.command_type === 'run_script') {
+      const ext     = ((p.extension || 'ps1')).replace(/[^a-z]/gi, '').slice(0, 4).toLowerCase()
+      const allowed = ['ps1', 'bat', 'cmd']
+      if (!allowed.includes(ext)) {
+        result = `Unsupported script type: ${ext}. Allowed: ps1, bat, cmd`
+      } else {
+        const tmpPath = `C:\\Windows\\Temp\\oq_${cmd.id.slice(0, 8)}.${ext}`
+        // Write script to temp file (UTF-8 no BOM)
+        psStr(`[System.IO.File]::WriteAllText('${tmpPath}', ${JSON.stringify(p.script || '')}, [System.Text.UTF8Encoding]::new($false))`)
+        if (ext === 'ps1') {
+          result = psStr(`& powershell -ExecutionPolicy Bypass -File '${tmpPath}' 2>&1 | Out-String; Remove-Item '${tmpPath}' -EA SilentlyContinue`)
+        } else {
+          result = psStr(`cmd /c "${tmpPath}" 2>&1 | Out-String; Remove-Item '${tmpPath}' -EA SilentlyContinue`)
+        }
+      }
     } else {
       result = `Unknown command type: ${cmd.command_type}`
     }
