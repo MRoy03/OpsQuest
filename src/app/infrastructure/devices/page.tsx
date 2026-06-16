@@ -163,7 +163,8 @@ function HardwareSparkline({ agentId }: { agentId: string }) {
             <XAxis dataKey="t" hide />
             <Tooltip
               contentStyle={{ background: '#0a1525', border: '1px solid #1a2f4a', borderRadius: 6, fontSize: 10 }}
-              formatter={(v: number, name: string) => [`${v}%`, name === 'cpu' ? 'CPU' : 'RAM']}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter={(v: any, name: any) => [`${v ?? 0}%`, name === 'cpu' ? 'CPU' : 'RAM']}
               labelStyle={{ color: '#64748b', fontSize: 10 }}
             />
             <Area type="monotone" dataKey="cpu" stroke="#00d4ff" strokeWidth={1.5} fill={`url(#cg${id})`} dot={false} isAnimationActive={false} />

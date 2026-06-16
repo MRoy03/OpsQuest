@@ -78,7 +78,8 @@ function DeviceActivityCard({ device }: { device: DeviceActivity }) {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={110} />
                 <Tooltip
                   contentStyle={{ background: '#0a1525', border: '1px solid #1a2f4a', borderRadius: 8, fontSize: 11 }}
-                  formatter={(v: number) => [`${v} min`, 'Usage']}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(v: any) => [`${v ?? 0} min`, 'Usage']}
                   cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                 />
                 <Bar dataKey="minutes" radius={[0, 4, 4, 0]}>
