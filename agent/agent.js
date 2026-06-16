@@ -10,7 +10,7 @@
  * Build: npm install && npm run build  →  dist/agent.exe
  */
 
-const { execSync, spawnSync } = require('child_process')
+const { execSync, spawnSync, spawn } = require('child_process')
 const fs   = require('fs')
 const path = require('path')
 const os   = require('os')
@@ -1159,7 +1159,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.5.4',
+      version:         '1.5.5',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
@@ -1274,17 +1274,35 @@ async function executeCommand(cmd) {
       const ext     = ((p.extension || 'ps1')).replace(/[^a-z]/gi, '').slice(0, 4).toLowerCase()
       const allowed = ['ps1', 'bat', 'cmd']
       if (!allowed.includes(ext)) {
-        result = `Unsupported script type: ${ext}. Allowed: ps1, bat, cmd`
+        result = `Unsupported: ${ext}. Allowed: ps1, bat, cmd`
       } else {
         const tmpPath = `C:\\Windows\\Temp\\oq_${cmd.id.slice(0, 8)}.${ext}`
-        // Write via fs — avoids nested powershell-inside-powershell which hangs in Session 0
         fs.writeFileSync(tmpPath, p.script || '', { encoding: 'utf8' })
-        const r = ext === 'ps1'
-          ? spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmpPath], { timeout: 90000, encoding: 'utf8' })
-          : spawnSync('cmd', ['/c', tmpPath], { timeout: 90000, encoding: 'utf8' })
-        try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
-        const out = ((r.stdout || '') + (r.stderr || '')).trim().slice(0, 4000)
-        result = out || `[Exit: ${r.status ?? 'timeout'} — no output]`
+        // Use async spawn — spawnSync blocks the event loop and prevents cmdUpdate('running')
+        // from completing, causing the command to appear stuck in 'pending' forever
+        result = await new Promise(resolve => {
+          const proc = ext === 'ps1'
+            ? spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmpPath], { stdio: 'pipe' })
+            : spawn('cmd', ['/c', tmpPath], { stdio: 'pipe' })
+          let out = '', err = ''
+          proc.stdout.on('data', d => { out += d.toString() })
+          proc.stderr.on('data', d => { err += d.toString() })
+          const timer = setTimeout(() => {
+            proc.kill()
+            resolve((`[TIMEOUT 90s]\n` + out + err).trim().slice(0, 4000))
+          }, 90000)
+          proc.on('close', code => {
+            clearTimeout(timer)
+            try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+            const combined = (out + err).trim().slice(0, 4000)
+            resolve(combined || `[Exit: ${code ?? 'unknown'} — no output]`)
+          })
+          proc.on('error', e => {
+            clearTimeout(timer)
+            try { fs.unlinkSync(tmpPath) } catch { /* ignore */ }
+            resolve(`[Spawn error: ${e.message}]`)
+          })
+        })
       }
     } else {
       result = `Unknown command type: ${cmd.command_type}`
@@ -1313,7 +1331,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.5.0`)
+log(`OpsQuest Agent v1.5.5`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
