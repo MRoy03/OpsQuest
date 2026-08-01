@@ -1,6 +1,6 @@
 'use strict'
 /**
- * OpsQuest Agent v1.7.0
+ * OpsQuest Agent v1.8.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
@@ -1185,6 +1185,55 @@ function collectServices() {
   }
 }
 
+// ─── BLOCKLIST ────────────────────────────────────────────────────────────────
+let cachedBlocklist      = null
+let blocklistFetchedAt   = 0
+const BLOCKLIST_INTERVAL = 3600000 // 1 hour
+
+async function fetchBlocklist() {
+  const now = Date.now()
+  if (cachedBlocklist !== null && now - blocklistFetchedAt < BLOCKLIST_INTERVAL) return cachedBlocklist
+  try {
+    const resp = await nodeFetch(
+      `${SUPABASE_URL}/rest/v1/software_blocklist?enabled=eq.true&select=id,name_pattern,reason,severity`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    )
+    if (resp.ok) {
+      cachedBlocklist    = await resp.json()
+      blocklistFetchedAt = now
+      log(`  Blocklist: ${cachedBlocklist.length} active rule(s)`)
+    }
+  } catch (e) { log(`  Blocklist fetch: ${e.message}`) }
+  return cachedBlocklist || []
+}
+
+function checkBlocklist(software, blocklist) {
+  if (!blocklist.length || !software?.length) return []
+  const violations = []
+  const seen = new Set()
+  for (const rule of blocklist) {
+    const pattern = rule.name_pattern.toLowerCase()
+    for (const app of software) {
+      const lc = (app.name || '').toLowerCase()
+      if (lc.includes(pattern)) {
+        const key = `${rule.id}|${app.name}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        violations.push({
+          rule_id:     rule.id,
+          pattern:     rule.name_pattern,
+          app_name:    app.name,
+          app_version: app.version || null,
+          severity:    rule.severity || 'high',
+          reason:      rule.reason  || null,
+          detected_at: new Date().toISOString(),
+        })
+      }
+    }
+  }
+  return violations
+}
+
 // ─── UPDATES COLLECTOR ───────────────────────────────────────────────────────
 let cachedUpdates = null
 let updatesCollectedAt = 0
@@ -1298,6 +1347,13 @@ async function collect() {
   // Attach services and updates to hardware_info so UI can display them
   hw.services          = services
   hw.available_updates = availableUpdates
+
+  // Blocklist check — violations embedded in hardware_info for UI display
+  const blocklist = await fetchBlocklist().catch(() => [])
+  hw.blocklist_violations = checkBlocklist(hw.software, blocklist)
+  if (hw.blocklist_violations.length) {
+    log(`  Blocklist: ${hw.blocklist_violations.length} violation(s) found`)
+  }
 
   // Try upsert with agent_id (requires ALTER TABLE migration), fall back silently
   const deviceRow = {
@@ -1630,7 +1686,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.7.0`)
+log(`OpsQuest Agent v1.8.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
