@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { mockTickets } from '@/lib/mock-data'
 
 export async function GET(request: Request) {

@@ -11,7 +11,9 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
-  sendMagicLink: (email: string) => Promise<{ error: string | null }>
+  signInWithMicrosoft: () => Promise<{ error: string | null }>
+  resetPassword: (email: string) => Promise<{ error: string | null }>
+  updatePassword: (password: string) => Promise<{ error: string | null }>
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
@@ -59,17 +61,34 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await supabase.auth.signOut()
   }
 
-  async function sendMagicLink(email: string) {
+  async function signInWithMicrosoft() {
     if (!supabase) return { error: 'Supabase not configured' }
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        scopes: 'openid profile email',
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
     return { error: error?.message ?? null }
   }
 
+  async function resetPassword(email: string) {
+    if (!supabase) return { error: 'Supabase not configured' }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+    })
+    return { error: error?.message ?? null }
+  }
+
+  async function updatePassword(password: string) {
+    if (!supabase) return { error: 'Supabase not configured' }
+    const { error } = await supabase.auth.updateUser({ password })
+    return { error: error?.message ?? null }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, sendMagicLink }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, signInWithMicrosoft, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

@@ -6,7 +6,7 @@ import {
   Monitor, Cpu, HardDrive, MemoryStick, Wifi, RefreshCw,
   Server, Laptop, Smartphone, Clock, Package, ShieldCheck, ShieldAlert, Key,
   Mouse, Keyboard, Printer, Bluetooth, Usb, Download, ChevronDown, ChevronUp,
-  Terminal, Trash2, CheckCircle, XCircle, Loader2, AlertCircle,
+  Terminal, Trash2, CheckCircle, XCircle, Loader2, AlertCircle, Camera,
 } from 'lucide-react'
 import { generateDevicesReport } from '@/lib/generateDevicesReport'
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -16,6 +16,16 @@ interface Device {
   id: string; mac_address: string; device_type: string
   hostname: string; last_ip: string; is_server: boolean
   last_seen: string; hardware_info: HardwareInfo; agent_id?: string
+  enrollment_state?: string; primary_user_upn?: string
+  tags?: string[]; security_posture?: SecurityPosture | null; hw_uuid?: string | null
+}
+
+interface SecurityPosture {
+  bitlocker?: Array<{ mount_point: string; encryption_method: string; volume_status: string; protection_status: string; lock_status: string; encryption_pct: number }>
+  tpm?: { present: boolean; ready: boolean; enabled: boolean; activated: boolean; owned: boolean } | null
+  defender?: { running: boolean; antivirus_enabled: boolean; realtime_enabled: boolean; antispyware: boolean; behavior_monitor: boolean } | null
+  firewall?: Array<{ profile: string; enabled: boolean; default_inbound: string; default_outbound: string }>
+  collected_at?: string
 }
 
 interface AgentCommand {
@@ -24,6 +34,9 @@ interface AgentCommand {
   status: 'pending' | 'running' | 'done' | 'failed'
   result?: string; created_at: string; completed_at?: string
 }
+interface ServiceEntry { name: string; display_name: string; status: string; start_type: string; description?: string | null }
+interface UpdateEntry  { name: string; id: string; version: string; source: string }
+
 interface HardwareInfo {
   cpu?: CpuInfo; ram?: RamSlot[]; ram_total_gb?: number
   disks?: DiskInfo[]; logical_drives?: LogicalDrive[]; partitions?: Partition[]
@@ -32,6 +45,7 @@ interface HardwareInfo {
   os?: OsInfo; network_adapters?: NicInfo[]
   software?: SoftwareEntry[]; license_keys?: LicenseKeys
   peripherals?: Peripherals
+  services?: ServiceEntry[]; available_updates?: UpdateEntry[]
 }
 interface CpuInfo {
   name: string; manufacturer: string; architecture: string
@@ -50,7 +64,7 @@ interface GpuInfo { name: string; vram_mb: number; driver_version: string; resol
 interface MonitorInfo { index: number; size_inches: number | null; width_cm: number | null; height_cm: number | null; resolution: string | null; refresh_rate_hz: number | null; gpu_name: string | null; gpu_vram_mb: number | null; driver_version: string | null }
 interface MoboInfo { manufacturer: string; product: string; serial: string; version: string }
 interface BiosInfo { manufacturer: string; version: string; release_date: string; serial: string }
-interface SystemInfo { manufacturer: string; model: string; domain: string; logged_user: string }
+interface SystemInfo { manufacturer: string; model: string; domain: string; logged_user: string; uuid?: string | null }
 interface OsInfo { name: string; version: string; architecture: string; build_number: string; last_boot: string; uptime_hours: number; registered_user: string; computer_name: string; domain?: string }
 interface NicInfo { name: string; mac: string; ip: string[]; gateway: string[]; dhcp: boolean; speed_mbps: number }
 interface SoftwareEntry { name: string; version: string | null; publisher: string | null; install_date: string | null; size_mb: number | null; is_licensed: boolean; license_category: string | null }
@@ -107,6 +121,71 @@ function HealthBadge({ device }: { device: Device }) {
       className="flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold shrink-0"
     >
       <span>{score}</span><span className="text-[9px] opacity-70">/100</span>
+    </div>
+  )
+}
+
+function EnrollmentBadge({ state }: { state?: string }) {
+  if (!state || state === 'discovered') return null
+  const styles: Record<string, string> = {
+    managed:    'bg-[#10b98122] text-[#10b981] border-[#10b98133]',
+    registered: 'bg-[#00d4ff22] text-[#00d4ff] border-[#00d4ff33]',
+    retired:    'bg-[#ef444422] text-[#ef4444] border-[#ef444433]',
+  }
+  const cls = styles[state] || 'bg-[#47556922] text-[#64748b] border-[#47556933]'
+  return (
+    <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${cls} shrink-0`}>
+      {state}
+    </span>
+  )
+}
+
+function SecurityPostureSection({ posture }: { posture: SecurityPosture }) {
+  const bl = posture.bitlocker || []
+  const sysDrive = bl.find(v => v.mount_point === 'C:')
+  const encrypted = sysDrive?.protection_status === 'On'
+  return (
+    <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] p-4">
+      <h4 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-[#10b981]">
+        <ShieldCheck className="w-3.5 h-3.5" /> Security Posture
+      </h4>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <div>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">BitLocker (C:)</p>
+          <span className={`text-xs font-medium ${encrypted ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+            {sysDrive ? (encrypted ? `Encrypted ${sysDrive.encryption_pct}%` : 'Not encrypted') : 'No data'}
+          </span>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">TPM</p>
+          <span className={`text-xs font-medium ${posture.tpm?.ready ? 'text-[#10b981]' : posture.tpm === null ? 'text-[#ef4444]' : 'text-[#f59e0b]'}`}>
+            {posture.tpm === null ? 'No TPM' : posture.tpm?.ready ? 'Ready' : 'Not ready'}
+          </span>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">Defender</p>
+          <span className={`text-xs font-medium ${posture.defender?.realtime_enabled ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+            {posture.defender ? (posture.defender.realtime_enabled ? 'Real-time On' : 'Real-time Off') : 'No data'}
+          </span>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">Firewall</p>
+          {posture.firewall?.length ? (
+            <span className={`text-xs font-medium ${posture.firewall.every(f => f.enabled) ? 'text-[#10b981]' : 'text-[#f59e0b]'}`}>
+              {posture.firewall.filter(f => f.enabled).length}/{posture.firewall.length} profiles
+            </span>
+          ) : <span className="text-xs text-[#475569]">No data</span>}
+        </div>
+      </div>
+      {bl.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {bl.map((v, i) => (
+            <span key={i} className={`text-[10px] px-2 py-0.5 rounded border font-mono ${v.protection_status === 'On' ? 'border-[#10b98133] text-[#10b981] bg-[#10b98111]' : 'border-[#ef444433] text-[#ef4444] bg-[#ef444411]'}`}>
+              {v.mount_point} {v.protection_status === 'On' ? `${v.encryption_pct}%` : 'unencrypted'}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -722,6 +801,240 @@ function SoftwareSection({
   )
 }
 
+// ─── SERVICES SECTION ────────────────────────────────────────────────────────
+function ServicesSection({ services, agentId, onCommandQueued }: { services: ServiceEntry[]; agentId?: string; onCommandQueued?: () => void }) {
+  const [tab, setTab]       = useState<'running' | 'stopped' | 'all'>('running')
+  const [search, setSearch] = useState('')
+  const [acting, setActing] = useState<string | null>(null)
+
+  const running = services.filter(s => s.status === 'Running')
+  const stopped = services.filter(s => s.status === 'Stopped')
+
+  const visible = (tab === 'running' ? running : tab === 'stopped' ? stopped : services)
+    .filter(s => !search || s.display_name.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase()))
+
+  async function sendServiceCmd(name: string, cmd: 'start_service' | 'stop_service') {
+    if (!agentId) return
+    setActing(name)
+    await fetch('/api/infrastructure/commands', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, command_type: cmd, payload: { name } }),
+    }).catch(() => null)
+    setActing(null)
+    onCommandQueued?.()
+  }
+
+  return (
+    <Section title={`Services (${running.length} running · ${stopped.length} stopped)`} icon={Server} color="cyan">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex bg-[#060b18] rounded-lg border border-[#1a2f4a] p-0.5">
+          {(['running', 'stopped', 'all'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${tab === t ? (t === 'running' ? 'bg-[#10b981] text-[#060b18]' : t === 'stopped' ? 'bg-[#ef4444] text-white' : 'bg-[#7c3aed] text-white') : 'text-[#64748b] hover:text-[#94a3b8]'}`}>
+              {t} {t === 'running' ? `(${running.length})` : t === 'stopped' ? `(${stopped.length})` : `(${services.length})`}
+            </button>
+          ))}
+        </div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search services…"
+          className="flex-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-1.5 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#00d4ff44] min-w-32"
+        />
+      </div>
+      <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
+        <div className="max-h-72 overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-[#060b18]">
+              <tr className="border-b border-[#1a2f4a] text-[#475569]">
+                <th className="text-left px-3 py-2 font-medium">Display Name</th>
+                <th className="text-left px-3 py-2 font-medium">Name</th>
+                <th className="text-left px-3 py-2 font-medium">Status</th>
+                <th className="text-left px-3 py-2 font-medium">Start</th>
+                {agentId && <th className="text-left px-3 py-2 font-medium">Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((s, i) => (
+                <tr key={i} className="border-b border-[#0a1525] hover:bg-[#ffffff04] transition-colors">
+                  <td className="px-3 py-2 text-[#e2e8f0] max-w-[200px] truncate">{s.display_name}</td>
+                  <td className="px-3 py-2 text-[#64748b] font-mono text-[10px]">{s.name}</td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${s.status === 'Running' ? 'bg-[#10b98122] text-[#10b981]' : 'bg-[#47556922] text-[#64748b]'}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-[10px] text-[#475569]">{s.start_type}</td>
+                  {agentId && (
+                    <td className="px-3 py-2">
+                      {acting === s.name ? (
+                        <Loader2 className="w-3 h-3 text-[#475569] animate-spin" />
+                      ) : s.status === 'Running' ? (
+                        <button onClick={() => sendServiceCmd(s.name, 'stop_service')}
+                          className="text-[10px] px-2 py-0.5 rounded bg-[#ef444411] text-[#ef4444] hover:bg-[#ef444422]">
+                          Stop
+                        </button>
+                      ) : (
+                        <button onClick={() => sendServiceCmd(s.name, 'start_service')}
+                          className="text-[10px] px-2 py-0.5 rounded bg-[#10b98111] text-[#10b981] hover:bg-[#10b98122]">
+                          Start
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {visible.length === 0 && (
+            <div className="text-center py-6 text-xs text-[#475569]">No services match the filter</div>
+          )}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+// ─── UPDATES SECTION ─────────────────────────────────────────────────────────
+function UpdatesSection({ updates, agentId, onCommandQueued }: { updates: UpdateEntry[]; agentId?: string; onCommandQueued?: () => void }) {
+  const [upgrading, setUpgrading] = useState<string | null>(null)
+
+  async function queueUpgrade(id: string, name: string) {
+    if (!agentId) return
+    setUpgrading(id)
+    await fetch('/api/infrastructure/commands', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, command_type: 'winget_upgrade', payload: { name, winget_id: id } }),
+    }).catch(() => null)
+    setUpgrading(null)
+    onCommandQueued?.()
+  }
+
+  return (
+    <Section title={`Available Updates (${updates.length})`} icon={Download} color="amber">
+      {updates.length === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-[#10b981]">
+          <CheckCircle className="w-4 h-4" /> System is up to date
+        </div>
+      ) : (
+        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#1a2f4a] bg-[#060b18] text-[#475569]">
+                <th className="text-left px-3 py-2 font-medium">Package</th>
+                <th className="text-left px-3 py-2 font-medium">ID</th>
+                <th className="text-left px-3 py-2 font-medium">Available</th>
+                <th className="text-left px-3 py-2 font-medium">Source</th>
+                {agentId && <th className="text-left px-3 py-2 font-medium">Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {updates.map((u, i) => (
+                <tr key={i} className="border-b border-[#0a1525] hover:bg-[#ffffff04] transition-colors">
+                  <td className="px-3 py-2 text-[#e2e8f0] max-w-[180px] truncate">{u.name}</td>
+                  <td className="px-3 py-2 text-[#64748b] font-mono text-[10px]">{u.id}</td>
+                  <td className="px-3 py-2 text-[#f59e0b] font-mono text-[10px]">{u.version}</td>
+                  <td className="px-3 py-2 text-[10px] text-[#475569]">{u.source}</td>
+                  {agentId && (
+                    <td className="px-3 py-2">
+                      {upgrading === u.id ? (
+                        <Loader2 className="w-3 h-3 text-[#475569] animate-spin" />
+                      ) : (
+                        <button onClick={() => queueUpgrade(u.id, u.name)}
+                          className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[#f59e0b11] text-[#f59e0b] hover:bg-[#f59e0b22]">
+                          <Download className="w-2.5 h-2.5" /> Upgrade
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ─── DISK HISTORY SECTION ────────────────────────────────────────────────────
+interface DiskSnapshot { drive: string; free_gb: number; used_gb: number; size_gb: number; use_pct: number }
+interface DiskHistoryPoint { recorded_at: string; disk_snapshots?: DiskSnapshot[] }
+
+function DiskHistorySection({ agentId }: { agentId: string }) {
+  const [data, setData]   = useState<DiskHistoryPoint[]>([])
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/infrastructure/history?agent_id=${encodeURIComponent(agentId)}&hours=24&fields=disk_snapshots`)
+      .then(r => r.json())
+      .then(j => { setData(j.data || []); setReady(true) })
+      .catch(() => setReady(true))
+  }, [agentId])
+
+  if (!ready) return null
+
+  // Extract unique drives from most recent snapshot
+  const recent = data[data.length - 1]
+  if (!recent?.disk_snapshots?.length) return (
+    <Section title="Disk Usage History" icon={HardDrive} color="cyan">
+      <p className="text-xs text-[#475569]">No disk history yet — requires agent v1.7.0+</p>
+    </Section>
+  )
+
+  const drives = [...new Set(data.flatMap(d => d.disk_snapshots?.map(s => s.drive) || []))]
+
+  return (
+    <Section title="Disk Usage History (24h)" icon={HardDrive} color="cyan">
+      <div className="space-y-4">
+        {drives.map(drive => {
+          const driveData = data.map(pt => {
+            const snap = pt.disk_snapshots?.find(s => s.drive === drive)
+            const dt = new Date(pt.recorded_at)
+            return snap ? {
+              t: isNaN(dt.getTime()) ? '' : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              pct: snap.use_pct ?? 0,
+              free: snap.free_gb ?? 0,
+            } : null
+          }).filter((d): d is { t: string; pct: number; free: number } => d !== null && d.t !== '')
+
+          if (driveData.length < 2) return null
+          const latest = driveData[driveData.length - 1]
+          const id = `${agentId.replace(/[^a-z0-9]/gi, '')}${drive.replace(':', '')}`
+
+          return (
+            <div key={drive} className="rounded-lg bg-[#060b18] border border-[#1a2f4a] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-[#00d4ff]">{drive}</span>
+                <span className={`text-xs font-medium ${latest.pct > 90 ? 'text-[#ef4444]' : latest.pct > 75 ? 'text-[#f59e0b]' : 'text-[#10b981]'}`}>
+                  {latest.pct}% used · {latest.free.toFixed(1)} GB free
+                </span>
+              </div>
+              <div className="h-14">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={driveData} margin={{ top: 2, right: 2, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id={`dg${id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={latest.pct > 90 ? '#ef4444' : '#7c3aed'} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={latest.pct > 90 ? '#ef4444' : '#7c3aed'} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="t" hide />
+                    <Tooltip
+                      contentStyle={{ background: '#0a1525', border: '1px solid #1a2f4a', borderRadius: 6, fontSize: 10 }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      formatter={(v: any) => [`${v}%`, 'Used']}
+                      labelStyle={{ color: '#64748b', fontSize: 10 }}
+                    />
+                    <Area type="monotone" dataKey="pct" stroke={latest.pct > 90 ? '#ef4444' : '#7c3aed'} strokeWidth={1.5} fill={`url(#dg${id})`} dot={false} isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )
+        }).filter(Boolean)}
+      </div>
+    </Section>
+  )
+}
+
 // ─── SERVER CARD ─────────────────────────────────────────────────────────────
 function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueued?: () => void }) {
   const hw     = device.hardware_info
@@ -741,6 +1054,7 @@ function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueu
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <EnrollmentBadge state={device.enrollment_state} />
           <HealthBadge device={device} />
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${online ? 'bg-[#10b981]' : 'bg-[#ef4444]'}`} />
@@ -828,6 +1142,8 @@ function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueu
           <PeripheralsSection p={hw.peripherals} />
         )}
 
+        {device.security_posture && <SecurityPostureSection posture={device.security_posture} />}
+
         {hw.software?.length ? (
           <SoftwareSection
             software={hw.software} licenseKeys={hw.license_keys}
@@ -835,6 +1151,40 @@ function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueu
             onCommandQueued={onCommandQueued}
           />
         ) : null}
+
+        {hw.services?.length ? (
+          <ServicesSection
+            services={hw.services}
+            agentId={device.agent_id || device.hostname || undefined}
+            onCommandQueued={onCommandQueued}
+          />
+        ) : null}
+
+        {hw.available_updates !== undefined ? (
+          <UpdatesSection
+            updates={hw.available_updates}
+            agentId={device.agent_id || device.hostname || undefined}
+            onCommandQueued={onCommandQueued}
+          />
+        ) : null}
+
+        {(device.agent_id || device.hostname) && (
+          <DiskHistorySection agentId={device.agent_id || device.hostname!} />
+        )}
+
+        {device.agent_id && (
+          <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] p-4">
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-[#ef4444]">
+              <ShieldAlert className="w-3.5 h-3.5" /> Device Control
+            </h4>
+            <div className="flex gap-2 flex-wrap">
+              <DeviceControlBtn agentId={device.agent_id} type="restart_device" label="Restart" onDone={onCommandQueued} />
+              <DeviceControlBtn agentId={device.agent_id} type="shutdown_device" label="Shutdown" onDone={onCommandQueued} />
+              <CaptureScreenBtn agentId={device.agent_id} />
+            </div>
+            <p className="text-[10px] text-[#334155] mt-2">Commands are queued and executed by the agent within its next poll cycle</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -862,9 +1212,13 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[#e2e8f0] truncate">{device.hostname || device.last_ip}</p>
-          <p className="text-[11px] text-[#475569] font-mono">{device.mac_address} · {device.last_ip}</p>
+          <p className="text-[11px] text-[#475569] font-mono">
+            {device.mac_address} · {device.last_ip}
+            {device.primary_user_upn && <span className="text-[#64748b]"> · {device.primary_user_upn}</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <EnrollmentBadge state={device.enrollment_state} />
           <HealthBadge device={device} />
           {licensed.length > 0 && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#10b98122] text-[#10b981]">
@@ -912,6 +1266,7 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
             </Section>
           ) : null}
           {hw.peripherals && <PeripheralsSection p={hw.peripherals} />}
+          {device.security_posture && <SecurityPostureSection posture={device.security_posture} />}
           {hw.software?.length ? (
             <SoftwareSection
               software={hw.software} licenseKeys={hw.license_keys}
@@ -919,9 +1274,112 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
               onCommandQueued={onCommandQueued}
             />
           ) : null}
+          {hw.services?.length ? (
+            <ServicesSection
+              services={hw.services}
+              agentId={device.agent_id || device.hostname || undefined}
+              onCommandQueued={onCommandQueued}
+            />
+          ) : null}
+          {hw.available_updates !== undefined ? (
+            <UpdatesSection
+              updates={hw.available_updates}
+              agentId={device.agent_id || device.hostname || undefined}
+              onCommandQueued={onCommandQueued}
+            />
+          ) : null}
+          {(device.agent_id || device.hostname) && (
+            <DiskHistorySection agentId={device.agent_id || device.hostname!} />
+          )}
+          {device.agent_id && (
+            <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] p-4">
+              <h4 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-[#ef4444]">
+                <ShieldAlert className="w-3.5 h-3.5" /> Device Control
+              </h4>
+              <div className="flex gap-2 flex-wrap">
+                <DeviceControlBtn agentId={device.agent_id} type="restart_device" label="Restart" onDone={onCommandQueued} />
+                <DeviceControlBtn agentId={device.agent_id} type="shutdown_device" label="Shutdown" onDone={onCommandQueued} />
+                <CaptureScreenBtn agentId={device.agent_id} />
+              </div>
+              <p className="text-[10px] text-[#334155] mt-2">Commands are queued and executed by the agent within its next poll cycle</p>
+            </div>
+          )}
         </div>
       )}
     </div>
+  )
+}
+
+function DeviceControlBtn({ agentId, type, label, onDone }: { agentId: string; type: string; label: string; onDone?: () => void }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+  const [confirm, setConfirm] = useState(false)
+
+  async function send() {
+    setState('sending')
+    try {
+      const resp = await fetch('/api/infrastructure/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type: type, payload: {} }),
+      })
+      if (resp.ok) { setState('ok'); onDone?.() }
+      else setState('err')
+    } catch { setState('err') }
+    setConfirm(false)
+    setTimeout(() => setState('idle'), 3000)
+  }
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-[#f59e0b]">{label}?</span>
+        <button onClick={send} className="text-[11px] px-2 py-1 rounded bg-[#ef444422] border border-[#ef444433] text-[#ef4444] hover:bg-[#ef444433]">Confirm</button>
+        <button onClick={() => setConfirm(false)} className="text-[11px] px-2 py-1 rounded text-[#475569] hover:text-[#94a3b8]">Cancel</button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setConfirm(true)}
+      disabled={state === 'sending'}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-50 ${
+        state === 'ok'  ? 'border-[#10b98133] bg-[#10b98111] text-[#10b981]' :
+        state === 'err' ? 'border-[#ef444433] bg-[#ef444411] text-[#ef4444]' :
+        'border-[#ef444433] bg-[#ef444411] text-[#ef4444] hover:bg-[#ef444422]'
+      }`}
+    >
+      {state === 'sending' ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+      {state === 'ok' ? 'Queued' : state === 'err' ? 'Failed' : label}
+    </button>
+  )
+}
+
+function CaptureScreenBtn({ agentId }: { agentId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+
+  async function capture() {
+    setState('sending')
+    try {
+      const r = await fetch('/api/infrastructure/commands', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type: 'capture_screen', payload: {} }),
+      })
+      setState(r.ok ? 'ok' : 'err')
+    } catch { setState('err') }
+    setTimeout(() => setState('idle'), 8000)
+  }
+
+  return (
+    <button onClick={capture} disabled={state !== 'idle'}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-60 ${
+        state === 'ok'  ? 'border-[#10b98133] bg-[#10b98111] text-[#10b981]' :
+        state === 'err' ? 'border-[#ef444433] bg-[#ef444411] text-[#ef4444]' :
+        'border-[#00d4ff33] bg-[#00d4ff11] text-[#00d4ff] hover:bg-[#00d4ff22]'
+      }`}>
+      {state === 'sending' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
+      {state === 'idle' ? 'Capture Screen' : state === 'sending' ? 'Queuing…' : state === 'ok' ? 'Queued!' : 'Failed'}
+    </button>
   )
 }
 

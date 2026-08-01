@@ -1,10 +1,12 @@
 'use strict'
 /**
- * OpsQuest Agent v1.4.0
+ * OpsQuest Agent v1.7.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
  *           software inventory (licensed vs unlicensed + license keys),
+ *           services (running/stopped state), available updates (winget, every 4h),
+ *           firewall events from Windows Security log (Event IDs 4946-5157),
  *           ARP network scan, remote WMI for domain clients, camera checks
  * Run as Administrator for full WMI access
  * Build: npm install && npm run build  →  dist/agent.exe
@@ -652,7 +654,8 @@ function collectHardware() {
   const moboRaw = one(ps(`Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product,SerialNumber,Version | ConvertTo-Json -Compress`))
   const biosRaw = one(ps(`Get-CimInstance Win32_BIOS | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber | ConvertTo-Json -Compress`))
   const osRaw   = one(ps(`Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,OSArchitecture,BuildNumber,InstallDate,LastBootUpTime,RegisteredUser,CSName | ConvertTo-Json -Compress`))
-  const sysRaw  = one(ps(`Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory,Domain,UserName,Manufacturer,Model | ConvertTo-Json -Compress`))
+  const sysRaw     = one(ps(`Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory,Domain,UserName,Manufacturer,Model | ConvertTo-Json -Compress`))
+  const sysProduct = one(ps(`try { Get-CimInstance Win32_ComputerSystemProduct | Select-Object UUID,IdentifyingNumber | ConvertTo-Json -Compress } catch { 'null' }`))
   const nicRaw  = arr(ps(`Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled} | Select-Object Description,MACAddress,IPAddress,DefaultIPGateway,DHCPEnabled,Speed | ConvertTo-Json -Compress`))
   const volRaw  = arr(ps(`Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free | ConvertTo-Json -Compress`))
 
@@ -792,6 +795,7 @@ function collectHardware() {
       model:        sysRaw.Model,
       domain:       sysRaw.Domain,
       logged_user:  sysRaw.UserName,
+      uuid:         sysProduct?.UUID || null,
     } : null,
     os: osRaw ? {
       name:            osRaw.Caption,
@@ -1117,6 +1121,154 @@ async function collectEventLogs() {
   } catch (e) { log(`  Event logs: ${e.message}`) }
 }
 
+// ─── SECURITY POSTURE ─────────────────────────────────────────────────────────
+function collectSecurityPosture() {
+  log('  Collecting security posture...')
+  try {
+    const blRaw = arr(ps(`try { Get-BitLockerVolume | Select-Object MountPoint,EncryptionMethod,VolumeStatus,ProtectionStatus,LockStatus,EncryptionPercentage | ConvertTo-Json -Compress } catch { '[]' }`))
+    const tpmRaw = one(ps(`try { Get-Tpm | Select-Object TpmPresent,TpmReady,TpmEnabled,TpmActivated,TpmOwned | ConvertTo-Json -Compress } catch { 'null' }`))
+    const defRaw = one(ps(`try { Get-MpComputerStatus | Select-Object AMRunningMode,AntivirusEnabled,RealTimeProtectionEnabled,AntispywareEnabled,BehaviorMonitorEnabled | ConvertTo-Json -Compress } catch { 'null' }`))
+    const fwRaw  = arr(ps(`try { Get-NetFirewallProfile | Select-Object Name,Enabled,DefaultInboundAction,DefaultOutboundAction | ConvertTo-Json -Compress } catch { '[]' }`))
+
+    return {
+      bitlocker: blRaw.map(v => ({
+        mount_point:      v.MountPoint,
+        encryption_method: v.EncryptionMethod,
+        volume_status:    v.VolumeStatus,
+        protection_status: v.ProtectionStatus === 1 ? 'On' : 'Off',
+        lock_status:      v.LockStatus,
+        encryption_pct:   v.EncryptionPercentage,
+      })),
+      tpm: tpmRaw ? {
+        present:   tpmRaw.TpmPresent,
+        ready:     tpmRaw.TpmReady,
+        enabled:   tpmRaw.TpmEnabled,
+        activated: tpmRaw.TpmActivated,
+        owned:     tpmRaw.TpmOwned,
+      } : null,
+      defender: defRaw ? {
+        running:           defRaw.AMRunningMode === 'Normal',
+        antivirus_enabled: defRaw.AntivirusEnabled,
+        realtime_enabled:  defRaw.RealTimeProtectionEnabled,
+        antispyware:       defRaw.AntispywareEnabled,
+        behavior_monitor:  defRaw.BehaviorMonitorEnabled,
+      } : null,
+      firewall: fwRaw.map(f => ({
+        profile:          f.Name,
+        enabled:          f.Enabled,
+        default_inbound:  f.DefaultInboundAction,
+        default_outbound: f.DefaultOutboundAction,
+      })),
+      collected_at: new Date().toISOString(),
+    }
+  } catch (e) {
+    log(`  Security posture error: ${e.message}`)
+    return null
+  }
+}
+
+// ─── SERVICES COLLECTOR ──────────────────────────────────────────────────────
+function collectServices() {
+  log('  Collecting services...')
+  try {
+    const raw = arr(ps(`Get-Service | Select-Object Name,DisplayName,Status,StartType,Description | ConvertTo-Json -Compress`))
+    return raw.map(s => ({
+      name:         s.Name,
+      display_name: s.DisplayName || s.Name,
+      status:       s.Status === 4 ? 'Running' : s.Status === 1 ? 'Stopped' : String(s.Status),
+      start_type:   s.StartType === 2 ? 'Automatic' : s.StartType === 3 ? 'Manual' : s.StartType === 4 ? 'Disabled' : String(s.StartType),
+      description:  s.Description || null,
+    }))
+  } catch (e) {
+    log(`  Services error: ${e.message}`)
+    return []
+  }
+}
+
+// ─── UPDATES COLLECTOR ───────────────────────────────────────────────────────
+let cachedUpdates = null
+let updatesCollectedAt = 0
+const UPDATE_INTERVAL_MS = 4 * 3600 * 1000
+
+function collectAvailableUpdates() {
+  const now = Date.now()
+  if (cachedUpdates !== null && now - updatesCollectedAt < UPDATE_INTERVAL_MS) {
+    return cachedUpdates
+  }
+  log('  Collecting available updates (winget)...')
+  try {
+    const raw = execSync(
+      'winget upgrade --list --accept-source-agreements --disable-interactivity 2>nul',
+      { encoding: 'utf8', timeout: 60000 }
+    )
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
+    // Find separator line (all dashes)
+    const sepIdx = lines.findIndex(l => /^-{10,}/.test(l))
+    if (sepIdx < 0) { cachedUpdates = []; updatesCollectedAt = now; return [] }
+    const updates = []
+    for (const line of lines.slice(sepIdx + 1)) {
+      // winget columns: Name  Id  Version  Available  Source
+      const parts = line.split(/\s{2,}/)
+      if (parts.length >= 4 && parts[0] && parts[1] && !parts[0].startsWith('--')) {
+        updates.push({ name: parts[0], id: parts[1], version: parts[3] || parts[2], source: parts[4] || 'winget' })
+      }
+    }
+    cachedUpdates = updates
+    updatesCollectedAt = now
+    log(`  Found ${updates.length} available update(s)`)
+    return updates
+  } catch (e) {
+    log(`  Updates error (winget may not be available): ${e.message}`)
+    cachedUpdates = cachedUpdates ?? []
+    updatesCollectedAt = now
+    return cachedUpdates
+  }
+}
+
+// ─── FIREWALL EVENTS COLLECTOR ───────────────────────────────────────────────
+async function collectFirewallEvents() {
+  log('  Collecting firewall events...')
+  try {
+    const script = `
+$ids = 4946,4947,4948,4950,5031,5152,5157
+$cutoff = (Get-Date).AddHours(-1)
+try {
+  $evts = Get-WinEvent -FilterHashtable @{LogName='Security';Id=$ids;StartTime=$cutoff} -ErrorAction SilentlyContinue
+  if (!$evts) { '[]'; exit }
+  $evts | Select-Object -First 200 @{N='event_id';E={$_.Id}},@{N='event_time';E={$_.TimeCreated.ToUniversalTime().ToString('o')}},@{N='level';E={if($_.Level -le 2){'critical'}elseif($_.Level -le 3){'warn'}else{'info'}}},@{N='message';E={($_.Message -split '\n')[0..2] -join ' | '}} | ConvertTo-Json -Compress
+} catch { '[]' }`.trim()
+    const raw = arr(ps(script))
+    if (!raw.length) return
+
+    const rows = raw.map(e => ({
+      agent_id:   AGENT_ID,
+      event_id:   e.event_id,
+      event_time: e.event_time,
+      level:      e.level,
+      message:    e.message,
+    }))
+
+    // Insert with ignore-duplicates (unique on agent_id, event_time, event_id, message)
+    for (let i = 0; i < rows.length; i += 50) {
+      const batch = rows.slice(i, i + 50)
+      const resp = await nodeFetch(`${SUPABASE_URL}/rest/v1/firewall_events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer':        'resolution=ignore-duplicates,return=minimal',
+        },
+        body: JSON.stringify(batch),
+      })
+      if (!resp.ok) log(`  Firewall events upsert warn: ${await resp.text()}`)
+    }
+    log(`  Firewall events: ${rows.length} event(s) sent`)
+  } catch (e) {
+    log(`  Firewall events error: ${e.message}`)
+  }
+}
+
 // ─── COLLECT LOOP ─────────────────────────────────────────────────────────────
 async function collect() {
   log('─── Collection cycle start ───')
@@ -1128,16 +1280,39 @@ async function collect() {
   const hostname   = hw.os?.computer_name               || os.hostname()
   const deviceType = detectDeviceType()
 
+  // Derive primary user UPN from DOMAIN\username logged_user field
+  let primaryUserUpn = null
+  const loggedUser = hw.system?.logged_user
+  if (loggedUser && loggedUser.includes('\\')) {
+    // Store as-is; Entra sync will match to a real UPN
+    primaryUserUpn = loggedUser.split('\\')[1] || null
+  }
+
+  const securityPosture = collectSecurityPosture()
+  const services        = collectServices()
+  const availableUpdates = collectAvailableUpdates()
+
+  // Collect firewall events independently (writes to firewall_events table)
+  collectFirewallEvents().catch(e => log(`  Firewall events: ${e.message}`))
+
+  // Attach services and updates to hardware_info so UI can display them
+  hw.services          = services
+  hw.available_updates = availableUpdates
+
   // Try upsert with agent_id (requires ALTER TABLE migration), fall back silently
   const deviceRow = {
-    mac_address:   localMac,
-    device_type:   deviceType,
+    mac_address:      localMac,
+    device_type:      deviceType,
     hostname,
-    last_ip:       localIp,
-    last_seen:     new Date().toISOString(),
-    hardware_info: hw,
-    is_server:     IS_SERVER,
-    agent_id:      AGENT_ID,
+    last_ip:          localIp,
+    last_seen:        new Date().toISOString(),
+    hardware_info:    hw,
+    is_server:        IS_SERVER,
+    agent_id:         AGENT_ID,
+    enrollment_state: 'managed',
+    hw_uuid:          hw.system?.uuid || null,
+    primary_user_upn: primaryUserUpn,
+    security_posture: securityPosture,
   }
   try {
     await supaUpsert('infrastructure_devices', deviceRow, 'mac_address')
@@ -1159,7 +1334,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.5.5',
+      version:         '1.7.0',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
@@ -1270,6 +1445,49 @@ async function executeCommand(cmd) {
       result = psStr(`Stop-Service -Name "${safe(p.name)}" -Force -PassThru 2>&1 | Out-String`)
     } else if (cmd.command_type === 'start_service') {
       result = psStr(`Start-Service -Name "${safe(p.name)}" -PassThru 2>&1 | Out-String`)
+    } else if (cmd.command_type === 'restart_device') {
+      result = psStr(`Restart-Computer -Force`)
+    } else if (cmd.command_type === 'shutdown_device') {
+      result = psStr(`Stop-Computer -Force`)
+    } else if (cmd.command_type === 'capture_screen') {
+      // screencap.exe must run in the interactive user session, not Session 0.
+      // We use Task Scheduler to launch it as the currently logged-on user.
+      const screencapExe = cfg.screencap_path
+        || path.join(path.dirname(process.execPath || process.argv[1] || ''), 'screencap.exe')
+      if (!fs.existsSync(screencapExe)) {
+        result = `screencap.exe not found at: ${screencapExe}\nSet "screencap_path" in config.json`
+      } else {
+        const taskName  = `OpsQuestCapture_${Date.now()}`
+        const exePath   = screencapExe.replace(/'/g, "''")
+        const taskScript = [
+          `$u = (Get-CimInstance Win32_ComputerSystem).UserName`,
+          `if (-not $u) { throw 'No interactive user is logged in' }`,
+          `$action    = New-ScheduledTaskAction -Execute '${exePath}'`,
+          `$trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(3)`,
+          `$principal = New-ScheduledTaskPrincipal -UserId $u -LogonType Interactive -RunLevel Highest`,
+          `$settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Seconds 30)`,
+          `Register-ScheduledTask -TaskName '${taskName}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null`,
+          `Start-Sleep 12`,
+          `schtasks /delete /tn '${taskName}' /f 2>$null | Out-Null`,
+        ].join('; ')
+        result = await new Promise(resolve => {
+          const proc = require('child_process').spawn(
+            'powershell.exe',
+            ['-NonInteractive', '-WindowStyle', 'Hidden', '-Command', taskScript],
+            { stdio: 'pipe' }
+          )
+          let out = '', err = ''
+          proc.stdout.on('data', d => { out += d })
+          proc.stderr.on('data', d => { err += d })
+          const timer = setTimeout(() => { proc.kill(); resolve('[TIMEOUT] Capture may still complete') }, 20000)
+          proc.on('close', code => {
+            clearTimeout(timer)
+            const msg = (out + err).trim()
+            resolve(code === 0 ? 'Screen capture initiated — check Screenshots page in ~15s' : `Capture error: ${msg}`)
+          })
+          proc.on('error', e => { clearTimeout(timer); resolve(`Spawn error: ${e.message}`) })
+        })
+      }
     } else if (cmd.command_type === 'run_script') {
       const ext     = ((p.extension || 'ps1')).replace(/[^a-z]/gi, '').slice(0, 4).toLowerCase()
       const allowed = ['ps1', 'bat', 'cmd']
@@ -1331,7 +1549,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.5.5`)
+log(`OpsQuest Agent v1.7.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)

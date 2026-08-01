@@ -1,0 +1,13 @@
+{
+  "name": "opsquest-screencap",
+  "version": "1.0.0",
+  "description": "OpsQuest Screen Capture Tool — captures screen and uploads to Supabase Storage",
+  "main": "screencap.js",
+  "scripts": {
+    "build":     "pkg screencap.js --target node18-win-x64 --output dist/screencap.exe --compress GZip",
+    "build-x86": "pkg screencap.js --target node18-win-x86 --output dist/screencap-x86.exe --compress GZip"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

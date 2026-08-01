@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { solveQuery } from '@/lib/solver-engine'
 import { mockSolutions } from '@/lib/mock-data'
 import { searchDocs } from '@/lib/docs-search'

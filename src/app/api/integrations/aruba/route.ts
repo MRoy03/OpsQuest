@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 
 const ARUBA_CLIENT_ID     = process.env.ARUBA_CLIENT_ID

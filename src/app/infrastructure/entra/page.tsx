@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import TopBar from '@/components/layout/TopBar'
-import { Users, Monitor, ShieldAlert, RefreshCw, CheckCircle, XCircle, AlertTriangle, Key } from 'lucide-react'
+import { Users, Monitor, ShieldAlert, RefreshCw, CheckCircle, XCircle, AlertTriangle, Key, Clock, DatabaseZap } from 'lucide-react'
 
 interface EntraOverview {
   total_users: number; enabled_users: number; licensed_users: number
@@ -59,6 +59,25 @@ export default function EntraPage() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [error, setError]       = useState<string | null>(null)
   const [p2Required, setP2Required] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ synced_at: string; users: number; groups: number } | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+
+  async function syncNow() {
+    setSyncing(true); setSyncError(null)
+    try {
+      const resp = await fetch('/api/entra/sync')
+      const json = await resp.json()
+      if (!resp.ok) { setSyncError(json.error || 'Sync failed'); return }
+      setSyncResult(json)
+      // Refresh current tab data after sync
+      if (tab === 'users') { setUsers([]); load('users') }
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const load = useCallback(async (scope: string) => {
     setLoading(true)
@@ -132,6 +151,34 @@ export default function EntraPage() {
       <TopBar title="Entra ID Monitor" subtitle="Microsoft Graph — Users · Devices · Sign-ins · Risky users" />
       <div className="flex-1 p-6 grid-bg overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-5">
+
+          {/* Sync status bar */}
+          <div className="rounded-xl border border-[#1a2f4a] bg-[#0a1525] px-4 py-3 flex items-center gap-4 flex-wrap">
+            <DatabaseZap className="w-4 h-4 text-[#7c3aed] shrink-0" />
+            <div className="flex-1 flex items-center gap-4 flex-wrap text-xs">
+              {syncResult ? (
+                <>
+                  <span className="flex items-center gap-1.5 text-[#64748b]">
+                    <Clock className="w-3 h-3" />
+                    Last synced: <span className="text-[#94a3b8]">{new Date(syncResult.synced_at).toLocaleString()}</span>
+                  </span>
+                  <span className="text-[#64748b]">Users synced: <span className="text-[#94a3b8]">{syncResult.users}</span></span>
+                  <span className="text-[#64748b]">Groups: <span className="text-[#94a3b8]">{syncResult.groups}</span></span>
+                </>
+              ) : (
+                <span className="text-[#475569]">Background sync runs every 15 min via Vercel Cron — click to sync manually</span>
+              )}
+              {syncError && <span className="text-[#ef4444] text-[11px]">{syncError}</span>}
+            </div>
+            <button
+              onClick={syncNow}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#7c3aed22] border border-[#7c3aed44] text-[#a78bfa] text-xs font-medium hover:bg-[#7c3aed33] disabled:opacity-50 transition-all shrink-0"
+            >
+              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing…' : 'Sync Now'}
+            </button>
+          </div>
 
           {/* Tabs */}
           <div className="flex items-center gap-1 bg-[#0d1f35] rounded-xl border border-[#1a2f4a] p-1">

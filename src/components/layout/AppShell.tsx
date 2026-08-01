@@ -6,18 +6,18 @@ import { Loader2 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 
-const ADMIN_EMAIL   = 'roy62125@gmail.com'
-const PUBLIC_PATHS  = ['/login', '/auth']
-const ADMIN_PATHS   = ['/infrastructure']
+const ADMIN_EMAIL    = 'roy62125@gmail.com'
+const ALLOWED_DOMAIN = 'jil-jupiter.com'
+const PUBLIC_PATHS   = ['/login', '/auth']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router   = useRouter()
   const { user, loading } = useAuth()
 
-  const isPublic    = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
-  const isAdminPath = ADMIN_PATHS.some(p => pathname.startsWith(p))
-  const isAdmin     = user?.email === ADMIN_EMAIL
+  const isPublic  = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+  const isAdmin   = user?.email === ADMIN_EMAIL
+  const isAllowed = isAdmin || (user?.email?.endsWith('@' + ALLOWED_DOMAIN) ?? false)
 
   useEffect(() => {
     if (loading) return
@@ -25,10 +25,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // before acting on it, preventing a redirect-to-login flash.
     const t = setTimeout(() => {
       if (!isPublic && !user) { router.replace('/login'); return }
-      if (isAdminPath && user && !isAdmin) router.replace('/')
+      if (!isPublic && user && !isAllowed) router.replace('/login')
     }, 200)
     return () => clearTimeout(t)
-  }, [loading, user, pathname, isPublic, isAdminPath, isAdmin, router])
+  }, [loading, user, pathname, isPublic, isAllowed, router])
 
   // Already authenticated → skip login page
   if (isPublic) {
@@ -50,8 +50,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!user) return null
-  if (isAdminPath && !isAdmin) return null
+  if (!user || !isAllowed) return null
 
   return (
     <>

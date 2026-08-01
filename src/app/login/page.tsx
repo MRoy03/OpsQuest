@@ -6,17 +6,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Shield, Zap, Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
-type Mode = 'signin' | 'signup' | 'magic'
+type Mode = 'signin' | 'signup' | 'forgot'
+
+const ADMIN_EMAIL    = 'roy62125@gmail.com'
+const ALLOWED_DOMAIN = 'jil-jupiter.com'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { signIn, signUp, sendMagicLink } = useAuth()
+  const { signIn, signUp, signInWithMicrosoft, resetPassword } = useAuth()
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [msLoading, setMsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -29,18 +33,37 @@ export default function LoginPage() {
         if (error) { setError(error); return }
         router.push('/')
       } else if (mode === 'signup') {
+        const isAllowed = email === ADMIN_EMAIL || email.endsWith('@' + ALLOWED_DOMAIN)
+        if (!isAllowed) {
+          setError(`Sign-up is restricted to @${ALLOWED_DOMAIN} accounts.`)
+          return
+        }
         const { error } = await signUp(email, password, name)
         if (error) { setError(error); return }
         setSuccess('Account created! Check your email to confirm.')
       } else {
-        const { error } = await sendMagicLink(email)
+        const { error } = await resetPassword(email)
         if (error) { setError(error); return }
-        setSuccess('Magic link sent! Check your inbox.')
+        setSuccess('Password reset link sent — check your inbox.')
       }
     } finally {
       setLoading(false)
     }
   }
+
+  async function handleMicrosoft() {
+    setMsLoading(true); setError('')
+    const { error } = await signInWithMicrosoft()
+    if (error) { setError(error); setMsLoading(false) }
+    // on success, browser navigates away — no need to reset loading
+  }
+
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setSuccess('') }
+
+  const btnLabel =
+    mode === 'signin' ? 'Access Command Center'
+    : mode === 'signup' ? 'Create Account'
+    : 'Send Reset Link'
 
   return (
     <div className="min-h-screen bg-[#060b18] flex items-center justify-center p-4 grid-bg overflow-hidden relative">
@@ -73,10 +96,10 @@ export default function LoginPage() {
         <div className="rounded-2xl border border-[#1a2f4a] bg-[#0a1525] p-6 shadow-2xl">
           {/* Mode tabs */}
           <div className="flex rounded-lg bg-[#060b18] p-1 mb-6 gap-1">
-            {([['signin', 'Sign In'], ['signup', 'Sign Up'], ['magic', 'Magic Link']] as [Mode, string][]).map(([m, label]) => (
+            {([['signin', 'Sign In'], ['signup', 'Sign Up'], ['forgot', 'Reset']] as [Mode, string][]).map(([m, label]) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError(''); setSuccess('') }}
+                onClick={() => switchMode(m)}
                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
                   mode === m
                     ? 'bg-[#00d4ff15] border border-[#00d4ff33] text-[#00d4ff]'
@@ -120,21 +143,32 @@ export default function LoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  placeholder="you@company.com"
+                  placeholder="you@jil-jupiter.com"
                   className="w-full bg-[#060b18] border border-[#1a2f4a] focus:border-[#00d4ff44] rounded-lg pl-10 pr-3 py-2.5 text-sm text-[#e2e8f0] placeholder-[#334155] outline-none transition-colors"
                 />
               </div>
             </div>
 
             <AnimatePresence mode="wait">
-              {mode !== 'magic' && (
+              {mode !== 'forgot' && (
                 <motion.div
                   key="pass"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                 >
-                  <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Password</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Password</label>
+                    {mode === 'signin' && (
+                      <button
+                        type="button"
+                        onClick={() => switchMode('forgot')}
+                        className="text-[11px] text-[#475569] hover:text-[#00d4ff] transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
                   <div className="relative mt-1">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569]" />
                     <input
@@ -174,10 +208,34 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#00d4ff] text-[#060b18] font-bold text-sm hover:bg-[#00b8d9] disabled:opacity-50 transition-all active:scale-95"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              {loading ? 'Processing...' : mode === 'signin' ? 'Access Command Center' : mode === 'signup' ? 'Create Account' : 'Send Magic Link'}
+              {loading ? 'Processing...' : btnLabel}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
+
+          {/* Microsoft SSO */}
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex-1 h-px bg-[#1a2f4a]" />
+            <span className="text-[11px] text-[#334155] uppercase tracking-wider">or</span>
+            <div className="flex-1 h-px bg-[#1a2f4a]" />
+          </div>
+          <button
+            onClick={handleMicrosoft}
+            disabled={msLoading}
+            className="mt-4 w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-[#1a2f4a] bg-[#060b18] hover:bg-[#0d1a2d] text-[#94a3b8] text-sm font-medium transition-all disabled:opacity-50 active:scale-95"
+          >
+            {msLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+                <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+              </svg>
+            )}
+            {msLoading ? 'Redirecting...' : 'Sign in with Microsoft'}
+          </button>
         </div>
 
         <p className="text-center text-[11px] text-[#334155] mt-4">

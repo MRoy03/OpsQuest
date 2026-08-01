@@ -7,10 +7,11 @@ import Image from 'next/image'
 import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
-  AlertTriangle, Monitor,
+  AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
+import NotificationBell from '@/components/NotificationBell'
 
 const ADMIN_EMAIL = 'roy62125@gmail.com'
 
@@ -22,9 +23,15 @@ const NAV_ITEMS = [
   { href: '/admin',         label: 'Knowledge Lab',  icon: BookOpen,        adminOnly: false },
   { href: '/gamification',  label: 'Achievements',   icon: Trophy,          adminOnly: false },
   { href: '/docs',          label: 'Documentation',  icon: FileText,        adminOnly: false },
-  { href: '/infrastructure',          label: 'Infrastructure',  icon: Server,        adminOnly: true  },
-  { href: '/infrastructure/events',   label: 'Event Logs',      icon: AlertTriangle, adminOnly: true  },
-  { href: '/infrastructure/activity', label: 'Activity Monitor', icon: Monitor,       adminOnly: true  },
+  { href: '/reports',                  label: 'Reports',          icon: BarChart2,     adminOnly: true  },
+  { href: '/infrastructure',          label: 'Infrastructure',   icon: Server,        adminOnly: true  },
+  { href: '/infrastructure/events',   label: 'Event Logs',       icon: AlertTriangle, adminOnly: true  },
+  { href: '/infrastructure/activity', label: 'Activity Monitor', icon: Monitor,        adminOnly: true  },
+  { href: '/infrastructure/compliance', label: 'Compliance',      icon: ShieldCheck,    adminOnly: true  },
+  { href: '/infrastructure/firewall',     label: 'Firewall Events', icon: Shield,         adminOnly: true  },
+  { href: '/infrastructure/screenshots',  label: 'Screenshots',     icon: Camera,         adminOnly: true  },
+  { href: '/infrastructure/bulk',         label: 'Bulk Actions',    icon: Layers,         adminOnly: true  },
+  { href: '/admin/audit',                 label: 'Audit Log',       icon: ClipboardList,  adminOnly: true  },
 ]
 
 export default function Sidebar() {
@@ -110,6 +117,7 @@ export default function Sidebar() {
                 </div>
                 <p className="text-[10px] text-[#475569] truncate">{user.email}</p>
               </div>
+              <NotificationBell />
             </div>
             <button
               onClick={handleSignOut}
