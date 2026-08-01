@@ -7,6 +7,7 @@ import {
   Server, Laptop, Smartphone, Clock, Package, ShieldCheck, ShieldAlert, Key,
   Mouse, Keyboard, Printer, Bluetooth, Usb, Download, ChevronDown, ChevronUp,
   Terminal, Trash2, CheckCircle, XCircle, Loader2, AlertCircle, Camera,
+  MessageSquare, StickyNote, Lock,
 } from 'lucide-react'
 import { generateDevicesReport } from '@/lib/generateDevicesReport'
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -18,6 +19,7 @@ interface Device {
   last_seen: string; hardware_info: HardwareInfo; agent_id?: string
   enrollment_state?: string; primary_user_upn?: string
   tags?: string[]; security_posture?: SecurityPosture | null; hw_uuid?: string | null
+  notes?: string | null
 }
 
 interface SecurityPosture {
@@ -1180,11 +1182,14 @@ function ServerCard({ device, onCommandQueued }: { device: Device; onCommandQueu
             <div className="flex gap-2 flex-wrap">
               <DeviceControlBtn agentId={device.agent_id} type="restart_device" label="Restart" onDone={onCommandQueued} />
               <DeviceControlBtn agentId={device.agent_id} type="shutdown_device" label="Shutdown" onDone={onCommandQueued} />
+              <LockScreenBtn agentId={device.agent_id} />
               <CaptureScreenBtn agentId={device.agent_id} />
+              <MessageUserBtn agentId={device.agent_id} />
             </div>
             <p className="text-[10px] text-[#334155] mt-2">Commands are queued and executed by the agent within its next poll cycle</p>
           </div>
         )}
+        <NotesPanel deviceId={device.id} initial={device.notes} />
       </div>
     </div>
   )
@@ -1299,11 +1304,14 @@ function ClientCard({ device, forceExpanded, onCommandQueued }: { device: Device
               <div className="flex gap-2 flex-wrap">
                 <DeviceControlBtn agentId={device.agent_id} type="restart_device" label="Restart" onDone={onCommandQueued} />
                 <DeviceControlBtn agentId={device.agent_id} type="shutdown_device" label="Shutdown" onDone={onCommandQueued} />
+                <LockScreenBtn agentId={device.agent_id} />
                 <CaptureScreenBtn agentId={device.agent_id} />
+                <MessageUserBtn agentId={device.agent_id} />
               </div>
               <p className="text-[10px] text-[#334155] mt-2">Commands are queued and executed by the agent within its next poll cycle</p>
             </div>
           )}
+          <NotesPanel deviceId={device.id} initial={device.notes} />
         </div>
       )}
     </div>
@@ -1380,6 +1388,132 @@ function CaptureScreenBtn({ agentId }: { agentId: string }) {
       {state === 'sending' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
       {state === 'idle' ? 'Capture Screen' : state === 'sending' ? 'Queuing…' : state === 'ok' ? 'Queued!' : 'Failed'}
     </button>
+  )
+}
+
+function LockScreenBtn({ agentId }: { agentId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+  async function lock() {
+    setState('sending')
+    try {
+      const r = await fetch('/api/infrastructure/commands', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type: 'lock_screen', payload: {} }),
+      })
+      setState(r.ok ? 'ok' : 'err')
+    } catch { setState('err') }
+    setTimeout(() => setState('idle'), 5000)
+  }
+  return (
+    <button onClick={lock} disabled={state !== 'idle'}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-60 ${
+        state === 'ok'  ? 'border-[#10b98133] bg-[#10b98111] text-[#10b981]' :
+        state === 'err' ? 'border-[#ef444433] bg-[#ef444411] text-[#ef4444]' :
+        'border-[#f59e0b33] bg-[#f59e0b11] text-[#f59e0b] hover:bg-[#f59e0b22]'
+      }`}>
+      {state === 'sending' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
+      {state === 'idle' ? 'Lock Screen' : state === 'sending' ? 'Locking…' : state === 'ok' ? 'Locked!' : 'Failed'}
+    </button>
+  )
+}
+
+function MessageUserBtn({ agentId }: { agentId: string }) {
+  const [open, setOpen]   = useState(false)
+  const [msg, setMsg]     = useState('')
+  const [title, setTitle] = useState('IT Notification')
+  const [state, setState] = useState<'idle' | 'sending' | 'ok' | 'err'>('idle')
+
+  async function send() {
+    if (!msg.trim()) return
+    setState('sending')
+    try {
+      const r = await fetch('/api/infrastructure/commands', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agentId, command_type: 'notify_user', payload: { message: msg, title } }),
+      })
+      if (r.ok) { setState('ok'); setTimeout(() => { setState('idle'); setOpen(false); setMsg('') }, 3000) }
+      else setState('err')
+    } catch { setState('err') }
+    if (state === 'err') setTimeout(() => setState('idle'), 4000)
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#a78bfa33] bg-[#a78bfa11] text-[#a78bfa] text-xs font-medium hover:bg-[#a78bfa22] transition-all">
+        <MessageSquare className="w-3 h-3" /> Message User
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="bg-[#0a1525] border border-[#1a2f4a] rounded-xl w-full max-w-sm p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-[#e2e8f0]">Send Message to User</p>
+            <div>
+              <label className="text-[10px] text-[#475569] uppercase tracking-wider">Title</label>
+              <input value={title} onChange={e => setTitle(e.target.value)}
+                className="w-full mt-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] focus:outline-none focus:border-[#a78bfa44]" />
+            </div>
+            <div>
+              <label className="text-[10px] text-[#475569] uppercase tracking-wider">Message</label>
+              <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={4}
+                placeholder="Your machine will restart in 30 minutes for patching."
+                className="w-full mt-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#334155] focus:outline-none focus:border-[#a78bfa44] resize-none" />
+            </div>
+            <p className="text-[10px] text-[#334155]">Appears as a dialog box on the user's screen via Windows Forms.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setOpen(false)} className="px-3 py-1.5 text-xs text-[#475569] hover:text-[#94a3b8]">Cancel</button>
+              <button onClick={send} disabled={!msg.trim() || state === 'sending'}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
+                  state === 'ok'  ? 'bg-[#10b981] text-white' :
+                  state === 'err' ? 'bg-[#ef4444] text-white' :
+                  'bg-[#a78bfa] text-white hover:bg-[#9063fa]'
+                }`}>
+                {state === 'sending' ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
+                {state === 'idle' ? 'Send' : state === 'sending' ? 'Sending…' : state === 'ok' ? 'Sent!' : 'Failed'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function NotesPanel({ deviceId, initial }: { deviceId: string; initial?: string | null }) {
+  const [notes, setNotes] = useState(initial || '')
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      await fetch(`/api/infrastructure/devices/${deviceId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      })
+      setSaved(true); setTimeout(() => setSaved(false), 2000)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 text-[#64748b]">
+          <StickyNote className="w-3.5 h-3.5" /> Device Notes
+        </h4>
+        <button onClick={save} disabled={saving}
+          className={`text-[10px] px-2.5 py-1 rounded border transition-all disabled:opacity-50 ${
+            saved ? 'border-[#10b98133] text-[#10b981] bg-[#10b98111]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8] hover:bg-[#ffffff08]'
+          }`}>
+          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+        </button>
+      </div>
+      <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+        placeholder="Add notes about this device — asset tag, location, owner, known issues…"
+        className="w-full bg-[#060b18] border border-[#1a2f4a] rounded-lg px-3 py-2 text-xs text-[#e2e8f0] placeholder-[#2a3f5a] focus:outline-none focus:border-[#475569] resize-none"
+        onBlur={save}
+      />
+    </div>
   )
 }
 

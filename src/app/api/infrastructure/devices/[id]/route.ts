@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const UPDATABLE = ['tags', 'primary_user_upn', 'primary_user_display', 'enrollment_state']
+const UPDATABLE = ['tags', 'primary_user_upn', 'primary_user_display', 'enrollment_state', 'notes']
 
 export async function GET(
   _req: NextRequest,

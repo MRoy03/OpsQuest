@@ -7,7 +7,7 @@ import Image from 'next/image'
 import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
-  AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers,
+  AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers, UserPlus,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { href: '/infrastructure/firewall',     label: 'Firewall Events', icon: Shield,         adminOnly: true  },
   { href: '/infrastructure/screenshots',  label: 'Screenshots',     icon: Camera,         adminOnly: true  },
   { href: '/infrastructure/bulk',         label: 'Bulk Actions',    icon: Layers,         adminOnly: true  },
+  { href: '/infrastructure/enrollment',   label: 'Enrollment',      icon: UserPlus,       adminOnly: true  },
   { href: '/admin/audit',                 label: 'Audit Log',       icon: ClipboardList,  adminOnly: true  },
 ]
 

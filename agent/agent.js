@@ -1488,6 +1488,87 @@ async function executeCommand(cmd) {
           proc.on('error', e => { clearTimeout(timer); resolve(`Spawn error: ${e.message}`) })
         })
       }
+    } else if (cmd.command_type === 'lock_screen') {
+      const taskName = `OQ_Lock_${Date.now()}`
+      const lockScript = [
+        `$u = (Get-CimInstance Win32_ComputerSystem).UserName`,
+        `if (-not $u) { Write-Output 'No interactive user logged in'; exit 0 }`,
+        `$action    = New-ScheduledTaskAction -Execute 'rundll32.exe' -Argument 'user32.dll,LockWorkStation'`,
+        `$trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)`,
+        `$principal = New-ScheduledTaskPrincipal -UserId $u -LogonType Interactive -RunLevel Highest`,
+        `$settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Seconds 10)`,
+        `Register-ScheduledTask -TaskName '${taskName}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null`,
+        `Start-Sleep 5`,
+        `schtasks /delete /tn '${taskName}' /f 2>$null | Out-Null`,
+        `Write-Output "Screen locked for $u"`,
+      ].join('; ')
+      result = await new Promise(resolve => {
+        const proc = spawn('powershell.exe', ['-NonInteractive', '-WindowStyle', 'Hidden', '-Command', lockScript], { stdio: 'pipe' })
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d })
+        proc.stderr.on('data', d => { err += d })
+        const timer = setTimeout(() => { proc.kill(); resolve('Lock initiated') }, 12000)
+        proc.on('close', code => {
+          clearTimeout(timer)
+          resolve((out + err).trim() || (code === 0 ? 'Screen locked' : `Exit ${code}`))
+        })
+        proc.on('error', e => { clearTimeout(timer); resolve(`Spawn error: ${e.message}`) })
+      })
+
+    } else if (cmd.command_type === 'notify_user') {
+      const rawMsg   = (p.message || 'Notification from IT').replace(/'/g, "''").replace(/"/g, '`"')
+      const rawTitle = (p.title || 'OpsQuest').replace(/'/g, "''").replace(/"/g, '`"')
+      const taskName = `OQ_Notify_${Date.now()}`
+      const notifyScript = [
+        `$u = (Get-CimInstance Win32_ComputerSystem).UserName`,
+        `if (-not $u) { Write-Output 'No interactive user logged in'; exit 0 }`,
+        `$ps = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${rawMsg}','${rawTitle}','OK','Information') | Out-Null"`,
+        `$action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-WindowStyle Hidden -Command $ps"`,
+        `$trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)`,
+        `$principal = New-ScheduledTaskPrincipal -UserId $u -LogonType Interactive`,
+        `$settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 2)`,
+        `Register-ScheduledTask -TaskName '${taskName}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null`,
+        `Start-Sleep 8`,
+        `schtasks /delete /tn '${taskName}' /f 2>$null | Out-Null`,
+        `Write-Output "Notification delivered to $u"`,
+      ].join('; ')
+      result = await new Promise(resolve => {
+        const proc = spawn('powershell.exe', ['-NonInteractive', '-WindowStyle', 'Hidden', '-Command', notifyScript], { stdio: 'pipe' })
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d })
+        proc.stderr.on('data', d => { err += d })
+        const timer = setTimeout(() => { proc.kill(); resolve('Notification initiated') }, 15000)
+        proc.on('close', code => {
+          clearTimeout(timer)
+          resolve((out + err).trim() || (code === 0 ? 'Notification sent' : `Exit ${code}`))
+        })
+        proc.on('error', e => { clearTimeout(timer); resolve(`Spawn error: ${e.message}`) })
+      })
+
+    } else if (cmd.command_type === 'winget_install') {
+      const appId   = (p.winget_id || '').replace(/[^a-zA-Z0-9._\-]/g, '')
+      const appName = (p.name || appId).slice(0, 200)
+      if (!appId && !appName) {
+        result = 'Missing winget_id or name'
+      } else {
+        const installArg = appId
+          ? `winget install --id ${appId} --silent --accept-package-agreements --accept-source-agreements`
+          : `winget install --name "${appName}" --silent --accept-package-agreements --accept-source-agreements`
+        result = await new Promise(resolve => {
+          const proc = spawn('powershell.exe', ['-NonInteractive', '-WindowStyle', 'Hidden', '-Command', installArg], { stdio: 'pipe' })
+          let out = '', err = ''
+          proc.stdout.on('data', d => { out += d })
+          proc.stderr.on('data', d => { err += d })
+          const timer = setTimeout(() => { proc.kill(); resolve(('[TIMEOUT 5min]\n' + out + err).trim().slice(0, 4000)) }, 300000)
+          proc.on('close', code => {
+            clearTimeout(timer)
+            const combined = (out + err).trim().slice(0, 4000)
+            resolve(combined || (code === 0 ? 'Install succeeded' : `Exit ${code}`))
+          })
+          proc.on('error', e => { clearTimeout(timer); resolve(`Spawn error: ${e.message}`) })
+        })
+      }
+
     } else if (cmd.command_type === 'run_script') {
       const ext     = ((p.extension || 'ps1')).replace(/[^a-z]/gi, '').slice(0, 4).toLowerCase()
       const allowed = ['ps1', 'bat', 'cmd']

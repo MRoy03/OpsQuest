@@ -1,7 +1,1 @@
-{
-  "crons": [
-    { "path": "/api/entra/sync",           "schedule": "*/15 * * * *" },
-    { "path": "/api/alerts/offline",       "schedule": "*/5 * * * *"  },
-    { "path": "/api/compliance/evaluate",  "schedule": "*/15 * * * *" }
-  ]
-}
+{}

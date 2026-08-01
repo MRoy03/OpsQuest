@@ -9,9 +9,10 @@ const supabase = createClient(
 
 const ALLOWED_TYPES = [
   'uninstall', 'winget_upgrade', 'stop_service', 'start_service', 'run_script',
-  'restart_device', 'shutdown_device', 'capture_screen',
+  'restart_device', 'shutdown_device', 'capture_screen', 'lock_screen', 'notify_user',
+  'winget_install',
 ]
-const NO_PAYLOAD_TYPES = ['restart_device', 'shutdown_device', 'capture_screen']
+const NO_PAYLOAD_TYPES = ['restart_device', 'shutdown_device', 'capture_screen', 'lock_screen']
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -25,6 +26,12 @@ export async function POST(req: NextRequest) {
     if (command_type === 'run_script') {
       if (typeof payload.script !== 'string' || payload.script.trim() === '')
         return NextResponse.json({ error: 'payload.script required for run_script' }, { status: 400 })
+    } else if (command_type === 'notify_user') {
+      if (typeof payload.message !== 'string' || payload.message.trim() === '')
+        return NextResponse.json({ error: 'payload.message required for notify_user' }, { status: 400 })
+    } else if (command_type === 'winget_install') {
+      if (!payload.winget_id && !payload.name)
+        return NextResponse.json({ error: 'payload.winget_id or payload.name required' }, { status: 400 })
     } else {
       if (typeof payload.name !== 'string' || payload.name.trim() === '')
         return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
