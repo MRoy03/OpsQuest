@@ -10,7 +10,7 @@ const supabase = createClient(
 const ALLOWED_TYPES = [
   'uninstall', 'winget_upgrade', 'stop_service', 'start_service', 'run_script',
   'restart_device', 'shutdown_device', 'capture_screen', 'lock_screen', 'notify_user',
-  'winget_install',
+  'winget_install', 'set_update_policy',
 ]
 const NO_PAYLOAD_TYPES = ['restart_device', 'shutdown_device', 'capture_screen', 'lock_screen']
 

@@ -1,6 +1,6 @@
 'use strict'
 /**
- * OpsQuest Agent v1.8.0
+ * OpsQuest Agent v1.9.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
@@ -1625,6 +1625,27 @@ async function executeCommand(cmd) {
         })
       }
 
+    } else if (cmd.command_type === 'set_update_policy') {
+      const qd      = Math.max(0, Math.min(30, parseInt(p.quality_defer_days) || 0))
+      const fd      = Math.max(0, Math.min(365, parseInt(p.feature_defer_days) || 0))
+      const blocked = p.blocked === true
+      const wu      = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate'
+      const au      = `${wu}\\AU`
+      const regScript = [
+        `if (-not (Test-Path '${wu}')) { New-Item -Path '${wu}' -Force | Out-Null }`,
+        `if (-not (Test-Path '${au}')) { New-Item -Path '${au}' -Force | Out-Null }`,
+        `Set-ItemProperty -Path '${wu}' -Name 'DeferQualityUpdates' -Value 1 -Type DWord`,
+        `Set-ItemProperty -Path '${wu}' -Name 'DeferQualityUpdatesPeriodInDays' -Value ${qd} -Type DWord`,
+        `Set-ItemProperty -Path '${wu}' -Name 'DeferFeatureUpdates' -Value 1 -Type DWord`,
+        `Set-ItemProperty -Path '${wu}' -Name 'DeferFeatureUpdatesPeriodInDays' -Value ${fd} -Type DWord`,
+        blocked
+          ? `Set-ItemProperty -Path '${au}' -Name 'NoAutoUpdate' -Value 1 -Type DWord`
+          : `Remove-ItemProperty -Path '${au}' -Name 'NoAutoUpdate' -ErrorAction SilentlyContinue`,
+        `Restart-Service -Name wuauserv -Force -ErrorAction SilentlyContinue`,
+        `Write-Output "Ring '${safe(p.ring_name || 'custom')}' applied — Quality defer: ${qd}d, Feature defer: ${fd}d, Blocked: ${blocked}"`,
+      ].join('; ')
+      result = psStr(regScript)
+
     } else if (cmd.command_type === 'run_script') {
       const ext     = ((p.extension || 'ps1')).replace(/[^a-z]/gi, '').slice(0, 4).toLowerCase()
       const allowed = ['ps1', 'bat', 'cmd']
@@ -1686,7 +1707,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.8.0`)
+log(`OpsQuest Agent v1.9.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
