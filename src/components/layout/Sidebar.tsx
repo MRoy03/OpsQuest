@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
+  Printer, Map, Calendar, Settings,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -35,8 +36,13 @@ const NAV_ITEMS = [
   { href: '/infrastructure/blocklist',   label: 'SW Blocklist',    icon: ShieldAlert,    adminOnly: true  },
   { href: '/infrastructure/catalog',     label: 'App Catalog',     icon: Package,        adminOnly: true  },
   { href: '/infrastructure/assets',      label: 'Asset Records',   icon: HardDrive,      adminOnly: true  },
-  { href: '/infrastructure/rings',       label: 'Update Rings',    icon: RefreshCcw,     adminOnly: true  },
-  { href: '/admin/audit',                label: 'Audit Log',       icon: ClipboardList,  adminOnly: true  },
+  { href: '/infrastructure/rings',            label: 'Update Rings',     icon: RefreshCcw,    adminOnly: true  },
+  { href: '/infrastructure/health',           label: 'Health Scores',    icon: Activity,      adminOnly: true  },
+  { href: '/infrastructure/printers',         label: 'Printers',         icon: Printer,       adminOnly: true  },
+  { href: '/infrastructure/map',              label: 'Network Map',      icon: Map,           adminOnly: true  },
+  { href: '/infrastructure/scheduled-scripts',label: 'Scheduled Scripts',icon: Calendar,      adminOnly: true  },
+  { href: '/infrastructure/profiles',         label: 'Config Profiles',  icon: Settings,      adminOnly: true  },
+  { href: '/admin/audit',                     label: 'Audit Log',        icon: ClipboardList, adminOnly: true  },
 ]
 
 export default function Sidebar() {

@@ -1,6 +1,6 @@
 'use strict'
 /**
- * OpsQuest Agent v1.9.0
+ * OpsQuest Agent v2.0.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
@@ -1234,6 +1234,156 @@ function checkBlocklist(software, blocklist) {
   return violations
 }
 
+// ─── SCHEDULED SCRIPTS ───────────────────────────────────────────────────────
+let scheduledScripts = []
+let scriptsFetchedAt = 0
+const SCRIPTS_INTERVAL = 60000 // re-fetch every minute
+
+async function fetchScheduledScripts() {
+  const now = Date.now()
+  if (now - scriptsFetchedAt < SCRIPTS_INTERVAL) return scheduledScripts
+  try {
+    const [scriptsResp, assignResp] = await Promise.all([
+      nodeFetch(`${SUPABASE_URL}/rest/v1/scheduled_scripts?enabled=eq.true&select=id,name,script_content,extension,interval_hours`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }),
+      nodeFetch(`${SUPABASE_URL}/rest/v1/script_device_assignments?agent_id=eq.${encodeURIComponent(AGENT_ID)}&select=script_id`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }),
+    ])
+    if (scriptsResp.ok && assignResp.ok) {
+      const allScripts = await scriptsResp.json()
+      const assignments = await assignResp.json()
+      const myIds = new Set(assignments.map(a => a.script_id))
+      scheduledScripts = allScripts.filter(s => myIds.has(s.id))
+      scriptsFetchedAt = now
+      log(`  Scheduled scripts: ${scheduledScripts.length} assigned`)
+    }
+  } catch (e) { log(`  Scheduled scripts fetch: ${e.message}`) }
+  return scheduledScripts
+}
+
+// Track last run time per script (in-memory; resets on agent restart)
+const scriptLastRun = {}
+
+async function runScheduledScripts() {
+  const scripts = await fetchScheduledScripts()
+  const now = Date.now()
+  for (const sc of scripts) {
+    const intervalMs = (sc.interval_hours || 24) * 3600000
+    const lastRun    = scriptLastRun[sc.id] || 0
+    if (now - lastRun < intervalMs) continue
+    scriptLastRun[sc.id] = now
+    log(`  Running scheduled script: ${sc.name}`)
+    const ext = (sc.extension || 'ps1').toLowerCase()
+    const tmpPath = `C:\\Windows\\Temp\\oq_sched_${sc.id.slice(0, 8)}.${ext}`
+    const startedAt = new Date().toISOString()
+    const t0 = Date.now()
+    let output = '', exitCode = null, success = false
+    try {
+      fs.writeFileSync(tmpPath, sc.script_content || '', { encoding: 'utf8' })
+      const result = await new Promise(resolve => {
+        const proc = ext === 'ps1'
+          ? spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmpPath], { stdio: 'pipe' })
+          : spawn('cmd', ['/c', tmpPath], { stdio: 'pipe' })
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        const timer = setTimeout(() => { proc.kill(); resolve({ out: '[TIMEOUT]\n' + out + err, code: -1 }) }, 90000)
+        proc.on('close', code => { clearTimeout(timer); resolve({ out: out + err, code }) })
+        proc.on('error', e2 => { clearTimeout(timer); resolve({ out: e2.message, code: -1 }) })
+      })
+      output   = (result.out || '').trim().slice(0, 4000)
+      exitCode = result.code ?? null
+      success  = exitCode === 0
+    } catch (e) { output = e.message; exitCode = -1 }
+    try { fs.unlinkSync(tmpPath) } catch { /* ok */ }
+    // Log result to Supabase
+    try {
+      await nodeFetch(`${SUPABASE_URL}/rest/v1/script_run_logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ script_id: sc.id, agent_id: AGENT_ID, started_at: startedAt, duration_ms: Date.now() - t0, exit_code: exitCode, output, success }),
+      })
+    } catch (e) { log(`  Script log error: ${e.message}`) }
+    log(`  Script ${sc.name}: exit=${exitCode} success=${success}`)
+  }
+}
+
+// ─── CONFIG PROFILES ─────────────────────────────────────────────────────────
+let configProfiles = []
+let profilesFetchedAt = 0
+const PROFILES_INTERVAL = 120000 // re-fetch every 2 minutes
+
+async function fetchConfigProfiles() {
+  const now = Date.now()
+  if (now - profilesFetchedAt < PROFILES_INTERVAL) return configProfiles
+  try {
+    const [profilesResp, assignResp] = await Promise.all([
+      nodeFetch(`${SUPABASE_URL}/rest/v1/config_profiles?enabled=eq.true&select=id,name`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }),
+      nodeFetch(`${SUPABASE_URL}/rest/v1/device_profile_assignments?agent_id=eq.${encodeURIComponent(AGENT_ID)}&select=profile_id`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }),
+    ])
+    if (!profilesResp.ok || !assignResp.ok) return configProfiles
+    const allProfiles = await profilesResp.json()
+    const assignments = await assignResp.json()
+    const myIds = new Set(assignments.map(a => a.profile_id))
+    const myProfiles = allProfiles.filter(p => myIds.has(p.id))
+    // Fetch settings for each assigned profile
+    configProfiles = await Promise.all(myProfiles.map(async prof => {
+      const sr = await nodeFetch(`${SUPABASE_URL}/rest/v1/config_profile_settings?profile_id=eq.${prof.id}&select=type,settings`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } })
+      const settings = sr.ok ? await sr.json() : []
+      return { ...prof, settings }
+    }))
+    profilesFetchedAt = now
+    log(`  Config profiles: ${configProfiles.length} assigned`)
+  } catch (e) { log(`  Config profiles fetch: ${e.message}`) }
+  return configProfiles
+}
+
+function applyProfileSetting(type, settings) {
+  try {
+    if (type === 'registry') {
+      const keyPath  = (settings.path || '').replace(/'/g, "''")
+      const valName  = (settings.name || '').replace(/'/g, "''")
+      const valData  = String(settings.value || '0').replace(/'/g, "''")
+      const valType  = (settings.type || 'DWORD').replace(/[^a-zA-Z]/g, '')
+      psStr(`if(-not(Test-Path '${keyPath}')){New-Item -Path '${keyPath}' -Force|Out-Null};Set-ItemProperty -Path '${keyPath}' -Name '${valName}' -Value '${valData}' -Type ${valType}`)
+    } else if (type === 'screensaver') {
+      const timeout = parseInt(settings.timeout_seconds) || 600
+      psStr(`Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'ScreenSaveTimeOut' -Value '${timeout}'; Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name 'ScreenSaverIsSecure' -Value '1'`)
+    } else if (type === 'disable_usb') {
+      const val = settings.disabled ? 4 : 3
+      psStr(`Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR' -Name 'Start' -Value ${val} -Type DWord`)
+    } else if (type === 'disable_task_mgr') {
+      const val = settings.disabled ? 1 : 0
+      psStr(`if(-not(Test-Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System')){New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Force|Out-Null};Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name 'DisableTaskMgr' -Value ${val} -Type DWord`)
+    } else if (type === 'timezone') {
+      const tz = (settings.timezone || 'UTC').replace(/[^a-zA-Z0-9 +\-:_\/]/g, '')
+      psStr(`Set-TimeZone -Id '${tz}' -ErrorAction SilentlyContinue`)
+    } else if (type === 'power_plan') {
+      const plan = (settings.plan || 'balanced').toLowerCase()
+      const guid = plan === 'high_performance' ? '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+               : plan === 'power_saver'       ? 'a1841308-3541-4fab-bc81-f71556f20b4a'
+               :                                '381b4222-f694-41f0-9685-ff5bb260df2e'
+      psStr(`powercfg /setactive ${guid}`)
+    } else if (type === 'wallpaper') {
+      const url = (settings.url || '').replace(/['"]/g, '')
+      if (url) {
+        const dest = 'C:\\Windows\\Temp\\oq_wallpaper.jpg'
+        psStr(`try{Invoke-WebRequest -Uri '${url}' -OutFile '${dest}' -TimeoutSec 30 -UseBasicParsing; Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class W{[DllImport("user32.dll")]public static extern int SystemParametersInfo(int uAction,int uParam,string lpvParam,int fuWinIni);}'; [W]::SystemParametersInfo(0x14,0,\\"${dest}\\",3)}catch{}`)
+      }
+    }
+  } catch (e) { log(`  Profile setting ${type}: ${e.message}`) }
+}
+
+async function applyConfigProfiles() {
+  const profiles = await fetchConfigProfiles()
+  if (!profiles.length) return
+  log(`  Applying ${profiles.length} config profile(s)…`)
+  for (const prof of profiles) {
+    for (const s of (prof.settings || [])) {
+      applyProfileSetting(s.type, s.settings || {})
+    }
+  }
+  log(`  Config profiles applied`)
+}
+
 // ─── UPDATES COLLECTOR ───────────────────────────────────────────────────────
 let cachedUpdates = null
 let updatesCollectedAt = 0
@@ -1390,7 +1540,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '1.7.0',
+      version:         '2.0.0',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
@@ -1403,6 +1553,12 @@ async function collect() {
 
   // 3d. App activity flush
   await flushActivity().catch(e => log(`  ERROR activity flush: ${e.message}`))
+
+  // 3e. Scheduled scripts — run any that are due
+  await runScheduledScripts().catch(e => log(`  ERROR scheduled scripts: ${e.message}`))
+
+  // 3f. Config profiles — apply on every cycle (idempotent registry/policy writes)
+  await applyConfigProfiles().catch(e => log(`  ERROR config profiles: ${e.message}`))
 
   // 3. ARP scan — only on server/gateway machine, skipped on clients
   if (SCAN_NETWORK) {
@@ -1707,7 +1863,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v1.9.0`)
+log(`OpsQuest Agent v2.0.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)
