@@ -1,6 +1,6 @@
 'use strict'
 /**
- * OpsQuest Agent v2.0.0
+ * OpsQuest Agent v2.1.0
  * Collects: hardware (CPU/RAM/GPU/mobo/BIOS), monitors (size+resolution),
  *           storage (physical disks + partitions + logical drives),
  *           peripherals (USB, mouse, keyboard, printer, Bluetooth, ext drives),
@@ -1468,6 +1468,238 @@ try {
   }
 }
 
+// ─── NETWORK INTELLIGENCE CONSTANTS ──────────────────────────────────────────
+const RISKY_PORTS = {
+  21:    { level: 'critical', proto: 'FTP',          reason: 'Plaintext file transfer — no encryption' },
+  23:    { level: 'critical', proto: 'Telnet',        reason: 'Plaintext remote shell — replace with SSH' },
+  4444:  { level: 'critical', proto: 'Metasploit',   reason: 'Default Metasploit listener port' },
+  5900:  { level: 'critical', proto: 'VNC',           reason: 'Remote desktop — often unencrypted' },
+  31337: { level: 'critical', proto: 'Back Orifice',  reason: 'Known RAT/malware port' },
+  1337:  { level: 'high',    proto: 'L33t',           reason: 'Associated with hacking tools and C2' },
+  3389:  { level: 'high',    proto: 'RDP',            reason: 'Remote desktop — verify not exposed to internet' },
+  5800:  { level: 'high',    proto: 'VNC-HTTP',       reason: 'VNC HTTP interface' },
+  22:    { level: 'medium',  proto: 'SSH',            reason: 'Remote shell — verify access controls' },
+  25:    { level: 'medium',  proto: 'SMTP',           reason: 'Email relay — verify not open relay' },
+  135:   { level: 'medium',  proto: 'RPC',            reason: 'Windows RPC endpoint mapper' },
+  139:   { level: 'medium',  proto: 'NetBIOS',        reason: 'Legacy Windows networking' },
+  445:   { level: 'medium',  proto: 'SMB',            reason: 'File sharing — should be LAN-only' },
+  8080:  { level: 'low',    proto: 'HTTP-Alt',        reason: 'Alternate HTTP port' },
+  8443:  { level: 'low',    proto: 'HTTPS-Alt',       reason: 'Alternate HTTPS port' },
+}
+
+const PORT_PROTO = {
+  20: 'FTP-Data', 21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP',
+  53: 'DNS', 67: 'DHCP', 68: 'DHCP', 80: 'HTTP', 110: 'POP3',
+  123: 'NTP', 143: 'IMAP', 161: 'SNMP', 389: 'LDAP', 443: 'HTTPS',
+  445: 'SMB', 465: 'SMTPS', 514: 'Syslog', 587: 'SMTP', 636: 'LDAPS',
+  993: 'IMAPS', 995: 'POP3S', 1433: 'MSSQL', 1521: 'Oracle', 3306: 'MySQL',
+  3389: 'RDP', 4444: 'Metasploit', 5432: 'PostgreSQL',
+  5800: 'VNC-HTTP', 5900: 'VNC', 6379: 'Redis', 6443: 'K8s-API',
+  8080: 'HTTP-Alt', 8443: 'HTTPS-Alt', 9090: 'Prometheus',
+  27017: 'MongoDB', 31337: 'Back-Orifice',
+}
+
+const TCP_STATES = {
+  1: 'Closed', 2: 'Listen', 3: 'SynSent', 4: 'SynReceived',
+  5: 'Established', 6: 'FinWait1', 7: 'FinWait2', 8: 'CloseWait',
+  9: 'Closing', 10: 'LastAck', 11: 'Bound', 12: 'TimeWait', 13: 'DeleteTCB',
+}
+
+// ─── AUTO CLEANUP (once per 24h, via Postgres RPC) ────────────────────────────
+let lastCleanupAt = 0
+
+async function cleanupOldData() {
+  if (Date.now() - lastCleanupAt < 86400000) return
+  lastCleanupAt = Date.now()
+  log('  Auto-cleanup: pruning old rows via RPC...')
+  try {
+    const resp = await nodeFetch(`${SUPABASE_URL}/rest/v1/rpc/cleanup_old_agent_data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({ p_agent_id: AGENT_ID }),
+    })
+    if (resp.ok) {
+      const result = await resp.json()
+      log(`  Auto-cleanup done: ${JSON.stringify(result)}`)
+    } else {
+      log(`  Auto-cleanup: ${resp.status} ${(await resp.text()).slice(0, 200)}`)
+    }
+  } catch (e) { log(`  Auto-cleanup: ${e.message}`) }
+}
+
+// ─── BANDWIDTH TRACKER ────────────────────────────────────────────────────────
+const prevNetBytes = {}
+
+function collectBandwidth() {
+  try {
+    const raw = arr(ps(`Get-CimInstance Win32_PerfRawData_Tcpip_NetworkInterface | Select-Object Name,BytesSentPersec,BytesReceivedPersec | ConvertTo-Json -Compress`))
+    const now = Date.now()
+    const stats = []
+    for (const s of raw) {
+      if (!s || !s.Name) continue
+      const prev   = prevNetBytes[s.Name]
+      const sentNow = Number(s.BytesSentPersec) || 0
+      const recvNow = Number(s.BytesReceivedPersec) || 0
+      if (prev && prev.at) {
+        const dt = (now - prev.at) / 1000
+        if (dt > 0) {
+          const txKbs = Math.round(Math.max(0, sentNow - prev.sent) / dt / 1024 * 10) / 10
+          const rxKbs = Math.round(Math.max(0, recvNow - prev.recv) / dt / 1024 * 10) / 10
+          stats.push({ adapter: s.Name.slice(0, 80), tx_kbs: txKbs, rx_kbs: rxKbs })
+        }
+      }
+      prevNetBytes[s.Name] = { sent: sentNow, recv: recvNow, at: now }
+    }
+    return stats
+  } catch { return [] }
+}
+
+// ─── CONNECTION COLLECTOR ─────────────────────────────────────────────────────
+let connectionsLastAt = 0
+const CONNECTIONS_INTERVAL = 120000 // every 2 minutes — PS commands are slow
+
+function collectConnections(hostname, deviceIp) {
+  const now = Date.now()
+  if (now - connectionsLastAt < CONNECTIONS_INTERVAL) return null
+  connectionsLastAt = now
+  log('  Collecting TCP/UDP connections...')
+  try {
+    const tcpRaw = arr(ps(`Get-NetTCPConnection | Select-Object LocalAddress,LocalPort,RemoteAddress,RemotePort,State,OwningProcess | ConvertTo-Json -Compress`))
+    const udpRaw = arr(ps(`Get-NetUDPEndpoint | Select-Object LocalAddress,LocalPort,OwningProcess | ConvertTo-Json -Compress`))
+    const pidMap = {}
+    try {
+      for (const p of arr(ps(`Get-Process | Select-Object Id,ProcessName | ConvertTo-Json -Compress`))) {
+        if (p && p.Id) pidMap[p.Id] = p.ProcessName
+      }
+    } catch { /* process list optional */ }
+
+    const ts   = new Date().toISOString()
+    const rows = []
+
+    for (const c of tcpRaw) {
+      if (!c || c.LocalPort == null) continue
+      const remoteIp   = c.RemoteAddress || ''
+      const localPort  = c.LocalPort
+      const remotePort = c.RemotePort
+      const stateNum   = c.State
+      const state      = TCP_STATES[stateNum] || (typeof stateNum === 'string' ? stateNum : String(stateNum))
+      const risky      = RISKY_PORTS[localPort] || RISKY_PORTS[remotePort] || null
+      const appProto   = PORT_PROTO[localPort]  || PORT_PROTO[remotePort]  || null
+      rows.push({
+        agent_id:     AGENT_ID,
+        hostname,
+        device_ip:    deviceIp,
+        local_ip:     c.LocalAddress || localIp,
+        local_port:   localPort,
+        remote_ip:    remoteIp || null,
+        remote_port:  remotePort || null,
+        state,
+        protocol_tcp: 'TCP',
+        app_protocol: appProto,
+        process_name: pidMap[c.OwningProcess] || null,
+        pid:          c.OwningProcess || null,
+        risk_level:   risky?.level  || 'low',
+        risk_reason:  risky?.reason || null,
+        captured_at:  ts,
+      })
+    }
+
+    for (const u of udpRaw) {
+      if (!u || u.LocalPort == null) continue
+      const localPort = u.LocalPort
+      const risky     = RISKY_PORTS[localPort] || null
+      const appProto  = PORT_PROTO[localPort]  || null
+      rows.push({
+        agent_id:     AGENT_ID,
+        hostname,
+        device_ip:    deviceIp,
+        local_ip:     u.LocalAddress || deviceIp,
+        local_port:   localPort,
+        remote_ip:    null,
+        remote_port:  null,
+        state:        'Listen',
+        protocol_tcp: 'UDP',
+        app_protocol: appProto,
+        process_name: pidMap[u.OwningProcess] || null,
+        pid:          u.OwningProcess || null,
+        risk_level:   risky?.level  || 'low',
+        risk_reason:  risky?.reason || null,
+        captured_at:  ts,
+      })
+    }
+
+    log(`  Connections: ${rows.length} (${rows.filter(r => r.risk_level !== 'low').length} risky)`)
+    return rows
+  } catch (e) {
+    log(`  Connections error: ${e.message}`)
+    return null
+  }
+}
+
+async function pushConnections(rows) {
+  if (!rows || !rows.length) return
+  try {
+    // Replace snapshot: delete stale rows for this agent, insert fresh batch
+    await nodeFetch(
+      `${SUPABASE_URL}/rest/v1/net_connections?agent_id=eq.${encodeURIComponent(AGENT_ID)}`,
+      { method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' } }
+    )
+    for (let i = 0; i < rows.length; i += 100) {
+      await nodeFetch(`${SUPABASE_URL}/rest/v1/net_connections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(rows.slice(i, i + 100)),
+      })
+    }
+  } catch (e) { log(`  Connections push: ${e.message}`) }
+}
+
+// ─── DNS CACHE COLLECTOR ──────────────────────────────────────────────────────
+let dnsLastAt = 0
+const DNS_INTERVAL = 300000 // every 5 minutes — cache is stable
+
+const DNS_TYPE_MAP = { 1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA' }
+
+async function collectAndPushDnsCache(hostname) {
+  if (Date.now() - dnsLastAt < DNS_INTERVAL) return
+  dnsLastAt = Date.now()
+  log('  Collecting DNS client cache...')
+  try {
+    const raw = arr(ps(`Get-DnsClientCache | Select-Object Entry,RecordType,TimeToLive,Data | ConvertTo-Json -Compress`))
+    if (!raw.length) return
+
+    const ts = new Date().toISOString()
+    const entries = raw
+      .filter(r => r && r.Entry && !/^(localhost|_|::1|127\.|0\.0\.0\.)/.test(r.Entry))
+      .map(r => ({
+        agent_id:    AGENT_ID,
+        hostname,
+        name:        (r.Entry || '').toLowerCase().replace(/\.$/, ''),
+        record_type: DNS_TYPE_MAP[r.RecordType] || String(r.RecordType || 'A'),
+        data:        String(r.Data || '').slice(0, 255),
+        ttl:         parseInt(r.TimeToLive) || 0,
+        last_seen:   ts,
+      }))
+      .filter(e => e.name.length > 0 && e.name.length < 256)
+
+    if (!entries.length) return
+    // Upsert: merge-duplicates by unique(agent_id, name, record_type) — updates last_seen
+    for (let i = 0; i < entries.length; i += 100) {
+      await nodeFetch(`${SUPABASE_URL}/rest/v1/dns_domains`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify(entries.slice(i, i + 100)),
+      })
+    }
+    log(`  DNS cache: ${entries.length} domains upserted`)
+  } catch (e) { log(`  DNS cache: ${e.message}`) }
+}
+
 // ─── COLLECT LOOP ─────────────────────────────────────────────────────────────
 async function collect() {
   log('─── Collection cycle start ───')
@@ -1505,6 +1737,9 @@ async function collect() {
     log(`  Blocklist: ${hw.blocklist_violations.length} violation(s) found`)
   }
 
+  // Bandwidth delta — embed in hardware_info so device detail page can show it
+  hw.network_stats = collectBandwidth()
+
   // Try upsert with agent_id (requires ALTER TABLE migration), fall back silently
   const deviceRow = {
     mac_address:      localMac,
@@ -1540,7 +1775,7 @@ async function collect() {
       agent_id:        AGENT_ID,
       server_hostname: hostname,
       last_ping:       new Date().toISOString(),
-      version:         '2.0.0',
+      version:         '2.1.0',
       status:          'online',
     }, 'agent_id')
   } catch (e) { log(`  ERROR heartbeat: ${e.message}`) }
@@ -1559,6 +1794,16 @@ async function collect() {
 
   // 3f. Config profiles — apply on every cycle (idempotent registry/policy writes)
   await applyConfigProfiles().catch(e => log(`  ERROR config profiles: ${e.message}`))
+
+  // 3g. Network connections snapshot (every 2 min — PS commands are expensive)
+  const connections = collectConnections(hostname, localIp)
+  if (connections) await pushConnections(connections).catch(e => log(`  ERROR connections: ${e.message}`))
+
+  // 3h. DNS client cache (every 5 min — upsert unique domains only)
+  await collectAndPushDnsCache(hostname).catch(e => log(`  ERROR dns cache: ${e.message}`))
+
+  // 3i. Auto-cleanup (once per 24h — keeps free tier healthy)
+  await cleanupOldData().catch(e => log(`  ERROR cleanup: ${e.message}`))
 
   // 3. ARP scan — only on server/gateway machine, skipped on clients
   if (SCAN_NETWORK) {
@@ -1863,7 +2108,7 @@ async function pollCommands() {
 }
 
 // ─── START ────────────────────────────────────────────────────────────────────
-log(`OpsQuest Agent v2.0.0`)
+log(`OpsQuest Agent v2.1.0`)
 log(`Agent ID:  ${AGENT_ID}`)
 log(`Mode:      ${IS_SERVER ? 'server' : 'client'} | Network scan: ${SCAN_NETWORK ? 'yes' : 'no'}`)
 log(`Supabase:  ${SUPABASE_URL}`)

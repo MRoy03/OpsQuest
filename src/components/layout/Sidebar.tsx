@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
-  Printer, Map, Calendar, Settings,
+  Printer, Map, Calendar, Settings, Network, Lock, Globe,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
@@ -41,8 +41,11 @@ const NAV_ITEMS = [
   { href: '/infrastructure/printers',         label: 'Printers',         icon: Printer,       adminOnly: true  },
   { href: '/infrastructure/map',              label: 'Network Map',      icon: Map,           adminOnly: true  },
   { href: '/infrastructure/scheduled-scripts',label: 'Scheduled Scripts',icon: Calendar,      adminOnly: true  },
-  { href: '/infrastructure/profiles',         label: 'Config Profiles',  icon: Settings,      adminOnly: true  },
-  { href: '/admin/audit',                     label: 'Audit Log',        icon: ClipboardList, adminOnly: true  },
+  { href: '/infrastructure/profiles',    label: 'Config Profiles',  icon: Settings,    adminOnly: true  },
+  { href: '/infrastructure/connections', label: 'Connection Monitor',icon: Network,     adminOnly: true  },
+  { href: '/infrastructure/ports',       label: 'Port Audit',       icon: Lock,        adminOnly: true  },
+  { href: '/infrastructure/dns',         label: 'DNS Log',          icon: Globe,       adminOnly: true  },
+  { href: '/admin/audit',                label: 'Audit Log',        icon: ClipboardList,adminOnly: true  },
 ]
 
 export default function Sidebar() {
