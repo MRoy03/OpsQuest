@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '@/hooks/useAuth'
+import { useSessionHeartbeat } from '@/hooks/useSessionHeartbeat'
 
 const ADMIN_EMAIL    = 'roy62125@gmail.com'
 const ALLOWED_DOMAIN = 'jil-jupiter.com'
@@ -18,6 +19,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isPublic  = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
   const isAdmin   = user?.email === ADMIN_EMAIL
   const isAllowed = isAdmin || (user?.email?.endsWith('@' + ALLOWED_DOMAIN) ?? false)
+
+  useSessionHeartbeat(user?.email)
 
   useEffect(() => {
     if (loading) return

@@ -8,44 +8,46 @@ import {
   LayoutDashboard, Zap, Ticket, BookOpen, Activity,
   Trophy, FileText, ChevronRight, LogOut, LogIn, Loader2, Server,
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2, Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
-  Printer, Map, Calendar, Settings, Network, Lock, Globe,
+  Printer, Map, Calendar, Settings, Network, Lock, Globe, Crown,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermissions } from '@/hooks/usePermissions'
 import { LEVEL_NAMES, LEVEL_BADGES } from '@/types'
 import NotificationBell from '@/components/NotificationBell'
 
-const ADMIN_EMAIL = 'roy62125@gmail.com'
+const SUPERADMIN_EMAIL = 'roy62125@gmail.com'
 
 const NAV_ITEMS = [
-  { href: '/',              label: 'Command Center', icon: LayoutDashboard, adminOnly: false },
-  { href: '/solver',        label: 'Problem Solver', icon: Zap,             adminOnly: false },
-  { href: '/tickets',       label: 'Ticket War Room',icon: Ticket,          adminOnly: false },
-  { href: '/predictor',     label: 'Issue Predictor',icon: Activity,        adminOnly: false },
-  { href: '/admin',         label: 'Knowledge Lab',  icon: BookOpen,        adminOnly: false },
-  { href: '/gamification',  label: 'Achievements',   icon: Trophy,          adminOnly: false },
-  { href: '/docs',          label: 'Documentation',  icon: FileText,        adminOnly: false },
-  { href: '/reports',                  label: 'Reports',          icon: BarChart2,     adminOnly: true  },
-  { href: '/infrastructure',          label: 'Infrastructure',   icon: Server,        adminOnly: true  },
-  { href: '/infrastructure/events',   label: 'Event Logs',       icon: AlertTriangle, adminOnly: true  },
-  { href: '/infrastructure/activity', label: 'Activity Monitor', icon: Monitor,        adminOnly: true  },
-  { href: '/infrastructure/compliance', label: 'Compliance',      icon: ShieldCheck,    adminOnly: true  },
-  { href: '/infrastructure/firewall',     label: 'Firewall Events', icon: Shield,         adminOnly: true  },
-  { href: '/infrastructure/screenshots',  label: 'Screenshots',     icon: Camera,         adminOnly: true  },
-  { href: '/infrastructure/bulk',         label: 'Bulk Actions',    icon: Layers,         adminOnly: true  },
-  { href: '/infrastructure/enrollment',   label: 'Enrollment',      icon: UserPlus,       adminOnly: true  },
-  { href: '/infrastructure/blocklist',   label: 'SW Blocklist',    icon: ShieldAlert,    adminOnly: true  },
-  { href: '/infrastructure/catalog',     label: 'App Catalog',     icon: Package,        adminOnly: true  },
-  { href: '/infrastructure/assets',      label: 'Asset Records',   icon: HardDrive,      adminOnly: true  },
-  { href: '/infrastructure/rings',            label: 'Update Rings',     icon: RefreshCcw,    adminOnly: true  },
-  { href: '/infrastructure/health',           label: 'Health Scores',    icon: Activity,      adminOnly: true  },
-  { href: '/infrastructure/printers',         label: 'Printers',         icon: Printer,       adminOnly: true  },
-  { href: '/infrastructure/map',              label: 'Network Map',      icon: Map,           adminOnly: true  },
-  { href: '/infrastructure/scheduled-scripts',label: 'Scheduled Scripts',icon: Calendar,      adminOnly: true  },
-  { href: '/infrastructure/profiles',    label: 'Config Profiles',  icon: Settings,    adminOnly: true  },
-  { href: '/infrastructure/connections', label: 'Connection Monitor',icon: Network,     adminOnly: true  },
-  { href: '/infrastructure/ports',       label: 'Port Audit',       icon: Lock,        adminOnly: true  },
-  { href: '/infrastructure/dns',         label: 'DNS Log',          icon: Globe,       adminOnly: true  },
-  { href: '/admin/audit',                label: 'Audit Log',        icon: ClipboardList,adminOnly: true  },
+  { href: '/',              label: 'Command Center', icon: LayoutDashboard, adminOnly: false, superadminOnly: false },
+  { href: '/solver',        label: 'Problem Solver', icon: Zap,             adminOnly: false, superadminOnly: false },
+  { href: '/tickets',       label: 'Ticket War Room',icon: Ticket,          adminOnly: false, superadminOnly: false },
+  { href: '/predictor',     label: 'Issue Predictor',icon: Activity,        adminOnly: false, superadminOnly: false },
+  { href: '/admin',         label: 'Knowledge Lab',  icon: BookOpen,        adminOnly: false, superadminOnly: false },
+  { href: '/gamification',  label: 'Achievements',   icon: Trophy,          adminOnly: false, superadminOnly: false },
+  { href: '/docs',          label: 'Documentation',  icon: FileText,        adminOnly: false, superadminOnly: false },
+  { href: '/reports',                  label: 'Reports',          icon: BarChart2,     adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure',          label: 'Infrastructure',   icon: Server,        adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/events',   label: 'Event Logs',       icon: AlertTriangle, adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/activity', label: 'Activity Monitor', icon: Monitor,       adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/compliance', label: 'Compliance',     icon: ShieldCheck,   adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/firewall',     label: 'Firewall Events', icon: Shield,      adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/screenshots',  label: 'Screenshots',     icon: Camera,      adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/bulk',         label: 'Bulk Actions',    icon: Layers,      adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/enrollment',   label: 'Enrollment',      icon: UserPlus,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/blocklist',   label: 'SW Blocklist',    icon: ShieldAlert,  adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/catalog',     label: 'App Catalog',     icon: Package,      adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/assets',      label: 'Asset Records',   icon: HardDrive,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/rings',            label: 'Update Rings',     icon: RefreshCcw,  adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/health',           label: 'Health Scores',    icon: Activity,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/printers',         label: 'Printers',         icon: Printer,     adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/map',              label: 'Network Map',      icon: Map,         adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/scheduled-scripts',label: 'Scheduled Scripts',icon: Calendar,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/profiles',    label: 'Config Profiles',  icon: Settings,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/connections', label: 'Connection Monitor',icon: Network,    adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/ports',       label: 'Port Audit',       icon: Lock,        adminOnly: true,  superadminOnly: false },
+  { href: '/infrastructure/dns',         label: 'DNS Log',          icon: Globe,       adminOnly: true,  superadminOnly: false },
+  { href: '/admin/audit',                label: 'Audit Log',        icon: ClipboardList,adminOnly: true, superadminOnly: false },
+  { href: '/superadmin',                 label: 'Admin Panel',      icon: Crown,       adminOnly: false, superadminOnly: true  },
 ]
 
 export default function Sidebar() {
@@ -53,10 +55,21 @@ export default function Sidebar() {
   const router = useRouter()
   const { user, loading, signOut } = useAuth()
 
-  const isAdmin     = user?.email === ADMIN_EMAIL
+  const isSuperAdmin = user?.email === SUPERADMIN_EMAIL
+  const { role, granted_pages, loading: permsLoading } = usePermissions(
+    !isSuperAdmin ? user?.email : null   // superadmin skips the DB fetch
+  )
+  const isAdmin = isSuperAdmin || role === 'admin'
+
   const displayName = user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'Operator'
   const initials    = displayName.slice(0, 2).toUpperCase()
-  const visibleNav  = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+
+  const visibleNav = NAV_ITEMS.filter(item => {
+    if (item.superadminOnly) return isSuperAdmin
+    if (!item.adminOnly) return true
+    if (isAdmin) return true
+    return granted_pages.includes(item.href)
+  })
 
   async function handleSignOut() {
     await signOut()
@@ -85,6 +98,12 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {permsLoading && !isSuperAdmin && (
+          <div className="flex items-center gap-2 px-3 py-2 opacity-40">
+            <Loader2 className="w-3.5 h-3.5 text-[#475569] animate-spin" />
+            <span className="text-[10px] text-[#475569] tracking-wider">LOADING ACCESS…</span>
+          </div>
+        )}
         {visibleNav.map(({ href, label, icon: Icon }, idx) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
@@ -127,7 +146,8 @@ export default function Sidebar() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-semibold text-[#e2e8f0] truncate">{displayName}</p>
-                  {isAdmin && <span className="text-[8px] px-1 py-px rounded bg-[#00d4ff22] text-[#00d4ff] font-bold tracking-wider shrink-0">ADMIN</span>}
+                  {isSuperAdmin && <span className="text-[8px] px-1 py-px rounded bg-[#f9731622] text-[#f97316] font-bold tracking-wider shrink-0">SUPERADMIN</span>}
+                  {!isSuperAdmin && isAdmin && <span className="text-[8px] px-1 py-px rounded bg-[#00d4ff22] text-[#00d4ff] font-bold tracking-wider shrink-0">ADMIN</span>}
                 </div>
                 <p className="text-[10px] text-[#475569] truncate">{user.email}</p>
               </div>
