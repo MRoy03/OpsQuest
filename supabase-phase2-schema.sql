@@ -181,6 +181,12 @@ CREATE TABLE IF NOT EXISTS compliance_policies (
   threshold   jsonb DEFAULT '{}',
   created_at  timestamptz DEFAULT now()
 );
+-- Patch pre-existing compliance_policies tables that may be missing columns
+ALTER TABLE compliance_policies ADD COLUMN IF NOT EXISTS category    text DEFAULT 'Security';
+ALTER TABLE compliance_policies ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE compliance_policies ADD COLUMN IF NOT EXISTS threshold   jsonb DEFAULT '{}';
+ALTER TABLE compliance_policies ADD COLUMN IF NOT EXISTS enabled     boolean DEFAULT true;
+
 -- Seed default policies (idempotent)
 INSERT INTO compliance_policies (name, rule_key, category, description, severity) VALUES
   ('BitLocker C: Drive',        'bitlocker_c_drive',    'Security',    'C: drive must be BitLocker-encrypted',           'critical'),
