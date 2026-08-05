@@ -1589,7 +1589,7 @@ function collectConnections(hostname, deviceIp) {
         agent_id:     AGENT_ID,
         hostname,
         device_ip:    deviceIp,
-        local_ip:     c.LocalAddress || localIp,
+        local_ip:     c.LocalAddress || deviceIp,
         local_port:   localPort,
         remote_ip:    remoteIp || null,
         remote_port:  remotePort || null,
@@ -1903,9 +1903,14 @@ async function executeCommand(cmd) {
     } else if (cmd.command_type === 'start_service') {
       result = psStr(`Start-Service -Name "${safe(p.name)}" -PassThru 2>&1 | Out-String`)
     } else if (cmd.command_type === 'restart_device') {
-      result = psStr(`Restart-Computer -Force`)
+      // Mark done BEFORE restarting so the status is saved before the machine goes down
+      await cmdUpdate(cmd.id, 'done', 'Restart initiated — device will reboot momentarily')
+      setTimeout(() => { try { psStr(`Restart-Computer -Force`) } catch {} }, 800)
+      continue
     } else if (cmd.command_type === 'shutdown_device') {
-      result = psStr(`Stop-Computer -Force`)
+      await cmdUpdate(cmd.id, 'done', 'Shutdown initiated — device will power off momentarily')
+      setTimeout(() => { try { psStr(`Stop-Computer -Force`) } catch {} }, 800)
+      continue
     } else if (cmd.command_type === 'capture_screen') {
       // screencap.exe must run in the interactive user session, not Session 0.
       // We use Task Scheduler to launch it as the currently logged-on user.

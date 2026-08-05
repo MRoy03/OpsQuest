@@ -8,9 +8,10 @@ const supabase = createClient(
 )
 
 const ALLOWED_TYPES = [
-  'run_script', 'uninstall', 'winget_upgrade',
+  'run_script', 'uninstall', 'winget_upgrade', 'winget_install',
   'stop_service', 'start_service', 'capture_screen',
   'restart_device', 'shutdown_device',
+  'lock_screen', 'notify_user', 'set_update_policy',
 ]
 
 export async function POST(req: NextRequest) {

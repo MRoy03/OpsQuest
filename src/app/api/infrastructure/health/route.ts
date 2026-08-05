@@ -7,8 +7,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-function computeScore(hw: any, lastSeen: string) {
-  const sec    = hw?.security_posture || {}
+function computeScore(hw: any, lastSeen: string, sp?: any) {
+  // security_posture is a top-level column on infrastructure_devices (not nested in hardware_info)
+  const sec    = sp || hw?.security_posture || {}
   const bl     = Array.isArray(sec.bitlocker) ? sec.bitlocker : []
   const def    = sec.defender || null
   const fw     = Array.isArray(sec.firewall) ? sec.firewall : []
@@ -35,12 +36,12 @@ function computeScore(hw: any, lastSeen: string) {
 export async function GET() {
   const { data, error } = await supabase
     .from('infrastructure_devices')
-    .select('id, hostname, last_ip, last_seen, device_type, hardware_info, agent_id')
+    .select('id, hostname, last_ip, last_seen, device_type, hardware_info, security_posture, agent_id')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const scored = (data || []).map(d => {
-    const { pts, total } = computeScore(d.hardware_info, d.last_seen)
+    const { pts, total } = computeScore(d.hardware_info, d.last_seen, d.security_posture)
     return {
       id: d.id, hostname: d.hostname, last_ip: d.last_ip,
       last_seen: d.last_seen, device_type: d.device_type, agent_id: d.agent_id,
