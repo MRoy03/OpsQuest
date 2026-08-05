@@ -165,7 +165,7 @@ export default function ScreenshotsPage() {
   useEffect(() => {
     fetch('/api/infrastructure/devices')
       .then(r => r.json())
-      .then(j => setDevices((j.data || []).filter((d: Device) => d.agent_id)))
+      .then(j => setDevices((Array.isArray(j) ? j : []).filter((d: Device) => d.agent_id)))
       .catch(() => null)
   }, [])
 

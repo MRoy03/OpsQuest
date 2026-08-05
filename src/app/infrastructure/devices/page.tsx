@@ -1965,7 +1965,7 @@ export default function DevicesPage() {
     try {
       const resp = await fetch('/api/infrastructure/devices')
       const json = await resp.json()
-      setDevices((json.data as Device[]) || [])
+      setDevices((Array.isArray(json) ? json : (json.data || [])) as Device[])
     } catch { /* silent */ }
     setLoading(false)
     setRefreshing(false)

@@ -58,14 +58,24 @@ export default function ConnectionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [cr, dr] = await Promise.all([
-      fetch('/api/infrastructure/connections'),
-      fetch('/api/infrastructure/devices'),
-    ])
-    const [c, d] = await Promise.all([cr.ok ? cr.json() : [], dr.ok ? dr.json() : []])
-    setConnections(c)
-    setDevices(d)
-    setLoading(false)
+    try {
+      const [cr, dr] = await Promise.all([
+        fetch('/api/infrastructure/connections'),
+        fetch('/api/infrastructure/devices'),
+      ])
+      const [c, d] = await Promise.all([
+        cr.ok ? cr.json().catch(() => []) : [],
+        dr.ok ? dr.json().catch(() => []) : [],
+      ])
+      setConnections(Array.isArray(c) ? c : [])
+      setDevices(Array.isArray(d) ? d : [])
+    } catch {
+      // Network error or unexpected failure — show empty state
+      setConnections([])
+      setDevices([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

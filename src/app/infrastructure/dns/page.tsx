@@ -35,14 +35,23 @@ export default function DnsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [dr, devsR] = await Promise.all([
-      fetch(`/api/infrastructure/dns${search ? `?q=${encodeURIComponent(search)}` : ''}`),
-      fetch('/api/infrastructure/devices'),
-    ])
-    const [d, devs] = await Promise.all([dr.ok ? dr.json() : [], devsR.ok ? devsR.json() : []])
-    setDomains(d)
-    setDevices(devs)
-    setLoading(false)
+    try {
+      const [dr, devsR] = await Promise.all([
+        fetch(`/api/infrastructure/dns${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+        fetch('/api/infrastructure/devices'),
+      ])
+      const [d, devs] = await Promise.all([
+        dr.ok ? dr.json().catch(() => []) : [],
+        devsR.ok ? devsR.json().catch(() => []) : [],
+      ])
+      setDomains(Array.isArray(d) ? d : [])
+      setDevices(Array.isArray(devs) ? devs : [])
+    } catch {
+      setDomains([])
+      setDevices([])
+    } finally {
+      setLoading(false)
+    }
   }, [search])
 
   useEffect(() => {

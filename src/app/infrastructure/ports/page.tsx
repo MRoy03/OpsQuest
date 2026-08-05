@@ -32,9 +32,17 @@ export default function PortsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/infrastructure/ports')
-    if (r.ok) setPorts(await r.json())
-    setLoading(false)
+    try {
+      const r = await fetch('/api/infrastructure/ports')
+      if (r.ok) {
+        const data = await r.json().catch(() => [])
+        setPorts(Array.isArray(data) ? data : [])
+      }
+    } catch {
+      setPorts([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])

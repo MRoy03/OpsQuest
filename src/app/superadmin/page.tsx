@@ -93,16 +93,28 @@ export default function SuperAdminPage() {
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/superadmin/users')
-    if (r.ok) setUsers(await r.json())
-    setLoading(false)
+    try {
+      const r = await fetch('/api/superadmin/users')
+      if (r.ok) {
+        const data = await r.json().catch(() => [])
+        setUsers(Array.isArray(data) ? data : [])
+      }
+    } catch { /* network error */ } finally {
+      setLoading(false)
+    }
   }, [])
 
   const loadSessions = useCallback(async () => {
     setSessLoading(true)
-    const r = await fetch('/api/superadmin/sessions')
-    if (r.ok) setSessions(await r.json())
-    setSessLoading(false)
+    try {
+      const r = await fetch('/api/superadmin/sessions')
+      if (r.ok) {
+        const data = await r.json().catch(() => [])
+        setSessions(Array.isArray(data) ? data : [])
+      }
+    } catch { /* network error */ } finally {
+      setSessLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadUsers() }, [loadUsers])
