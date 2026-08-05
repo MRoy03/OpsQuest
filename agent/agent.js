@@ -1905,12 +1905,12 @@ async function executeCommand(cmd) {
     } else if (cmd.command_type === 'restart_device') {
       // Mark done BEFORE restarting so the status is saved before the machine goes down
       await cmdUpdate(cmd.id, 'done', 'Restart initiated — device will reboot momentarily')
-      setTimeout(() => { try { psStr(`Restart-Computer -Force`) } catch {} }, 800)
-      continue
+      setTimeout(() => { try { psStr(`Restart-Computer -Force`) } catch (_e) {} }, 800)
+      return   // skip the generic cmdUpdate below — already marked done
     } else if (cmd.command_type === 'shutdown_device') {
       await cmdUpdate(cmd.id, 'done', 'Shutdown initiated — device will power off momentarily')
-      setTimeout(() => { try { psStr(`Stop-Computer -Force`) } catch {} }, 800)
-      continue
+      setTimeout(() => { try { psStr(`Stop-Computer -Force`) } catch (_e) {} }, 800)
+      return   // skip the generic cmdUpdate below — already marked done
     } else if (cmd.command_type === 'capture_screen') {
       // screencap.exe must run in the interactive user session, not Session 0.
       // We use Task Scheduler to launch it as the currently logged-on user.
