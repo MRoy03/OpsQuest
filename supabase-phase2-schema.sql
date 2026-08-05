@@ -202,6 +202,20 @@ CREATE TABLE IF NOT EXISTS net_connections (
   captured_at   timestamptz DEFAULT now()
 );
 
+-- Patch pre-existing net_connections tables that may be missing columns
+ALTER TABLE net_connections
+  ADD COLUMN IF NOT EXISTS hostname      text,
+  ADD COLUMN IF NOT EXISTS device_ip     text,
+  ADD COLUMN IF NOT EXISTS remote_ip     text,
+  ADD COLUMN IF NOT EXISTS remote_port   int,
+  ADD COLUMN IF NOT EXISTS protocol_tcp  text DEFAULT 'TCP',
+  ADD COLUMN IF NOT EXISTS app_protocol  text,
+  ADD COLUMN IF NOT EXISTS process_name  text,
+  ADD COLUMN IF NOT EXISTS pid           int,
+  ADD COLUMN IF NOT EXISTS risk_level    text DEFAULT 'low',
+  ADD COLUMN IF NOT EXISTS risk_reason   text,
+  ADD COLUMN IF NOT EXISTS captured_at   timestamptz DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_net_connections_agent  ON net_connections(agent_id);
 CREATE INDEX IF NOT EXISTS idx_net_connections_risk   ON net_connections(risk_level);
 CREATE INDEX IF NOT EXISTS idx_net_connections_state  ON net_connections(state);
@@ -221,6 +235,15 @@ CREATE TABLE IF NOT EXISTS dns_domains (
   suspicious    boolean DEFAULT false,
   UNIQUE(agent_id, name, record_type)
 );
+
+-- Patch pre-existing dns_domains tables that may be missing columns
+ALTER TABLE dns_domains
+  ADD COLUMN IF NOT EXISTS hostname    text,
+  ADD COLUMN IF NOT EXISTS data        text,
+  ADD COLUMN IF NOT EXISTS ttl         int,
+  ADD COLUMN IF NOT EXISTS first_seen  timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS last_seen   timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS suspicious  boolean DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_dns_domains_agent      ON dns_domains(agent_id);
 CREATE INDEX IF NOT EXISTS idx_dns_domains_suspicious ON dns_domains(suspicious);
