@@ -621,14 +621,38 @@ CREATE POLICY "auth insert incidents"              ON incidents               FO
 CREATE POLICY "auth all user_sessions"             ON user_sessions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
--- ─── 23. SUPABASE STORAGE BUCKET ────────────────────────────────────────────
--- Run this separately in the Supabase Dashboard → Storage → New bucket:
---   Name: screenshots
---   Public: false
---   File size limit: 10 MB
---   Allowed MIME types: image/png, image/jpeg
---
--- Then add these Storage policies in Dashboard → Storage → screenshots bucket → Policies:
---   INSERT: ((bucket_id = 'screenshots'::text)) for role anon
---   SELECT: ((bucket_id = 'screenshots'::text)) for role authenticated
---   DELETE: ((bucket_id = 'screenshots'::text)) for role authenticated
+-- ─── 23. SUPABASE STORAGE BUCKET + POLICIES ─────────────────────────────────
+-- Creates the screenshots bucket and all three storage policies via SQL.
+-- Run this in the same SQL editor run — no dashboard UI needed.
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'screenshots',
+  'screenshots',
+  false,
+  10485760,                              -- 10 MB
+  ARRAY['image/png', 'image/jpeg']
+)
+ON CONFLICT (id) DO UPDATE SET
+  file_size_limit    = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- Drop first so this section is idempotent
+DROP POLICY IF EXISTS "anon upload screenshots"  ON storage.objects;
+DROP POLICY IF EXISTS "auth view screenshots"    ON storage.objects;
+DROP POLICY IF EXISTS "auth delete screenshots"  ON storage.objects;
+
+-- agent (anon key) can upload captures
+CREATE POLICY "anon upload screenshots"
+  ON storage.objects FOR INSERT TO anon
+  WITH CHECK (bucket_id = 'screenshots');
+
+-- authenticated dashboard users can view screenshots
+CREATE POLICY "auth view screenshots"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'screenshots');
+
+-- authenticated dashboard users can delete screenshots
+CREATE POLICY "auth delete screenshots"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'screenshots');
