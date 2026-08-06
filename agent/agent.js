@@ -1684,8 +1684,9 @@ async function collectAndPushDnsCache(hostname) {
 
     if (!entries.length) return
     // Upsert: merge-duplicates by unique(agent_id, name, record_type) — updates last_seen
+    // on_conflict MUST be specified in the URL for PostgREST to use the composite key
     for (let i = 0; i < entries.length; i += 100) {
-      await nodeFetch(`${SUPABASE_URL}/rest/v1/dns_domains`, {
+      await nodeFetch(`${SUPABASE_URL}/rest/v1/dns_domains?on_conflict=agent_id,name,record_type`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

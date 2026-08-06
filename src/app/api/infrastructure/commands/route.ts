@@ -14,6 +14,18 @@ const ALLOWED_TYPES = [
 ]
 const NO_PAYLOAD_TYPES = ['restart_device', 'shutdown_device', 'capture_screen', 'lock_screen']
 
+/** Decode Supabase JWT without a network call to get actor email */
+function actorFromRequest(req: NextRequest): string | null {
+  try {
+    const auth = req.headers.get('authorization') || ''
+    const token = auth.replace('Bearer ', '').trim()
+    if (!token || token.split('.').length !== 3) return null
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(b64))
+    return (payload.email as string) ?? null
+  } catch { return null }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { agent_id, command_type, payload } = body
@@ -45,6 +57,16 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ── Audit log (fire-and-forget, never blocks the response) ──
+  supabase.from('audit_log').insert({
+    actor_email: actorFromRequest(req),
+    action:      'command_queued',
+    target_type: 'device',
+    target_id:   agent_id,
+    detail:      { command_type, payload, command_id: data.id },
+  }).then(() => {}).catch(() => {})
+
   return NextResponse.json({ data })
 }
 

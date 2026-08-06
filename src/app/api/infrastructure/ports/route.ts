@@ -8,11 +8,12 @@ const supabase = createClient(
 )
 
 export async function GET() {
-  // Pull all listening ports — these are the ones exposed to the network
+  // Pull all listening/bound ports — these are the ones exposed to the network.
+  // Use OR to handle any casing PowerShell may produce (Listen / listen / LISTEN).
   const { data, error } = await supabase
     .from('net_connections')
     .select('*')
-    .in('state', ['Listen', 'Bound'])
+    .or('state.ilike.listen,state.ilike.bound')
     .order('risk_level', { ascending: false })
     .limit(5000)
 
