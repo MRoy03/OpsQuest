@@ -41,9 +41,11 @@ export default function NetworkMapPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/infrastructure/devices')
-    if (r.ok) setDevices(await r.json())
-    setLoading(false)
+    try {
+      const r = await fetch('/api/infrastructure/devices')
+      if (r.ok) setDevices(await r.json())
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

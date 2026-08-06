@@ -94,13 +94,15 @@ export default function AssetsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [aRes, dRes] = await Promise.all([
-      fetch('/api/infrastructure/assets').then(r => r.json()),
-      fetch('/api/infrastructure/devices').then(r => r.json()),
-    ])
-    if (Array.isArray(aRes)) setAssets(aRes)
-    if (Array.isArray(dRes)) setDevices(dRes)
-    setLoading(false)
+    try {
+      const [aRes, dRes] = await Promise.all([
+        fetch('/api/infrastructure/assets').then(r => r.json()),
+        fetch('/api/infrastructure/devices').then(r => r.json()),
+      ])
+      if (Array.isArray(aRes)) setAssets(aRes)
+      if (Array.isArray(dRes)) setDevices(dRes)
+    } catch { /* network error — keep existing data */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

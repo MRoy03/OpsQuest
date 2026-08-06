@@ -629,11 +629,12 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 VALUES (
   'screenshots',
   'screenshots',
-  false,
+  true,                                  -- public so /object/public/ URLs work in the dashboard
   10485760,                              -- 10 MB
   ARRAY['image/png', 'image/jpeg']
 )
 ON CONFLICT (id) DO UPDATE SET
+  public             = EXCLUDED.public,  -- fix existing private bucket
   file_size_limit    = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 

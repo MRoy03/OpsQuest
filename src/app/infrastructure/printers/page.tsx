@@ -35,9 +35,11 @@ export default function PrintersPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/infrastructure/printers')
-    if (r.ok) setPrinters(await r.json())
-    setLoading(false)
+    try {
+      const r = await fetch('/api/infrastructure/printers')
+      if (r.ok) setPrinters(await r.json())
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

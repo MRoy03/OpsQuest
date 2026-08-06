@@ -54,26 +54,28 @@ export default function ScheduledScriptsPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [sr, dr, lr] = await Promise.all([
-      fetch('/api/infrastructure/scheduled-scripts'),
-      fetch('/api/infrastructure/devices'),
-      fetch('/api/infrastructure/scheduled-scripts/logs'),
-    ])
-    const [s, d, l] = await Promise.all([sr.ok ? sr.json() : [], dr.ok ? dr.json() : [], lr.ok ? lr.json() : []])
-    setScripts(s)
-    setDevices(d)
-    setLogs(l)
-    // Load assignments for all scripts
-    if (s.length) {
-      const amap: Record<string, string[]> = {}
-      await Promise.all(s.map(async (sc: Script) => {
-        const r = await fetch(`/api/infrastructure/scheduled-scripts/assign?script_id=${sc.id}`)
-        if (r.ok) { const a: Assignment[] = await r.json(); amap[sc.id] = a.map(x => x.agent_id) }
-        else amap[sc.id] = []
-      }))
-      setAssignments(amap)
-    }
-    setLoading(false)
+    try {
+      const [sr, dr, lr] = await Promise.all([
+        fetch('/api/infrastructure/scheduled-scripts'),
+        fetch('/api/infrastructure/devices'),
+        fetch('/api/infrastructure/scheduled-scripts/logs'),
+      ])
+      const [s, d, l] = await Promise.all([sr.ok ? sr.json() : [], dr.ok ? dr.json() : [], lr.ok ? lr.json() : []])
+      setScripts(s)
+      setDevices(d)
+      setLogs(l)
+      // Load assignments for all scripts
+      if (s.length) {
+        const amap: Record<string, string[]> = {}
+        await Promise.all(s.map(async (sc: Script) => {
+          const r = await fetch(`/api/infrastructure/scheduled-scripts/assign?script_id=${sc.id}`)
+          if (r.ok) { const a: Assignment[] = await r.json(); amap[sc.id] = a.map(x => x.agent_id) }
+          else amap[sc.id] = []
+        }))
+        setAssignments(amap)
+      }
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])

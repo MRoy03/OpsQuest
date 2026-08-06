@@ -30,11 +30,12 @@ export default function CamerasPage() {
 
   async function load() {
     setRefreshing(true)
-    const resp = await fetch('/api/integrations/cameras')
-    const json = await resp.json()
-    setCameras(json.cameras || [])
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const resp = await fetch('/api/integrations/cameras')
+      const json = await resp.json()
+      setCameras(json.cameras || [])
+    } catch { /* network error */ }
+    finally { setLoading(false); setRefreshing(false) }
   }
 
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])

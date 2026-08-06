@@ -57,13 +57,15 @@ export default function RingsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [rRes, dRes] = await Promise.all([
-      fetch('/api/infrastructure/rings').then(r => r.json()),
-      fetch('/api/infrastructure/devices').then(r => r.json()),
-    ])
-    if (Array.isArray(rRes)) setRings(rRes)
-    if (Array.isArray(dRes)) setDevices(dRes.filter((d: Device) => d.agent_id))
-    setLoading(false)
+    try {
+      const [rRes, dRes] = await Promise.all([
+        fetch('/api/infrastructure/rings').then(r => r.json()),
+        fetch('/api/infrastructure/devices').then(r => r.json()),
+      ])
+      if (Array.isArray(rRes)) setRings(rRes)
+      if (Array.isArray(dRes)) setDevices(dRes.filter((d: Device) => d.agent_id))
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

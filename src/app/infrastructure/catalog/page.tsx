@@ -65,15 +65,17 @@ export default function CatalogPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [appsRes, devsRes] = await Promise.all([
-      fetch('/api/infrastructure/catalog').then(r => r.json()),
-      fetch('/api/infrastructure/devices').then(r => r.json()),
-    ])
-    if (Array.isArray(appsRes)) setApps(appsRes)
-    if (Array.isArray(devsRes)) {
-      setDevices(devsRes.filter((d: Device) => d.agent_id && d.enrollment_state === 'managed'))
-    }
-    setLoading(false)
+    try {
+      const [appsRes, devsRes] = await Promise.all([
+        fetch('/api/infrastructure/catalog').then(r => r.json()),
+        fetch('/api/infrastructure/devices').then(r => r.json()),
+      ])
+      if (Array.isArray(appsRes)) setApps(appsRes)
+      if (Array.isArray(devsRes)) {
+        setDevices(devsRes.filter((d: Device) => d.agent_id && d.enrollment_state === 'managed'))
+      }
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

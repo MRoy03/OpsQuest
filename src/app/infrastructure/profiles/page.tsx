@@ -53,23 +53,25 @@ export default function ProfilesPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [pr, dr] = await Promise.all([
-      fetch('/api/infrastructure/profiles'),
-      fetch('/api/infrastructure/devices'),
-    ])
-    const [p, d] = await Promise.all([pr.ok ? pr.json() : [], dr.ok ? dr.json() : []])
-    setProfiles(p)
-    setDevices(d)
-    if (p.length) {
-      const amap: Record<string, string[]> = {}
-      await Promise.all(p.map(async (prof: Profile) => {
-        const r = await fetch(`/api/infrastructure/profiles/assign?profile_id=${prof.id}`)
-        if (r.ok) { const a: { agent_id: string }[] = await r.json(); amap[prof.id] = a.map(x => x.agent_id) }
-        else amap[prof.id] = []
-      }))
-      setAssignments(amap)
-    }
-    setLoading(false)
+    try {
+      const [pr, dr] = await Promise.all([
+        fetch('/api/infrastructure/profiles'),
+        fetch('/api/infrastructure/devices'),
+      ])
+      const [p, d] = await Promise.all([pr.ok ? pr.json() : [], dr.ok ? dr.json() : []])
+      setProfiles(p)
+      setDevices(d)
+      if (p.length) {
+        const amap: Record<string, string[]> = {}
+        await Promise.all(p.map(async (prof: Profile) => {
+          const r = await fetch(`/api/infrastructure/profiles/assign?profile_id=${prof.id}`)
+          if (r.ok) { const a: { agent_id: string }[] = await r.json(); amap[prof.id] = a.map(x => x.agent_id) }
+          else amap[prof.id] = []
+        }))
+        setAssignments(amap)
+      }
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])

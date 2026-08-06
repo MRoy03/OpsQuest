@@ -51,9 +51,11 @@ export default function HealthPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/infrastructure/health')
-    if (r.ok) setDevices(await r.json())
-    setLoading(false)
+    try {
+      const r = await fetch('/api/infrastructure/health')
+      if (r.ok) setDevices(await r.json())
+    } catch { /* network error — keep existing data */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])

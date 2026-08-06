@@ -65,13 +65,15 @@ export default function BlocklistPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [rulesRes, violRes] = await Promise.all([
-      fetch('/api/infrastructure/blocklist').then(r => r.json()),
-      fetch('/api/infrastructure/blocklist/violations').then(r => r.json()),
-    ])
-    if (Array.isArray(rulesRes)) setRules(rulesRes)
-    if (Array.isArray(violRes))  setViolations(violRes)
-    setLoading(false)
+    try {
+      const [rulesRes, violRes] = await Promise.all([
+        fetch('/api/infrastructure/blocklist').then(r => r.json()),
+        fetch('/api/infrastructure/blocklist/violations').then(r => r.json()),
+      ])
+      if (Array.isArray(rulesRes)) setRules(rulesRes)
+      if (Array.isArray(violRes))  setViolations(violRes)
+    } catch { /* network error */ }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
