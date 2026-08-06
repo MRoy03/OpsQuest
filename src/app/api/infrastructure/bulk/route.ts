@@ -56,13 +56,13 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // ── Audit log (fire-and-forget) ──
-  supabase.from('audit_log').insert({
+  void supabase.from('audit_log').insert({
     actor_email: actorFromRequest(req),
     action:      'bulk_command_queued',
     target_type: 'device_group',
     target_name: label || command_type,
     detail:      { command_type, payload, device_count: agent_ids.length, agent_ids },
-  }).then(() => {}).catch(() => {})
+  })
 
   return NextResponse.json({ queued: data.length, commands: data })
 }

@@ -59,13 +59,13 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // ── Audit log (fire-and-forget, never blocks the response) ──
-  supabase.from('audit_log').insert({
+  void supabase.from('audit_log').insert({
     actor_email: actorFromRequest(req),
     action:      'command_queued',
     target_type: 'device',
     target_id:   agent_id,
     detail:      { command_type, payload, command_id: data.id },
-  }).then(() => {}).catch(() => {})
+  })
 
   return NextResponse.json({ data })
 }
