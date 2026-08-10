@@ -1,15 +1,18 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Server, Ticket, Zap, TrendingUp } from 'lucide-react'
 import AnimatedCounter from '@/components/ui/AnimatedCounter'
 
-const stats = [
-  { label: 'Active Tickets', value: 6,  suffix: '',  delta: '+2 today',    icon: Ticket,     color: 'cyan',   trend: 'up' },
-  { label: 'Systems Online', value: 7,  suffix: '/8', delta: '1 offline',  icon: Server,     color: 'green',  trend: 'warn' },
-  { label: 'Issues Solved',  value: 34, suffix: '',  delta: 'this week',   icon: Zap,        color: 'purple', trend: 'up' },
-  { label: 'Resolution Rate',value: 87, suffix: '%', delta: '+3% vs last', icon: TrendingUp, color: 'amber',  trend: 'up' },
-]
+interface Stats {
+  activeTickets:    number
+  systemsOnline:    number
+  systemsTotal:     number
+  issuesSolved:     number
+  resolutionRate:   number
+  loading:          boolean
+}
 
 const colorMap = {
   cyan:   { bg: 'bg-[#00d4ff11]', border: 'border-[#00d4ff22]', icon: 'text-[#00d4ff]', val: 'text-[#00d4ff]',  glow: '0 0 20px #00d4ff22' },
@@ -19,10 +22,88 @@ const colorMap = {
 }
 
 export default function StatsGrid() {
+  const [stats, setStats] = useState<Stats>({
+    activeTickets: 0, systemsOnline: 0, systemsTotal: 0,
+    issuesSolved: 0, resolutionRate: 0, loading: true,
+  })
+
+  useEffect(() => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+
+    Promise.allSettled([
+      fetch('/api/tickets?status=open').then(r => r.json()),
+      fetch('/api/infrastructure/devices').then(r => r.json()),
+      fetch('/api/tickets?status=resolved').then(r => r.json()),
+      fetch('/api/tickets').then(r => r.json()),
+    ]).then(([openRes, devRes, resolvedRes, allRes]) => {
+      const openTickets    = openRes.status === 'fulfilled'    ? (openRes.value.total    ?? 0) : 0
+      const allDevices     = devRes.status  === 'fulfilled' && Array.isArray(devRes.value) ? devRes.value : []
+      const resolvedTickets= resolvedRes.status === 'fulfilled' ? (resolvedRes.value.total ?? 0) : 0
+      const allTickets     = allRes.status === 'fulfilled'     ? (allRes.value.total     ?? 0) : 0
+
+      // count devices seen in the last 5 minutes as "online"
+      const onlineDevices = allDevices.filter((d: { last_seen?: string }) =>
+        d.last_seen && d.last_seen > fiveMinAgo
+      ).length
+
+      const rate = allTickets > 0
+        ? Math.round((resolvedTickets / allTickets) * 100)
+        : 0
+
+      setStats({
+        activeTickets:  openTickets,
+        systemsOnline:  onlineDevices,
+        systemsTotal:   allDevices.length,
+        issuesSolved:   resolvedTickets,
+        resolutionRate: rate,
+        loading:        false,
+      })
+    })
+  }, [])
+
+  const statCards = [
+    {
+      label:  'Active Tickets',
+      value:  stats.activeTickets,
+      suffix: '',
+      delta:  stats.loading ? '…' : stats.activeTickets === 0 ? 'All clear' : `${stats.activeTickets} open`,
+      icon:   Ticket,
+      color:  'cyan' as const,
+      trend:  stats.activeTickets > 0 ? 'warn' : 'up',
+    },
+    {
+      label:  'Systems Online',
+      value:  stats.systemsOnline,
+      suffix: stats.systemsTotal > 0 ? `/${stats.systemsTotal}` : '',
+      delta:  stats.loading ? '…' : stats.systemsTotal === 0 ? 'No agents yet' : `${stats.systemsTotal - stats.systemsOnline} offline`,
+      icon:   Server,
+      color:  'green' as const,
+      trend:  stats.systemsTotal > 0 && stats.systemsOnline < stats.systemsTotal ? 'warn' : 'up',
+    },
+    {
+      label:  'Issues Solved',
+      value:  stats.issuesSolved,
+      suffix: '',
+      delta:  stats.loading ? '…' : 'all time',
+      icon:   Zap,
+      color:  'purple' as const,
+      trend:  'up',
+    },
+    {
+      label:  'Resolution Rate',
+      value:  stats.resolutionRate,
+      suffix: '%',
+      delta:  stats.loading ? '…' : stats.resolutionRate >= 80 ? 'On target' : 'Needs attention',
+      icon:   TrendingUp,
+      color:  'amber' as const,
+      trend:  stats.resolutionRate >= 80 ? 'up' : 'warn',
+    },
+  ]
+
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-      {stats.map(({ label, value, suffix, delta, icon: Icon, color, trend }, i) => {
-        const c = colorMap[color as keyof typeof colorMap]
+      {statCards.map(({ label, value, suffix, delta, icon: Icon, color, trend }, i) => {
+        const c = colorMap[color]
         return (
           <motion.div
             key={label}
@@ -36,7 +117,11 @@ export default function StatsGrid() {
               <div>
                 <p className="text-xs text-[#64748b] font-medium uppercase tracking-wider">{label}</p>
                 <p className={`text-2xl font-bold mt-1 tabular-nums ${c.val}`}>
-                  <AnimatedCounter value={value} suffix={suffix} />
+                  {stats.loading ? (
+                    <span className="text-[#334155] animate-pulse">—</span>
+                  ) : (
+                    <AnimatedCounter value={value} suffix={suffix} />
+                  )}
                 </p>
                 <p className={`text-xs mt-1 ${trend === 'warn' ? 'text-[#f59e0b]' : 'text-[#64748b]'}`}>{delta}</p>
               </div>

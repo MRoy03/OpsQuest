@@ -40,12 +40,24 @@ function buildIndex(): Result[] {
   }))
 
   const docs = [
-    { id: 'ms365', title: 'Microsoft 365 Admin Centers', subtitle: 'Exchange, Entra ID, Defender, Intune', href: '/docs/ms365' },
-    { id: 'azure', title: 'Microsoft Azure Guide', subtitle: 'VMs, Networking, Monitor, Storage', href: '/docs/azure' },
-    { id: 'sap', title: 'SAP S/4HANA Public Cloud', subtitle: 'Fiori, Users, Authorization, Integration', href: '/docs/sap' },
-    { id: 'devops', title: 'Cloud Infra & DevOps', subtitle: 'Docker, Kubernetes, Terraform, CI/CD', href: '/docs/devops' },
+    { id: 'hw',      title: 'Hardware & Network',           subtitle: 'WiFi, printers, BSOD, networking commands',  href: '/docs/hardware' },
+    { id: 'ms365',   title: 'Microsoft 365 Admin Centers',  subtitle: 'Exchange, Entra ID, Defender, Intune',        href: '/docs/ms365' },
+    { id: 'azure',   title: 'Microsoft Azure Guide',        subtitle: 'VMs, Networking, Monitor, Storage',           href: '/docs/azure' },
+    { id: 'sap',     title: 'SAP S/4HANA Public Cloud',     subtitle: 'Fiori, Users, Authorization, Integration',    href: '/docs/sap' },
+    { id: 'devops',  title: 'Cloud Infra & DevOps',         subtitle: 'Docker, Kubernetes, Terraform, CI/CD',        href: '/docs/devops' },
+    { id: 'itrecap', title: 'IT Recap & Fundamentals',      subtitle: 'OSI model, AD, Security, PowerShell, Cloud',  href: '/docs/itrecap' },
+    { id: 'dbms',    title: 'DBMS & ERP Systems',           subtitle: 'SQL, NoSQL, ERP, troubleshooting',            href: '/docs/dbms-erp' },
   ]
   docs.forEach(d => items.push({ type: 'doc', ...d, badge: 'docs', badgeColor: '#7c3aed' }))
+
+  // Infrastructure hub pages
+  const hubs = [
+    { id: 'hub-monitor',  title: 'Monitoring Hub',  subtitle: 'Events, activity, screenshots, firewall', href: '/infrastructure/monitor' },
+    { id: 'hub-network',  title: 'Network Hub',     subtitle: 'Devices, connections, ports, DNS, map',   href: '/infrastructure/network-hub' },
+    { id: 'hub-security', title: 'Security Hub',    subtitle: 'Compliance, blocklist, health, audit',    href: '/infrastructure/security' },
+    { id: 'hub-manage',   title: 'Manage Hub',      subtitle: 'Assets, bulk actions, catalog, scripts',  href: '/infrastructure/manage' },
+  ]
+  hubs.forEach(h => items.push({ type: 'doc' as const, ...h, badge: 'infra', badgeColor: '#3b82f6' }))
 
   return items
 }

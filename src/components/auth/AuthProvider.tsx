@@ -32,9 +32,31 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
+
+      // On every sign-in, sync the user's Microsoft/Entra directory roles to OpsQuest.
+      // This automatically grants admin access to users who hold an admin role in the
+      // Microsoft 365 tenant (e.g. Global Admin, Helpdesk Admin, etc.).
+      if (event === 'SIGNED_IN' && session?.user?.email) {
+        const email = session.user.email
+        fetch('/api/auth/sync-roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(result => {
+            if (result?.changed) {
+              // Notify usePermissions hooks to re-fetch from DB
+              window.dispatchEvent(
+                new CustomEvent('opsquest:permissions-changed', { detail: { email } })
+              )
+            }
+          })
+          .catch(() => { /* silent — role sync is best-effort */ })
+      }
     })
 
     return () => subscription.unsubscribe()

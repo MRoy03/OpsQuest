@@ -10,28 +10,37 @@ import {
 
 // All admin-only pages users can be granted access to
 const ADMIN_PAGES = [
+  // ─── Hub pages ───────────────────────────────────────────────
   { path: '/reports',                           label: 'Reports' },
   { path: '/infrastructure',                    label: 'Infrastructure Overview' },
+  { path: '/infrastructure/monitor',            label: 'Monitoring Hub' },
+  { path: '/infrastructure/network-hub',        label: 'Network Hub' },
+  { path: '/infrastructure/security',           label: 'Security Hub' },
+  { path: '/infrastructure/manage',             label: 'Manage Hub' },
+  // ─── Monitoring sub-pages ────────────────────────────────────
   { path: '/infrastructure/events',             label: 'Event Logs' },
   { path: '/infrastructure/activity',           label: 'Activity Monitor' },
-  { path: '/infrastructure/compliance',         label: 'Compliance' },
-  { path: '/infrastructure/firewall',           label: 'Firewall Events' },
   { path: '/infrastructure/screenshots',        label: 'Screenshots' },
-  { path: '/infrastructure/bulk',               label: 'Bulk Actions' },
-  { path: '/infrastructure/enrollment',         label: 'Enrollment' },
-  { path: '/infrastructure/blocklist',          label: 'SW Blocklist' },
-  { path: '/infrastructure/catalog',            label: 'App Catalog' },
-  { path: '/infrastructure/assets',             label: 'Asset Records' },
-  { path: '/infrastructure/rings',              label: 'Update Rings' },
-  { path: '/infrastructure/health',             label: 'Health Scores' },
-  { path: '/infrastructure/printers',           label: 'Printers' },
+  { path: '/infrastructure/firewall',           label: 'Firewall Events' },
+  // ─── Network sub-pages ───────────────────────────────────────
   { path: '/infrastructure/map',                label: 'Network Map' },
-  { path: '/infrastructure/scheduled-scripts',  label: 'Scheduled Scripts' },
-  { path: '/infrastructure/profiles',           label: 'Config Profiles' },
   { path: '/infrastructure/connections',        label: 'Connection Monitor' },
   { path: '/infrastructure/ports',              label: 'Port Audit' },
   { path: '/infrastructure/dns',                label: 'DNS Log' },
+  { path: '/infrastructure/printers',           label: 'Printers' },
+  // ─── Security sub-pages ──────────────────────────────────────
+  { path: '/infrastructure/compliance',         label: 'Compliance' },
+  { path: '/infrastructure/blocklist',          label: 'SW Blocklist' },
+  { path: '/infrastructure/health',             label: 'Health Scores' },
   { path: '/admin/audit',                       label: 'Audit Log' },
+  // ─── Manage sub-pages ────────────────────────────────────────
+  { path: '/infrastructure/assets',             label: 'Asset Records' },
+  { path: '/infrastructure/enrollment',         label: 'Enrollment' },
+  { path: '/infrastructure/bulk',               label: 'Bulk Actions' },
+  { path: '/infrastructure/profiles',           label: 'Config Profiles' },
+  { path: '/infrastructure/rings',              label: 'Update Rings' },
+  { path: '/infrastructure/scheduled-scripts',  label: 'Scheduled Scripts' },
+  { path: '/infrastructure/catalog',            label: 'App Catalog' },
 ]
 
 interface AppUser {
@@ -324,7 +333,7 @@ export default function SuperAdminPage() {
                             {u.role === 'admin' ? (
                               <div className="flex items-center gap-2 text-xs text-[#10b981]">
                                 <Shield className="w-4 h-4" />
-                                <span>Admin role — full access to all 22 admin pages. No individual page overrides needed.</span>
+                                <span>Admin role — full access to all {ADMIN_PAGES.length} admin pages. No individual page overrides needed.</span>
                               </div>
                             ) : (
                               <>

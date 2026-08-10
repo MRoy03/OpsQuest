@@ -1,7 +1,18 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { mockTickets } from '@/lib/mock-data'
 import type { Priority, TicketStatus } from '@/types'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, RefreshCw, Ticket } from 'lucide-react'
+
+interface DashTicket {
+  id:        string
+  title:     string
+  priority:  Priority
+  status:    TicketStatus
+  userName:  string
+  createdAt: string
+}
 
 const priorityColor: Record<Priority, string> = {
   critical: 'text-[#ef4444] bg-[#ef444411] border-[#ef444422]',
@@ -21,7 +32,21 @@ function formatDate(iso: string) {
 }
 
 export default function RecentTickets() {
-  const recent = mockTickets.slice(0, 5)
+  const [tickets, setTickets] = useState<DashTicket[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch('/api/tickets')
+      .then(r => r.ok ? r.json() : { tickets: [] })
+      .then(json => {
+        const data = Array.isArray(json.tickets) ? json.tickets : []
+        setTickets(data.slice(0, 5) as DashTicket[])
+      })
+      .catch(() => setTickets([]))
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <div className="rounded-xl border border-[#1a2f4a] bg-[#0a1525] p-5">
       <div className="flex items-center justify-between mb-4">
@@ -30,42 +55,57 @@ export default function RecentTickets() {
           View all <ArrowRight className="w-3 h-3" />
         </Link>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-[#475569] uppercase tracking-wider text-[10px]">
-              <th className="text-left pb-2 pr-4">ID</th>
-              <th className="text-left pb-2 pr-4">Title</th>
-              <th className="text-left pb-2 pr-4">Priority</th>
-              <th className="text-left pb-2 pr-4">Status</th>
-              <th className="text-left pb-2 pr-4">User</th>
-              <th className="text-left pb-2">Created</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#1a2f4a]">
-            {recent.map(ticket => (
-              <tr key={ticket.id} className="group hover:bg-[#ffffff04] transition-colors">
-                <td className="py-2.5 pr-4 text-[#475569] font-mono">{ticket.id.toUpperCase()}</td>
-                <td className="py-2.5 pr-4">
-                  <Link href={`/tickets`} className="text-[#94a3b8] group-hover:text-[#00d4ff] transition-colors line-clamp-1 max-w-48">
-                    {ticket.title}
-                  </Link>
-                </td>
-                <td className="py-2.5 pr-4">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase ${priorityColor[ticket.priority]}`}>
-                    {ticket.priority}
-                  </span>
-                </td>
-                <td className={`py-2.5 pr-4 font-medium capitalize ${statusColor[ticket.status]}`}>
-                  {ticket.status.replace('_', ' ')}
-                </td>
-                <td className="py-2.5 pr-4 text-[#64748b]">{ticket.userName}</td>
-                <td className="py-2.5 text-[#475569]">{formatDate(ticket.createdAt)}</td>
+
+      {loading ? (
+        <div className="py-6 text-center text-[#334155] text-xs">
+          <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-1" />
+          Loading tickets…
+        </div>
+      ) : tickets.length === 0 ? (
+        <div className="py-6 text-center text-[#334155] text-xs">
+          <Ticket className="w-5 h-5 mx-auto mb-1 opacity-30" />
+          No tickets yet — create one in the Tickets room
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[#475569] uppercase tracking-wider text-[10px]">
+                <th className="text-left pb-2 pr-4">ID</th>
+                <th className="text-left pb-2 pr-4">Title</th>
+                <th className="text-left pb-2 pr-4">Priority</th>
+                <th className="text-left pb-2 pr-4">Status</th>
+                <th className="text-left pb-2 pr-4">User</th>
+                <th className="text-left pb-2">Created</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-[#1a2f4a]">
+              {tickets.map(ticket => (
+                <tr key={ticket.id} className="group hover:bg-[#ffffff04] transition-colors">
+                  <td className="py-2.5 pr-4 text-[#475569] font-mono text-[10px]">
+                    {String(ticket.id).replace(/-/g, '').slice(0, 8).toUpperCase()}
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <Link href="/tickets" className="text-[#94a3b8] group-hover:text-[#00d4ff] transition-colors line-clamp-1 max-w-48 block">
+                      {ticket.title}
+                    </Link>
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase ${priorityColor[ticket.priority] ?? 'text-[#475569]'}`}>
+                      {ticket.priority}
+                    </span>
+                  </td>
+                  <td className={`py-2.5 pr-4 font-medium capitalize ${statusColor[ticket.status] ?? 'text-[#475569]'}`}>
+                    {ticket.status?.replace('_', ' ')}
+                  </td>
+                  <td className="py-2.5 pr-4 text-[#64748b]">{ticket.userName}</td>
+                  <td className="py-2.5 text-[#475569]">{formatDate(ticket.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

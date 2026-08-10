@@ -21,7 +21,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Build
+:: Build agent.exe
 echo.
 echo Building agent.exe ...
 mkdir dist 2>nul
@@ -32,13 +32,30 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: Build screencap.exe (required for screen-capture commands)
+echo.
+echo Building screencap.exe ...
+cd screencap
+npm install >nul 2>&1
+npm run build
+if errorlevel 1 (
+    echo WARNING: screencap build failed - screen capture commands will not work
+) else (
+    echo Copying screencap.exe to dist\ ...
+    copy /Y dist\screencap.exe ..\dist\screencap.exe >nul
+    echo Screencap ready.
+)
+cd ..
+
 echo.
 echo ============================================
 echo  BUILD COMPLETE
-echo  Output: agent\dist\agent.exe
+echo  Outputs:
+echo    agent\dist\agent.exe
+echo    agent\dist\screencap.exe  (screen capture)
 echo.
 echo  NEXT STEPS:
-echo  1. Copy dist\agent.exe to your server
+echo  1. Copy dist\agent.exe + dist\screencap.exe to your server
 echo  2. Copy config.example.json -> config.json
 echo  3. Fill in your Supabase URL + anon key
 echo  4. Add your camera IPs to the cameras array

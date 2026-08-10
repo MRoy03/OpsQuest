@@ -133,7 +133,7 @@ export function searchDocs(query: string, limit = 4): DocSearchResult[] {
     section: entry.section,
     module: entry.module,
     moduleName: entry.moduleName,
-    href: entry.href,
+    href: `${entry.href}#${entry.id}`,   // deep-link to exact section
     snippet: entry.text.slice(0, 80) + '…',
     score,
   }))

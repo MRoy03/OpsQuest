@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ChevronUp, ExternalLink, CheckCircle, Copy, Check, Search } from 'lucide-react'
 
@@ -47,6 +47,19 @@ function DocCard({ entry, searchTerm }: { entry: DocEntry; searchTerm: string })
   const [checkedSteps, setCheckedSteps] = useState<Record<string, Set<number>>>({})
   const c = colorMap[entry.color] ?? colorMap.cyan
 
+  // Auto-open and scroll-to if the URL hash matches this entry's id
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash.replace('#', '')
+    if (hash === entry.id) {
+      setOpen(true)
+      setTimeout(() => {
+        const el = document.getElementById(entry.id)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 120)
+    }
+  }, [entry.id])
+
   const matchesSearch = !searchTerm || [entry.title, ...entry.sections.map(s =>
     [s.heading, s.content ?? '', ...(s.steps ?? []), ...(s.items?.map(i => i.label) ?? [])].join(' ')
   )].join(' ').toLowerCase().includes(searchTerm.toLowerCase())
@@ -64,10 +77,11 @@ function DocCard({ entry, searchTerm }: { entry: DocEntry; searchTerm: string })
 
   return (
     <motion.div
+      id={entry.id}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border ${c.border} ${c.bg} overflow-hidden`}
+      className={`rounded-xl border ${c.border} ${c.bg} overflow-hidden scroll-mt-20`}
     >
       <button
         onClick={() => setOpen(!open)}
