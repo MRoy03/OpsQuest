@@ -85,10 +85,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   async function signInWithMicrosoft() {
     if (!supabase) return { error: 'Supabase not configured' }
+    // Do NOT include 'openid' in scopes — Supabase/Azure add it automatically.
+    // Passing it explicitly results in a duplicate "openid openid …" scope string
+    // which Azure rejects with an immediate error before showing the login UI.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        scopes: 'openid profile email',
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
