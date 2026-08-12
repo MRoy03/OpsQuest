@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import TopBar from '@/components/layout/TopBar'
 import {
   Users, Monitor, ShieldAlert, RefreshCw, CheckCircle, XCircle,
-  AlertTriangle, Key, Clock, DatabaseZap, ExternalLink,
+  AlertTriangle, Key, Clock, DatabaseZap, ExternalLink, ShieldPlus,
 } from 'lucide-react'
 
 interface EntraOverview {
@@ -334,15 +335,28 @@ export default function EntraPage() {
 
           {/* Overview */}
           {tab === 'overview' && overview && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-              <StatCard label="Total Users"       value={overview.total_users}                            icon={Users}       color="cyan" />
-              <StatCard label="Enabled"           value={overview.enabled_users}                          icon={CheckCircle} color="green" />
-              <StatCard label="Licensed"          value={overview.licensed_users}                         icon={Key}         color="purple" />
-              <StatCard label="Total Devices"     value={overview.total_devices}                          icon={Monitor}     color="cyan" />
-              <StatCard label="Compliant Devices" value={overview.compliant_devices}                      icon={CheckCircle} color="green" />
-              <StatCard label="Managed Devices"   value={overview.managed_devices}                        icon={Monitor}     color="purple" />
-              <StatCard label="Risky Users"       value={overview.risky_users}                            icon={ShieldAlert} color={overview.risky_users > 0 ? 'red' : 'green'} />
-              <StatCard label="Not Licensed"      value={overview.total_users - overview.licensed_users}  icon={XCircle}     color="amber" />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                <StatCard label="Total Users"       value={overview.total_users}                            icon={Users}       color="cyan" />
+                <StatCard label="Enabled"           value={overview.enabled_users}                          icon={CheckCircle} color="green" />
+                <StatCard label="Licensed"          value={overview.licensed_users}                         icon={Key}         color="purple" />
+                <StatCard label="Total Devices"     value={overview.total_devices}                          icon={Monitor}     color="cyan" />
+                <StatCard label="Compliant Devices" value={overview.compliant_devices}                      icon={CheckCircle} color="green" />
+                <StatCard label="Managed Devices"   value={overview.managed_devices}                        icon={Monitor}     color="purple" />
+                <StatCard label="Risky Users"       value={overview.risky_users}                            icon={ShieldAlert} color={overview.risky_users > 0 ? 'red' : 'green'} />
+                <StatCard label="Not Licensed"      value={overview.total_users - overview.licensed_users}  icon={XCircle}     color="amber" />
+              </div>
+              {/* Governance quick-link */}
+              <Link href="/infrastructure/entra/governance"
+                className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-[#7c3aed33] bg-[#7c3aed08] hover:bg-[#7c3aed15] transition-colors group"
+              >
+                <ShieldPlus className="w-4 h-4 text-[#a78bfa] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[#a78bfa]">Identity Governance &amp; Security</p>
+                  <p className="text-[10px] text-[#475569]">App secrets · MFA coverage · License waste · Guest audit · Org structure + 7 more</p>
+                </div>
+                <ExternalLink className="w-3 h-3 text-[#475569] group-hover:text-[#a78bfa] transition-colors shrink-0" />
+              </Link>
             </div>
           )}
 

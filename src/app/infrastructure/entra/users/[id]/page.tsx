@@ -6,7 +6,7 @@ import {
   ArrowLeft, ChevronDown, ChevronUp, Shield, Smartphone, Users,
   Key, Activity, User, MapPin, Phone, Mail, Building2,
   CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw,
-  Globe, Fingerprint, BadgeCheck, Monitor,
+  Globe, Fingerprint, BadgeCheck, Monitor, HardDrive, Inbox,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -78,6 +78,20 @@ interface SignIn {
   conditionalAccessStatus: string
 }
 
+interface DriveQuota {
+  used: number
+  remaining: number
+  total: number
+  state: string
+}
+
+interface MailFolder {
+  id: string
+  displayName: string
+  totalItemCount: number
+  sizeInBytes: number
+}
+
 interface UserDetail {
   profile: UserProfile | null
   memberOf: MemberOf[]
@@ -85,6 +99,8 @@ interface UserDetail {
   authMethods: AuthMethod[]
   licenseDetails: LicenseDetail[]
   signIns: SignIn[]
+  drive: { id: string; quota: DriveQuota } | null
+  mailFolders: MailFolder[]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -161,6 +177,12 @@ function fmt(iso?: string | null) {
 function fmtDate(iso?: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+function fmtBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(0)} MB`
+  return `${(bytes / 1073741824).toFixed(2)} GB`
 }
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
@@ -282,7 +304,7 @@ export default function UserProfilePage() {
     )
   }
 
-  const { profile, memberOf, devices, authMethods, licenseDetails, signIns } = data
+  const { profile, memberOf, devices, authMethods, licenseDetails, signIns, drive, mailFolders } = data
   const color = avatarColor(profile.displayName)
 
   const directoryRoles = memberOf.filter(m => m['@odata.type'] === '#microsoft.graph.directoryRole')
@@ -643,6 +665,75 @@ export default function UserProfilePage() {
               </div>
             )}
         </Section>
+
+        {/* ── Storage ── */}
+        {(drive || mailFolders.length > 0) && (
+          <Section id="storage" title="Storage & Mailbox" icon={HardDrive} color="#0891b2">
+            <div className="p-5 space-y-4">
+              {/* OneDrive */}
+              {drive?.quota && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <HardDrive className="w-3.5 h-3.5 text-[#0891b2]" />
+                    <p className="text-xs font-semibold text-[#e2e8f0]">OneDrive</p>
+                    <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      drive.quota.state === 'normal'  ? 'bg-[#10b98122] text-[#10b981]' :
+                      drive.quota.state === 'warning' ? 'bg-[#f59e0b22] text-[#f59e0b]' :
+                                                         'bg-[#ef444422] text-[#ef4444]'
+                    }`}>{drive.quota.state}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-[#475569] mb-1">
+                    <span>{fmtBytes(drive.quota.used)} used</span>
+                    <span>{fmtBytes(drive.quota.total)} total</span>
+                  </div>
+                  <div className="h-2 bg-[#1a2f4a] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.9 ? 'bg-[#ef4444]' :
+                        drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.7 ? 'bg-[#f59e0b]' :
+                        'bg-[#0891b2]'
+                      }`}
+                      style={{ width: drive.quota.total > 0 ? `${Math.min(100, (drive.quota.used / drive.quota.total) * 100).toFixed(1)}%` : '0%' }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-[#334155] mt-1">
+                    {fmtBytes(drive.quota.remaining)} remaining
+                  </p>
+                </div>
+              )}
+
+              {/* Mailbox folders */}
+              {mailFolders.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Inbox className="w-3.5 h-3.5 text-[#7c3aed]" />
+                    <p className="text-xs font-semibold text-[#e2e8f0]">Mailbox</p>
+                    <span className="ml-auto text-[10px] text-[#475569]">
+                      Total: {fmtBytes(mailFolders.reduce((s, f) => s + (f.sizeInBytes || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-[#1a2f4a] rounded-xl border border-[#1a2f4a] overflow-hidden">
+                    {mailFolders.slice(0, 10).map(f => (
+                      <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-[#0a1525] hover:bg-[#0d1f35] transition-colors">
+                        <span className="text-xs text-[#94a3b8]">{f.displayName}</span>
+                        <div className="flex items-center gap-4 text-[11px] text-[#475569]">
+                          <span>{(f.totalItemCount || 0).toLocaleString()} items</span>
+                          <span className="w-16 text-right font-mono">{fmtBytes(f.sizeInBytes || 0)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!drive && mailFolders.length === 0 && (
+                <p className="text-center py-4 text-xs text-[#475569]">
+                  Storage data not available. Add <code className="text-[#a78bfa] font-mono text-[10px]">Files.Read.All</code> and <code className="text-[#a78bfa] font-mono text-[10px]">Mail.ReadBasic.All</code> to the App Registration.
+                </p>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* ── Sign-in Activity ── */}
         <Section id="signins" title="Sign-in Activity" icon={Activity} count={signIns.length} color="#be123c">

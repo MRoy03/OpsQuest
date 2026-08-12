@@ -11,7 +11,7 @@ import {
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2,
   Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
   Printer, Map, Calendar, Settings, Network, Lock, Globe, Crown,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Users, ShieldPlus,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -86,6 +86,17 @@ const ADMIN_GROUPS = [
       { href: '/infrastructure/rings',             label: 'Update Rings',     icon: RefreshCcw },
       { href: '/infrastructure/scheduled-scripts', label: 'Scheduled Scripts',icon: Calendar },
       { href: '/infrastructure/catalog',           label: 'App Catalog',      icon: Package },
+    ],
+  },
+  {
+    key:   'identity',
+    label: 'Identity',
+    icon:  Users,
+    hub:   '/infrastructure/entra',
+    color: '#7c3aed',
+    items: [
+      { href: '/infrastructure/entra',            label: 'Entra Users',      icon: Users },
+      { href: '/infrastructure/entra/governance', label: 'Governance',       icon: ShieldPlus },
     ],
   },
 ]
@@ -259,7 +270,10 @@ export default function Sidebar() {
                       >
                         <div className="ml-3 mt-0.5 mb-1 border-l border-[#1a2f4a] pl-2 space-y-0.5">
                           {visibleItems.map(({ href, label, icon: Icon }) => {
-                            const active = pathname.startsWith(href)
+                            // Precise active: exact match, or starts-with only if no sibling is more specific
+                            const active = pathname === href ||
+                              (pathname.startsWith(href + '/') &&
+                               !visibleItems.some(other => other.href !== href && pathname.startsWith(other.href)))
                             return (
                               <Link key={href} href={href} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-all duration-150 ${
                                 active ? 'bg-[#00d4ff11] text-[#00d4ff]' : 'text-[#475569] hover:text-[#94a3b8] hover:bg-[#ffffff08]'

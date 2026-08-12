@@ -59,8 +59,10 @@ export async function GET(
     const token = await getToken()
 
     // Run all Graph calls in parallel; each fails gracefully
-    const [profileRes, memberOfRes, devicesRes, authMethodsRes, licensesRes, signInsRes] =
-      await Promise.allSettled([
+    const [
+      profileRes, memberOfRes, devicesRes, authMethodsRes,
+      licensesRes, signInsRes, driveRes, mailFoldersRes,
+    ] = await Promise.allSettled([
         // Full profile
         graphGet(
           `/users/${encodeURIComponent(id)}` +
@@ -100,6 +102,17 @@ export async function GET(
           `clientAppUsed,appDisplayName,riskLevelAggregated,conditionalAccessStatus`,
           token
         ),
+        // OneDrive storage quota (requires Files.Read.All)
+        graphGetSafe(
+          `/users/${encodeURIComponent(id)}/drive?$select=id,quota`,
+          token
+        ),
+        // Mailbox folder sizes (requires Mail.ReadBasic.All or Mail.Read)
+        graphGetSafe(
+          `/users/${encodeURIComponent(id)}/mailFolders` +
+          `?$select=id,displayName,totalItemCount,sizeInBytes&$top=20`,
+          token
+        ),
       ])
 
     return NextResponse.json({
@@ -109,6 +122,8 @@ export async function GET(
       authMethods:    authMethodsRes.status  === 'fulfilled' ? (authMethodsRes.value?.value ?? []) : [],
       licenseDetails: licensesRes.status     === 'fulfilled' ? (licensesRes.value?.value ?? [])    : [],
       signIns:        signInsRes.status      === 'fulfilled' ? (signInsRes.value?.value ?? [])     : [],
+      drive:          driveRes.status        === 'fulfilled' ? driveRes.value                      : null,
+      mailFolders:    mailFoldersRes.status  === 'fulfilled' ? (mailFoldersRes.value?.value ?? []) : [],
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
