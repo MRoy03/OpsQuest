@@ -25,6 +25,7 @@ interface DeptMfa { department: string; total: number; registered: number }
 interface MfaCoverageData {
   totalUsers: number; mfaRegistered: number
   departments: DeptMfa[]; users: MfaUser[]
+  permissionDenied?: boolean
 }
 
 interface AppPermission {
@@ -44,14 +45,24 @@ interface StaleUser {
   id: string; displayName: string; mail: string
   department: string; licensed: boolean; createdDateTime: string
 }
-interface StaleAccountsData { totalLicensed: number; staleCount: number; users: StaleUser[] }
+interface LicensedUser {
+  id: string; displayName: string; mail: string
+  department: string; hasRecentSignIn: boolean; createdDateTime: string
+}
+interface StaleAccountsData {
+  totalLicensed: number; staleCount: number; users: StaleUser[]
+  allLicensed?: LicensedUser[]; signInsAvailable?: boolean; windowDays?: number
+}
 
 interface LicenseSku {
   skuId: string; skuPartNumber: string
   purchased: number; consumed: number; available: number
 }
 interface DisabledLicUser { id: string; displayName: string; mail: string; licenses: string[] }
-interface LicenseWasteData { skus: LicenseSku[]; disabledWithLicenses: DisabledLicUser[] }
+interface LicenseWasteData {
+  skus: LicenseSku[]; disabledWithLicenses: DisabledLicUser[]
+  subscriptionError?: string | null
+}
 
 interface GuestUser {
   id: string; displayName: string; mail: string
@@ -85,7 +96,7 @@ interface GroupInfo {
 }
 interface GroupHealthData {
   totalGroups: number; issuesFound: number; ownerless: number; empty: number
-  groups: GroupInfo[]
+  groups: GroupInfo[]; groupsError?: string | null
 }
 
 interface DeptInfo {
@@ -329,7 +340,7 @@ function AppSecretsView({ d, onRefresh, loading }: { d: AppSecretsData; onRefres
 }
 
 function MfaCoverageView({ d, onRefresh, loading }: { d: MfaCoverageData; onRefresh: () => void; loading: boolean }) {
-  const pct = d.totalUsers > 0 ? Math.round((d.mfaRegistered / d.totalUsers) * 100) : 0
+  const pct = d.totalUsers > 0 && !d.permissionDenied ? Math.round((d.mfaRegistered / d.totalUsers) * 100) : 0
   const barColor = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444'
   const users = d.users ?? []
   const depts = d.departments ?? []
@@ -337,10 +348,20 @@ function MfaCoverageView({ d, onRefresh, loading }: { d: MfaCoverageData; onRefr
   return (
     <div>
       <ViewHeader title="MFA Coverage Dashboard" desc="Multi-factor authentication registration status." onRefresh={onRefresh} loading={loading} />
+
+      {d.permissionDenied && (
+        <div className="rounded border border-[#f59e0b30] bg-[#f59e0b08] px-3 py-2 mb-3 flex items-start gap-2 text-[11px] text-[#f59e0b]">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            MFA data unavailable — grant <code className="font-mono bg-[#060b18] px-1 rounded text-[10px]">UserAuthenticationMethod.Read.All</code> in Azure Portal → App Registration → API Permissions → Add a permission → Microsoft Graph → Application permissions.
+          </span>
+        </div>
+      )}
+
       <StatRow stats={[
-        { label: 'Total Users',    value: d.totalUsers ?? 0,    color: 'cyan' },
-        { label: 'MFA Registered', value: d.mfaRegistered ?? 0, color: 'green' },
-        { label: 'Coverage',       value: `${pct}%`,            color: pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red' },
+        { label: 'Total Users',    value: d.totalUsers ?? 0,                              color: 'cyan' },
+        { label: 'MFA Registered', value: d.permissionDenied ? '—' : d.mfaRegistered ?? 0, color: 'green' },
+        { label: 'Coverage',       value: d.permissionDenied ? 'N/A' : `${pct}%`,          color: d.permissionDenied ? 'muted' : pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red' },
       ]} />
 
       {/* Coverage bar */}
@@ -479,30 +500,52 @@ function RoleChangesView({ d, onRefresh, loading }: { d: RoleChangesData; onRefr
 }
 
 function StaleAccountsView({ d, onRefresh, loading }: { d: StaleAccountsData; onRefresh: () => void; loading: boolean }) {
-  const users = d.users ?? []
+  const allLicensed = d.allLicensed ?? []
+  const noSignIn = allLicensed.filter(u => !u.hasRecentSignIn)
+  const withSignIn = allLicensed.filter(u => u.hasRecentSignIn)
+  const windowDays = d.windowDays ?? 7
+  const [showAll, setShowAll] = useState(false)
+  const rows = showAll ? allLicensed : noSignIn
+
   return (
     <div>
-      <ViewHeader title="Stale Account Detector" desc="Licensed users with no sign-in recorded in the last 7 days." onRefresh={onRefresh} loading={loading} />
+      <ViewHeader title="Licensed User Sign-In Activity" desc={`Sign-in status within the last ${windowDays} days (Entra P0 window).`} onRefresh={onRefresh} loading={loading} />
       <StatRow stats={[
-        { label: 'Total Licensed',    value: d.totalLicensed ?? 0, color: 'cyan' },
-        { label: 'No Recent Sign-In', value: d.staleCount ?? 0,    color: 'amber' },
-        { label: 'Potential Waste',   value: `${d.staleCount ?? 0} users`, color: 'red' },
+        { label: 'Total Licensed',      value: d.totalLicensed ?? 0, color: 'cyan' },
+        { label: `Active (${windowDays}d)`, value: withSignIn.length,  color: 'green' },
+        { label: 'No Recent Sign-In',   value: noSignIn.length,      color: noSignIn.length > 0 ? 'amber' : 'green' },
       ]} />
       <div className="rounded border border-[#1a2f4a] bg-[#0a1525] px-3 py-1.5 mb-3 flex items-center gap-1.5 text-[10px] text-[#475569]">
         <Info className="w-3 h-3 shrink-0 text-[#334155]" />
-        Sign-in data available for 7-day window only (Entra P0 — upgrade to P1/P2 for 30-day history)
+        <span>Sign-in logs cover only the last {windowDays} days on Entra P0. &quot;No sign-in&quot; includes users on leave or using cached credentials.</span>
       </div>
-      {users.length === 0 ? <EmptyView label="No stale licensed accounts found" /> : (
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          onClick={() => setShowAll(false)}
+          className={`text-[11px] px-2.5 py-1 rounded border transition-all ${!showAll ? 'bg-[#f59e0b18] border-[#f59e0b30] text-[#f59e0b]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}
+        >No Sign-In ({noSignIn.length})</button>
+        <button
+          onClick={() => setShowAll(true)}
+          className={`text-[11px] px-2.5 py-1 rounded border transition-all ${showAll ? 'bg-[#00d4ff12] border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}
+        >All Licensed ({d.totalLicensed ?? 0})</button>
+      </div>
+      {rows.length === 0
+        ? <EmptyView label={showAll ? 'No licensed users found' : 'All licensed users have recent sign-in activity'} />
+        : (
         <CompactTable
-          headers={['User', 'Email', 'Department', 'Licensed', 'Created']}
+          headers={['User', 'Email', 'Department', 'Sign-In (7d)', 'Created']}
           empty={false}
-          rows={users.map(u => (
+          rows={rows.map(u => (
             <tr key={u.id} className="hover:bg-[#ffffff04] transition-colors">
               <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{u.displayName}</td>
               <td className="px-3 py-1.5 font-mono text-[#64748b]">{u.mail}</td>
               <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
               <td className="px-3 py-1.5">
-                <span className={u.licensed ? 'text-[#10b981]' : 'text-[#f59e0b]'}>{u.licensed ? 'Yes' : 'No'}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                  u.hasRecentSignIn
+                    ? 'bg-[#10b98118] text-[#10b981] border-[#10b98130]'
+                    : 'bg-[#f59e0b18] text-[#f59e0b] border-[#f59e0b30]'
+                }`}>{u.hasRecentSignIn ? 'Active' : 'None'}</span>
               </td>
               <td className="px-3 py-1.5 text-[#64748b]">{fmt(u.createdDateTime)}</td>
             </tr>
@@ -519,6 +562,14 @@ function LicenseWasteView({ d, onRefresh, loading }: { d: LicenseWasteData; onRe
   return (
     <div>
       <ViewHeader title="License Waste Report" desc="Unused and over-provisioned Microsoft 365 licenses." onRefresh={onRefresh} loading={loading} />
+      {d.subscriptionError && (
+        <div className="rounded border border-[#f59e0b30] bg-[#f59e0b08] px-3 py-2 mb-3 flex items-start gap-2 text-[11px] text-[#f59e0b]">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            License subscription data unavailable — grant <code className="font-mono bg-[#060b18] px-1 rounded text-[10px]">Organization.Read.All</code> in Azure Portal → App Registration → API Permissions.
+          </span>
+        </div>
+      )}
 
       {skus.length > 0 && (
         <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] divide-y divide-[#1a2f4a] mb-3 overflow-hidden">
@@ -713,6 +764,14 @@ function GroupHealthView({ d, onRefresh, loading }: { d: GroupHealthData; onRefr
   return (
     <div>
       <ViewHeader title="Group Health Report" desc="Groups with governance issues across your tenant." onRefresh={onRefresh} loading={loading} />
+      {d.groupsError && (
+        <div className="rounded border border-[#f59e0b30] bg-[#f59e0b08] px-3 py-2 mb-3 flex items-start gap-2 text-[11px] text-[#f59e0b]">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Group data unavailable — grant <code className="font-mono bg-[#060b18] px-1 rounded text-[10px]">Group.Read.All</code> in Azure Portal → App Registration → API Permissions.
+          </span>
+        </div>
+      )}
       <StatRow stats={[
         { label: 'Total Groups', value: d.totalGroups ?? 0, color: 'cyan' },
         { label: 'Issues Found', value: d.issuesFound ?? 0, color: 'amber' },
@@ -827,6 +886,7 @@ export default function GovernancePage() {
           mfaRegistered: json.mfaEnabled ?? 0,
           departments: (json.byDepartment ?? []).map((d: any) => ({ department: d.dept, total: d.total, registered: d.mfa })),
           users: (json.users ?? []).map((u: any) => ({ ...u, mfaRegistered: u.hasMFA })),
+          permissionDenied: json.permissionDenied ?? false,
         }
       case 'service_principals':
         return {
@@ -851,12 +911,21 @@ export default function GovernancePage() {
         }
       case 'stale_accounts': {
         const users = (json.stale ?? []).map((u: any) => ({ ...u, licensed: u.hasLicense }))
-        return { totalLicensed: json.totalLicensed ?? 0, staleCount: users.length, users }
+        const allLicensed = (json.allLicensed ?? []) as LicensedUser[]
+        return {
+          totalLicensed: json.totalLicensed ?? 0,
+          staleCount: users.length,
+          users,
+          allLicensed,
+          signInsAvailable: json.signInsAvailable ?? false,
+          windowDays: json.windowDays ?? 7,
+        }
       }
       case 'license_waste':
         return {
           skus: json.skus ?? [],
           disabledWithLicenses: (json.disabledWithLicense ?? []).map((u: any) => ({ ...u, licenses: [] })),
+          subscriptionError: json.subscriptionError ?? null,
         }
       case 'guests':
         return {
@@ -911,6 +980,7 @@ export default function GovernancePage() {
           ownerless: groups.filter((g: any) => g.ownerCount === 0).length,
           empty: groups.filter((g: any) => g.memberCount === 0).length,
           groups,
+          groupsError: json.groupsError ?? null,
         }
       }
       case 'org_structure': {

@@ -11,7 +11,7 @@ import {
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2,
   Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
   Printer, Map, Calendar, Settings, Network, Lock, Globe, Crown,
-  ChevronDown, ChevronRight, Users, ShieldPlus,
+  ChevronDown, ChevronRight, Users,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -70,6 +70,7 @@ const ADMIN_GROUPS = [
       { href: '/infrastructure/blocklist',  label: 'SW Blocklist', icon: ShieldAlert },
       { href: '/infrastructure/health',     label: 'Health Scores',icon: Activity },
       { href: '/admin/audit',               label: 'Audit Log',    icon: ClipboardList },
+      { href: '/infrastructure/entra',      label: 'Entra ID',     icon: Users },
     ],
   },
   {
@@ -86,17 +87,6 @@ const ADMIN_GROUPS = [
       { href: '/infrastructure/rings',             label: 'Update Rings',     icon: RefreshCcw },
       { href: '/infrastructure/scheduled-scripts', label: 'Scheduled Scripts',icon: Calendar },
       { href: '/infrastructure/catalog',           label: 'App Catalog',      icon: Package },
-    ],
-  },
-  {
-    key:   'identity',
-    label: 'Identity',
-    icon:  Users,
-    hub:   '/infrastructure/entra',
-    color: '#7c3aed',
-    items: [
-      { href: '/infrastructure/entra',            label: 'Entra Users',      icon: Users },
-      { href: '/infrastructure/entra/governance', label: 'Governance',       icon: ShieldPlus },
     ],
   },
 ]

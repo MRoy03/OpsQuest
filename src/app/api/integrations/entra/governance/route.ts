@@ -143,18 +143,29 @@ async function handleMfaCoverage(token: string) {
   )
   const users: any[] = data.value ?? []
 
-  // Process in parallel batches of 15
-  const batchSize = 15
+  // Process in batches of 10; use null as fallback to detect 403
+  const batchSize = 10
   const enriched: any[] = []
+  let permissionDenied = false
+
   for (let i = 0; i < users.length; i += batchSize) {
     const batch = users.slice(i, i + batchSize)
     const results = await Promise.all(
       batch.map(async (u: any) => {
+        // null fallback = call failed (likely 403 - needs UserAuthenticationMethod.Read.All)
         const methodsData = await graphGetSafe(
           `/users/${u.id}/authentication/methods`,
           token,
-          { value: [] }
+          null
         )
+        if (methodsData === null) {
+          permissionDenied = true
+          return {
+            id: u.id, displayName: u.displayName, mail: u.mail,
+            department: u.department, jobTitle: u.jobTitle,
+            hasMFA: false, methodCount: -1, methods: [],
+          }
+        }
         const methods: any[] = methodsData?.value ?? []
         const methodTypes: string[] = methods.map((m: any) => m['@odata.type'] ?? '')
         const passwordOnly =
@@ -163,21 +174,17 @@ async function handleMfaCoverage(token: string) {
         const hasMFA = methods.length > 1 || (methods.length === 1 && !passwordOnly)
 
         return {
-          id:          u.id,
-          displayName: u.displayName,
-          mail:        u.mail,
-          department:  u.department,
-          jobTitle:    u.jobTitle,
-          hasMFA,
-          methodCount: methods.length,
-          methods:     methodTypes,
+          id: u.id, displayName: u.displayName, mail: u.mail,
+          department: u.department, jobTitle: u.jobTitle,
+          hasMFA, methodCount: methods.length, methods: methodTypes,
         }
       })
     )
     enriched.push(...results)
   }
 
-  const mfaEnabled = enriched.filter(u => u.hasMFA).length
+  // If all users had permission denied, mfaEnabled is meaningless - flag it
+  const mfaEnabled = permissionDenied ? 0 : enriched.filter(u => u.hasMFA).length
 
   // Aggregate by department
   const deptMap: Record<string, { total: number; mfa: number }> = {}
@@ -192,8 +199,9 @@ async function handleMfaCoverage(token: string) {
   return NextResponse.json({
     total: enriched.length,
     mfaEnabled,
-    users: enriched,
-    byDepartment,
+    users: permissionDenied ? [] : enriched, // don't send useless 0-MFA rows
+    byDepartment: permissionDenied ? [] : byDepartment,
+    permissionDenied,
   })
 }
 
@@ -291,7 +299,7 @@ async function handleRoleChanges(token: string) {
 
 // scope=stale_accounts
 async function handleStaleAccounts(token: string) {
-  const [usersData, signInsData] = await Promise.all([
+  const [usersRes, signInsRes] = await Promise.allSettled([
     graphGet(
       '/users?$filter=accountEnabled eq true&$select=id,displayName,mail,department,jobTitle,createdDateTime,assignedLicenses&$top=999',
       token
@@ -303,31 +311,40 @@ async function handleStaleAccounts(token: string) {
     ),
   ])
 
-  const users: any[] = usersData.value ?? []
-  const signIns: any[] = signInsData?.value ?? []
+  const users: any[] = usersRes.status === 'fulfilled' ? (usersRes.value.value ?? []) : []
+  const signIns: any[] = (signInsRes.status === 'fulfilled' ? signInsRes.value?.value : null) ?? []
   const recentUserIds = new Set(signIns.map((s: any) => s.userId))
+  const signInsAvailable = recentUserIds.size > 0
 
   const licensed = users.filter((u: any) => (u.assignedLicenses?.length ?? 0) > 0)
+  // "No recent sign-in" = licensed user not seen in the 7-day sign-in window
   const stale = licensed.filter((u: any) => !recentUserIds.has(u.id))
 
   return NextResponse.json({
+    // Legacy "stale" array for backward compat
     stale: stale.map((u: any) => ({
-      id:              u.id,
-      displayName:     u.displayName,
-      mail:            u.mail,
-      department:      u.department,
-      jobTitle:        u.jobTitle,
-      hasLicense:      true,
+      id: u.id, displayName: u.displayName, mail: u.mail,
+      department: u.department, jobTitle: u.jobTitle,
+      hasLicense: true, createdDateTime: u.createdDateTime,
+    })),
+    // Full picture: all licensed users with sign-in status
+    allLicensed: licensed.map((u: any) => ({
+      id: u.id, displayName: u.displayName, mail: u.mail,
+      department: u.department, jobTitle: u.jobTitle,
+      hasRecentSignIn: recentUserIds.has(u.id),
       createdDateTime: u.createdDateTime,
     })),
     totalLicensed:     licensed.length,
     recentSigninCount: recentUserIds.size,
+    signInsAvailable,
+    windowDays: 7,
   })
 }
 
 // scope=license_waste
 async function handleLicenseWaste(token: string) {
-  const [skusData, disabledData] = await Promise.all([
+  // Use allSettled so a 403 on subscriptions doesn't kill the whole response
+  const [skusRes, disabledRes] = await Promise.allSettled([
     graphGet('/subscribedSkus?$select=skuId,skuPartNumber,consumedUnits,prepaidUnits', token),
     graphGet(
       '/users?$filter=accountEnabled eq false&$select=id,displayName,mail,department,assignedLicenses,createdDateTime&$top=999',
@@ -335,27 +352,36 @@ async function handleLicenseWaste(token: string) {
     ),
   ])
 
-  const skus = (skusData.value ?? []).map((s: any) => ({
-    skuId:        s.skuId,
-    skuPartNumber: s.skuPartNumber,
-    consumed:     s.consumedUnits ?? 0,
-    purchased:    s.prepaidUnits?.enabled ?? 0,
-    available:    (s.prepaidUnits?.enabled ?? 0) - (s.consumedUnits ?? 0),
-    state:        s.prepaidUnits?.suspended > 0 ? 'suspended' : 'active',
-  }))
+  const skus = skusRes.status === 'fulfilled'
+    ? (skusRes.value.value ?? []).map((s: any) => ({
+        skuId:         s.skuId,
+        skuPartNumber: s.skuPartNumber,
+        consumed:      s.consumedUnits ?? 0,
+        purchased:     s.prepaidUnits?.enabled ?? 0,
+        available:     (s.prepaidUnits?.enabled ?? 0) - (s.consumedUnits ?? 0),
+        state:         (s.prepaidUnits?.suspended ?? 0) > 0 ? 'suspended' : 'active',
+      }))
+    : []
 
-  const disabledWithLicense = (disabledData.value ?? [])
-    .filter((u: any) => (u.assignedLicenses?.length ?? 0) > 0)
-    .map((u: any) => ({
-      id:              u.id,
-      displayName:     u.displayName,
-      mail:            u.mail,
-      department:      u.department,
-      assignedLicenses: u.assignedLicenses,
-      createdDateTime: u.createdDateTime,
-    }))
+  const disabledWithLicense = disabledRes.status === 'fulfilled'
+    ? (disabledRes.value.value ?? [])
+        .filter((u: any) => (u.assignedLicenses?.length ?? 0) > 0)
+        .map((u: any) => ({
+          id:               u.id,
+          displayName:      u.displayName,
+          mail:             u.mail,
+          department:       u.department,
+          assignedLicenses: u.assignedLicenses,
+          createdDateTime:  u.createdDateTime,
+        }))
+    : []
 
-  return NextResponse.json({ skus, disabledWithLicense })
+  // Surface a soft warning (not a hard error) if subscriptions failed
+  const subscriptionError = skusRes.status === 'rejected'
+    ? ((skusRes.reason as Error)?.message ?? 'Failed to fetch subscriptions').slice(0, 300)
+    : null
+
+  return NextResponse.json({ skus, disabledWithLicense, subscriptionError })
 }
 
 // scope=guests
@@ -468,23 +494,30 @@ async function handlePasswordResets(token: string) {
 
 // scope=group_health
 async function handleGroupHealth(token: string) {
-  const data = await graphGet(
-    '/groups?$select=id,displayName,mail,groupTypes,visibility,createdDateTime,securityEnabled,mailEnabled,description&$top=200',
-    token
-  )
-  const groups: any[] = data.value ?? []
+  let groups: any[] = []
+  let groupsError: string | null = null
+
+  try {
+    const data = await graphGet(
+      '/groups?$select=id,displayName,mail,groupTypes,visibility,createdDateTime,securityEnabled,mailEnabled,description&$top=200',
+      token
+    )
+    groups = data.value ?? []
+  } catch (e: unknown) {
+    // Return empty instead of HTTP 500 so the UI shows a soft warning, not a red error
+    groupsError = ((e as Error)?.message ?? 'Failed to list groups').slice(0, 300)
+    return NextResponse.json({ groups: [], groupsError })
+  }
 
   const batchSize = 10
   const enriched: any[] = []
 
   for (let i = 0; i < groups.length; i += batchSize) {
     const batch = groups.slice(i, i + batchSize)
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       batch.map(async (g: any) => {
-        const [memberCount, ownersData] = await Promise.all([
-          graphCount(`/groups/${g.id}/members/$count`, token),
-          graphGetSafe(`/groups/${g.id}/owners?$select=id,displayName`, token, { value: [] }),
-        ])
+        const memberCount = await graphCount(`/groups/${g.id}/members/$count`, token)
+        const ownersData  = await graphGetSafe(`/groups/${g.id}/owners?$select=id,displayName`, token, { value: [] })
         const owners: any[] = ownersData?.value ?? []
         const ownerCount = owners.length
 
@@ -508,10 +541,13 @@ async function handleGroupHealth(token: string) {
         }
       })
     )
-    enriched.push(...results)
+    // Only include successfully enriched groups
+    for (const r of results) {
+      if (r.status === 'fulfilled') enriched.push(r.value)
+    }
   }
 
-  return NextResponse.json({ groups: enriched })
+  return NextResponse.json({ groups: enriched, groupsError: null })
 }
 
 // scope=org_structure

@@ -666,74 +666,76 @@ export default function UserProfilePage() {
             )}
         </Section>
 
-        {/* ── Storage ── */}
-        {(drive || mailFolders.length > 0) && (
-          <Section id="storage" title="Storage & Mailbox" icon={HardDrive} color="#0891b2">
-            <div className="p-5 space-y-4">
-              {/* OneDrive */}
-              {drive?.quota && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <HardDrive className="w-3.5 h-3.5 text-[#0891b2]" />
-                    <p className="text-xs font-semibold text-[#e2e8f0]">OneDrive</p>
-                    <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      drive.quota.state === 'normal'  ? 'bg-[#10b98122] text-[#10b981]' :
-                      drive.quota.state === 'warning' ? 'bg-[#f59e0b22] text-[#f59e0b]' :
-                                                         'bg-[#ef444422] text-[#ef4444]'
-                    }`}>{drive.quota.state}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-[#475569] mb-1">
-                    <span>{fmtBytes(drive.quota.used)} used</span>
-                    <span>{fmtBytes(drive.quota.total)} total</span>
-                  </div>
-                  <div className="h-2 bg-[#1a2f4a] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.9 ? 'bg-[#ef4444]' :
-                        drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.7 ? 'bg-[#f59e0b]' :
-                        'bg-[#0891b2]'
-                      }`}
-                      style={{ width: drive.quota.total > 0 ? `${Math.min(100, (drive.quota.used / drive.quota.total) * 100).toFixed(1)}%` : '0%' }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-[#334155] mt-1">
-                    {fmtBytes(drive.quota.remaining)} remaining
-                  </p>
+        {/* ── Storage ── always rendered; shows permission hint when data unavailable */}
+        <Section id="storage" title="Storage & Mailbox" icon={HardDrive} color="#0891b2">
+          <div className="p-5 space-y-4">
+            {/* OneDrive */}
+            {drive?.quota ? (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <HardDrive className="w-3.5 h-3.5 text-[#0891b2]" />
+                  <p className="text-xs font-semibold text-[#e2e8f0]">OneDrive</p>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    drive.quota.state === 'normal'  ? 'bg-[#10b98122] text-[#10b981]' :
+                    drive.quota.state === 'warning' ? 'bg-[#f59e0b22] text-[#f59e0b]' :
+                                                       'bg-[#ef444422] text-[#ef4444]'
+                  }`}>{drive.quota.state}</span>
                 </div>
-              )}
-
-              {/* Mailbox folders */}
-              {mailFolders.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Inbox className="w-3.5 h-3.5 text-[#7c3aed]" />
-                    <p className="text-xs font-semibold text-[#e2e8f0]">Mailbox</p>
-                    <span className="ml-auto text-[10px] text-[#475569]">
-                      Total: {fmtBytes(mailFolders.reduce((s, f) => s + (f.sizeInBytes || 0), 0))}
-                    </span>
-                  </div>
-                  <div className="divide-y divide-[#1a2f4a] rounded-xl border border-[#1a2f4a] overflow-hidden">
-                    {mailFolders.slice(0, 10).map(f => (
-                      <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-[#0a1525] hover:bg-[#0d1f35] transition-colors">
-                        <span className="text-xs text-[#94a3b8]">{f.displayName}</span>
-                        <div className="flex items-center gap-4 text-[11px] text-[#475569]">
-                          <span>{(f.totalItemCount || 0).toLocaleString()} items</span>
-                          <span className="w-16 text-right font-mono">{fmtBytes(f.sizeInBytes || 0)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex items-center justify-between text-[11px] text-[#475569] mb-1">
+                  <span>{fmtBytes(drive.quota.used)} used</span>
+                  <span>{fmtBytes(drive.quota.total)} total</span>
                 </div>
-              )}
-
-              {!drive && mailFolders.length === 0 && (
-                <p className="text-center py-4 text-xs text-[#475569]">
-                  Storage data not available. Add <code className="text-[#a78bfa] font-mono text-[10px]">Files.Read.All</code> and <code className="text-[#a78bfa] font-mono text-[10px]">Mail.ReadBasic.All</code> to the App Registration.
+                <div className="h-2 bg-[#1a2f4a] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.9 ? 'bg-[#ef4444]' :
+                      drive.quota.total > 0 && drive.quota.used / drive.quota.total > 0.7 ? 'bg-[#f59e0b]' :
+                      'bg-[#0891b2]'
+                    }`}
+                    style={{ width: drive.quota.total > 0 ? `${Math.min(100, (drive.quota.used / drive.quota.total) * 100).toFixed(1)}%` : '0%' }}
+                  />
+                </div>
+                <p className="text-[10px] text-[#334155] mt-1">
+                  {fmtBytes(drive.quota.remaining)} remaining
                 </p>
-              )}
-            </div>
-          </Section>
-        )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a1525] border border-[#1a2f4a]">
+                <HardDrive className="w-3.5 h-3.5 text-[#334155] shrink-0" />
+                <span className="text-[11px] text-[#475569]">OneDrive — grant <code className="text-[#a78bfa] font-mono text-[10px]">Files.Read.All</code> permission to see quota</span>
+              </div>
+            )}
+
+            {/* Mailbox folders */}
+            {mailFolders.length > 0 ? (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Inbox className="w-3.5 h-3.5 text-[#7c3aed]" />
+                  <p className="text-xs font-semibold text-[#e2e8f0]">Mailbox</p>
+                  <span className="ml-auto text-[10px] text-[#475569]">
+                    Total: {fmtBytes(mailFolders.reduce((s, f) => s + (f.sizeInBytes || 0), 0))}
+                  </span>
+                </div>
+                <div className="divide-y divide-[#1a2f4a] rounded-xl border border-[#1a2f4a] overflow-hidden">
+                  {mailFolders.slice(0, 10).map(f => (
+                    <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-[#0a1525] hover:bg-[#0d1f35] transition-colors">
+                      <span className="text-xs text-[#94a3b8]">{f.displayName}</span>
+                      <div className="flex items-center gap-4 text-[11px] text-[#475569]">
+                        <span>{(f.totalItemCount || 0).toLocaleString()} items</span>
+                        <span className="w-16 text-right font-mono">{fmtBytes(f.sizeInBytes || 0)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a1525] border border-[#1a2f4a]">
+                <Inbox className="w-3.5 h-3.5 text-[#334155] shrink-0" />
+                <span className="text-[11px] text-[#475569]">Mailbox — grant <code className="text-[#a78bfa] font-mono text-[10px]">Mail.Read.All</code> permission to see folder sizes</span>
+              </div>
+            )}
+          </div>
+        </Section>
 
         {/* ── Sign-in Activity ── */}
         <Section id="signins" title="Sign-in Activity" icon={Activity} count={signIns.length} color="#be123c">
