@@ -45,7 +45,6 @@ function AiAnswerCard({ answer, model }: { answer: string; model: string }) {
 }
 
 function DocRefsCard({ refs }: { refs: DocRef[] }) {
-  const router = useRouter()
   if (refs.length === 0) return null
   return (
     <div className="rounded-xl border border-[#00d4ff22] bg-[#00d4ff08] p-4">
@@ -55,14 +54,14 @@ function DocRefsCard({ refs }: { refs: DocRef[] }) {
       </div>
       <div className="space-y-2">
         {refs.map((ref, i) => (
-          <button key={i} onClick={() => router.push(ref.href)}
-            className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#060b18] border border-[#1a2f4a] hover:border-[#00d4ff33] text-left transition-colors group">
+          <a key={i} href={ref.href}
+            className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#060b18] border border-[#1a2f4a] hover:border-[#00d4ff33] text-left transition-colors group no-underline">
             <div>
               <p className="text-xs font-medium text-[#e2e8f0] group-hover:text-[#00d4ff] transition-colors">{ref.title}</p>
               <p className="text-[10px] text-[#475569]">{ref.section} · {ref.module}</p>
             </div>
             <ArrowRight className="w-3.5 h-3.5 text-[#475569] group-hover:text-[#00d4ff] shrink-0 transition-colors" />
-          </button>
+          </a>
         ))}
       </div>
     </div>

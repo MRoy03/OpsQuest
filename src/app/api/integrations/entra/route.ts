@@ -99,6 +99,62 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ configured: true, data: data.value })
     }
 
+    if (scope === 'charts') {
+      const [usersRes, signInsRes] = await Promise.allSettled([
+        graphGet('/users?$select=id,department,assignedLicenses,accountEnabled,createdDateTime&$top=999', token),
+        graphGet('/auditLogs/signIns?$top=500&$orderby=createdDateTime desc&$select=userId,createdDateTime,status', token),
+      ])
+
+      const users: Record<string, unknown>[] = usersRes.status === 'fulfilled' ? (usersRes.value.value ?? []) : []
+      const signIns: Record<string, unknown>[] = signInsRes.status === 'fulfilled' ? (signInsRes.value.value ?? []) : []
+
+      // Department headcount
+      const deptMap: Record<string, number> = {}
+      const now = Date.now()
+      let recentJoins = 0
+      for (const u of users) {
+        const dept = (u.department as string) || 'Unknown'
+        deptMap[dept] = (deptMap[dept] || 0) + 1
+        if (u.createdDateTime && (now - new Date(u.createdDateTime as string).getTime()) < 30 * 86400000) {
+          recentJoins++
+        }
+      }
+      const departments = Object.entries(deptMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, count }))
+
+      // Sign-in trend (last 7 days grouped by day)
+      const dayLabels = ['6d', '5d', '4d', '3d', '2d', 'Yest', 'Today']
+      const dayMap: Record<number, number> = {}
+      for (const s of signIns) {
+        const daysAgo = Math.floor((now - new Date(s.createdDateTime as string).getTime()) / 86400000)
+        if (daysAgo >= 0 && daysAgo < 7) {
+          dayMap[daysAgo] = (dayMap[daysAgo] || 0) + 1
+        }
+      }
+      const signInTrend = Array.from({ length: 7 }, (_, i) => ({
+        day: 6 - i,
+        count: dayMap[6 - i] || 0,
+        label: dayLabels[i],
+      }))
+
+      const licensed = users.filter(u => ((u.assignedLicenses as unknown[]) ?? []).length > 0).length
+
+      return NextResponse.json({
+        configured: true,
+        charts: {
+          departments,
+          signInTrend,
+          licensed,
+          unlicensed: users.length - licensed,
+          recentJoins,
+          totalUsers: users.length,
+          signInsAvailable: signIns.length > 0,
+        },
+      })
+    }
+
     // Overview: fetch users + devices counts in parallel (riskyUsers needs P2 — graceful fallback)
     const [usersResp, devicesResp, riskyResp] = await Promise.allSettled([
       graphGet('/users?$select=id,accountEnabled,assignedLicenses&$top=999', token),
