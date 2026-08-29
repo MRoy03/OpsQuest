@@ -70,7 +70,8 @@ const ADMIN_GROUPS = [
       { href: '/infrastructure/blocklist',  label: 'SW Blocklist', icon: ShieldAlert },
       { href: '/infrastructure/health',     label: 'Health Scores',icon: Activity },
       { href: '/admin/audit',               label: 'Audit Log',    icon: ClipboardList },
-      { href: '/infrastructure/entra',      label: 'Entra ID',     icon: Users },
+      { href: '/infrastructure/entra',         label: 'Entra ID',      icon: Users },
+      { href: '/infrastructure/entra/reports', label: 'Entra Reports', icon: BarChart2 },
     ],
   },
   {

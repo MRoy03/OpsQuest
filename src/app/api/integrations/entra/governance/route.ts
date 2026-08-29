@@ -522,10 +522,19 @@ async function handleGroupHealth(token: string) {
         const ownerCount = owners.length
 
         const isDynamic = (g.groupTypes ?? []).includes('DynamicMembership')
+
+        // Check for external (guest) members
+        const membersData = await graphGetSafe(
+          `/groups/${g.id}/members?$select=id,userType&$top=50`, token, { value: [] }
+        )
+        const members: any[] = membersData?.value ?? []
+        const externalCount = members.filter((m: any) => m.userType === 'Guest').length
+
         const issues: string[] = []
         if (memberCount === 0) issues.push('empty')
         if (ownerCount === 0) issues.push('ownerless')
         if (isDynamic && memberCount === 0) issues.push('dynamic-no-members')
+        if (externalCount > 0) issues.push(`${externalCount} external`)
 
         return {
           id:             g.id,
@@ -534,6 +543,7 @@ async function handleGroupHealth(token: string) {
           groupTypes:     g.groupTypes,
           memberCount,
           ownerCount,
+          externalCount,
           owners:         owners.map((o: any) => ({ id: o.id, displayName: o.displayName })),
           issues,
           createdDateTime: g.createdDateTime,
@@ -548,6 +558,337 @@ async function handleGroupHealth(token: string) {
   }
 
   return NextResponse.json({ groups: enriched, groupsError: null })
+}
+
+// scope=admin_roles
+async function handleAdminRoles(token: string) {
+  const HIGH_PRIV = [
+    'Global Administrator', 'Privileged Role Administrator', 'Security Administrator',
+    'Exchange Administrator', 'SharePoint Administrator', 'Teams Administrator',
+    'Intune Administrator', 'User Administrator', 'Authentication Administrator',
+    'Application Administrator', 'Cloud Application Administrator',
+  ]
+
+  const [rolesResp, assignmentsResp] = await Promise.allSettled([
+    graphGet('/directoryRoles?$select=id,displayName,description', token),
+    graphGet(
+      '/roleManagement/directory/roleAssignments?$expand=principal($select=id,displayName,mail,userPrincipalName,accountEnabled)&$top=999',
+      token
+    ),
+  ])
+
+  if (rolesResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
+    return NextResponse.json({
+      assignments: [], total: 0, highPrivCount: 0,
+      rolesError: 'Grant RoleManagement.Read.Directory permission in Azure Portal → App Registration → API Permissions.',
+    })
+  }
+
+  const roles: any[] = rolesResp.value.value ?? []
+  const raw: any[]   = assignmentsResp.value.value ?? []
+
+  const roleMap: Record<string, string> = {}
+  for (const r of roles) roleMap[r.id] = r.displayName
+
+  const groups: Record<string, { roleName: string; isHighPriv: boolean; members: any[] }> = {}
+  for (const a of raw) {
+    const roleName = roleMap[a.roleDefinitionId] || a.roleDefinitionId
+    if (!groups[a.roleDefinitionId]) {
+      groups[a.roleDefinitionId] = {
+        roleName,
+        isHighPriv: HIGH_PRIV.some(hp => roleName.includes(hp)),
+        members: [],
+      }
+    }
+    if (a.principal) {
+      groups[a.roleDefinitionId].members.push({
+        id:           a.principal.id,
+        displayName:  a.principal.displayName,
+        mail:         a.principal.mail || a.principal.userPrincipalName,
+        accountEnabled: a.principal.accountEnabled,
+        principalType: (a.principal['@odata.type'] || '').replace('#microsoft.graph.', ''),
+      })
+    }
+  }
+
+  const assignments = Object.values(groups).sort((a, b) => {
+    if (a.isHighPriv && !b.isHighPriv) return -1
+    if (!a.isHighPriv && b.isHighPriv) return 1
+    return b.members.length - a.members.length
+  })
+
+  return NextResponse.json({
+    assignments,
+    total: raw.length,
+    highPrivCount: assignments.filter(a => a.isHighPriv).length,
+    rolesError: null,
+  })
+}
+
+// scope=app_security (Service Principal creds + OAuth consent grants)
+async function handleAppSecurity(token: string) {
+  const [spResp, grantsResp, usersResp] = await Promise.allSettled([
+    graphGet('/servicePrincipals?$select=id,displayName,appId,passwordCredentials,keyCredentials,servicePrincipalType,publisherName&$top=999', token),
+    graphGet('/oauth2PermissionGrants?$top=999', token),
+    graphGet('/users?$select=id,displayName,mail&$top=999', token),
+  ])
+
+  const sps: any[]    = spResp.status    === 'fulfilled' ? (spResp.value.value    ?? []) : []
+  const grants: any[] = grantsResp.status === 'fulfilled' ? (grantsResp.value.value ?? []) : []
+  const users: any[]  = usersResp.status  === 'fulfilled' ? (usersResp.value.value  ?? []) : []
+
+  const userMap: Record<string, string> = {}
+  for (const u of users) userMap[u.id] = u.displayName || u.mail || u.id
+
+  const spMap: Record<string, string> = {}
+  for (const sp of sps) spMap[sp.id] = sp.displayName || sp.appId
+
+  const now = Date.now()
+  const WARN_DAYS = 90
+
+  const expiringCredentials: any[] = []
+  for (const sp of sps) {
+    if (sp.servicePrincipalType === 'ManagedIdentity') continue
+    const allCreds = [
+      ...(sp.passwordCredentials ?? []).map((c: any) => ({ ...c, credType: 'Secret' })),
+      ...(sp.keyCredentials       ?? []).map((c: any) => ({ ...c, credType: 'Certificate' })),
+    ]
+    for (const cred of allCreds) {
+      if (!cred.endDateTime) continue
+      const daysLeft = Math.ceil((new Date(cred.endDateTime).getTime() - now) / 86400000)
+      if (daysLeft <= WARN_DAYS) {
+        expiringCredentials.push({
+          appName: sp.displayName,
+          publisher: sp.publisherName || 'Unknown',
+          credType: cred.credType,
+          credName: cred.displayName || '(unnamed)',
+          endDateTime: cred.endDateTime,
+          daysLeft,
+          status: daysLeft < 0 ? 'expired' : daysLeft < 30 ? 'critical' : daysLeft < 60 ? 'warning' : 'notice',
+        })
+      }
+    }
+  }
+  expiringCredentials.sort((a, b) => a.daysLeft - b.daysLeft)
+
+  const HIGH_RISK_SCOPES = ['Mail.ReadWrite', 'Mail.Send', 'Files.ReadWrite.All',
+    'Directory.ReadWrite.All', 'User.ReadWrite.All', 'Calendars.ReadWrite', 'Contacts.ReadWrite']
+
+  const oauthGrants = grants.map((g: any) => {
+    const scopes: string[] = (g.scope || '').split(' ').filter(Boolean)
+    const highRisk = scopes.filter((s: string) => HIGH_RISK_SCOPES.some(hr => s.startsWith(hr.split('.')[0])))
+    return {
+      clientName:   spMap[g.clientId] || g.clientId,
+      principalName: g.principalId ? (userMap[g.principalId] || g.principalId) : 'All Users (Admin Consent)',
+      consentType:  g.consentType,
+      scopes,
+      highRiskScopes: highRisk,
+      risk: highRisk.length > 2 ? 'critical' : highRisk.length > 0 ? 'high' : 'medium',
+    }
+  }).sort((a: any, b: any) => {
+    const o: Record<string, number> = { critical: 0, high: 1, medium: 2 }
+    return (o[a.risk] ?? 9) - (o[b.risk] ?? 9)
+  })
+
+  return NextResponse.json({
+    expiringCredentials,
+    oauthGrants,
+    totalSPs: sps.length,
+    spError:     spResp.status    === 'rejected' ? 'Grant Application.Read.All permission'  : null,
+    grantsError: grantsResp.status === 'rejected' ? 'Grant Directory.Read.All permission'   : null,
+  })
+}
+
+// scope=directory_health (recently deleted users + domain status)
+async function handleDirectoryHealth(token: string) {
+  const [deletedResp, domainsResp] = await Promise.allSettled([
+    graphGet('/directory/deletedItems/users?$select=id,displayName,mail,deletedDateTime,department,jobTitle&$top=100', token),
+    graphGet('/domains?$select=id,isDefault,isVerified,isInitial,authenticationType&$top=100', token),
+  ])
+
+  const deleted: any[] = deletedResp.status === 'fulfilled' ? (deletedResp.value.value ?? []) : []
+  const domains: any[] = domainsResp.status === 'fulfilled' ? (domainsResp.value.value ?? []) : []
+  const now = Date.now()
+
+  return NextResponse.json({
+    deletedUsers: deleted.map((u: any) => ({
+      ...u,
+      daysUntilPermanent: u.deletedDateTime
+        ? Math.max(0, 30 - Math.floor((now - new Date(u.deletedDateTime).getTime()) / 86400000))
+        : null,
+    })),
+    domains,
+    deletedError: deletedResp.status === 'rejected' ? 'Grant Directory.Read.All permission' : null,
+    domainsError: domainsResp.status === 'rejected' ? 'Grant Domain.Read.All permission'    : null,
+  })
+}
+
+// scope=directory_insights (profile completeness + account age + auth method dist)
+async function handleDirectoryInsights(token: string) {
+  const [usersResp, authResp] = await Promise.allSettled([
+    graphGet('/users?$select=id,displayName,mail,department,jobTitle,mobilePhone,officeLocation,createdDateTime,accountEnabled,assignedLicenses&$top=999', token),
+    graphGetSafe('/reports/credentialUserRegistrationDetails?$top=999', token, { value: [] }),
+  ])
+
+  const users: any[]      = usersResp.status === 'fulfilled' ? (usersResp.value.value  ?? []) : []
+  const authDetails: any[] = authResp.status  === 'fulfilled' ? (authResp.value?.value  ?? []) : []
+  const now = Date.now()
+
+  const FIELDS = ['department', 'jobTitle', 'mobilePhone', 'officeLocation']
+  const profileScores = users.map((u: any) => {
+    const filled = FIELDS.filter(f => u[f]?.toString().trim()).length
+    return {
+      id: u.id, displayName: u.displayName, mail: u.mail,
+      department: u.department, score: Math.round((filled / FIELDS.length) * 100),
+      missing: FIELDS.filter(f => !u[f]?.toString().trim()),
+      licensed: (u.assignedLicenses?.length ?? 0) > 0,
+    }
+  }).sort((a: any, b: any) => a.score - b.score)
+
+  const avgScore = users.length > 0
+    ? Math.round(profileScores.reduce((s: number, u: any) => s + u.score, 0) / users.length)
+    : 0
+
+  const ageGroups = [
+    { range: '<1yr', min: 0,   max: 1,   count: 0 },
+    { range: '1-2yr',min: 1,   max: 2,   count: 0 },
+    { range: '2-3yr',min: 2,   max: 3,   count: 0 },
+    { range: '3-5yr',min: 3,   max: 5,   count: 0 },
+    { range: '5yr+', min: 5,   max: 999, count: 0 },
+  ]
+  for (const u of users) {
+    if (!u.createdDateTime) continue
+    const yr = (now - new Date(u.createdDateTime).getTime()) / (365.25 * 86400000)
+    const g = ageGroups.find(a => yr >= a.min && yr < a.max)
+    if (g) g.count++
+  }
+
+  const methodMap: Record<string, number> = {}
+  const METHOD_LABELS: Record<string, string> = {
+    microsoftAuthenticator: 'Authenticator App', mobilePhone: 'SMS / Phone',
+    email: 'Email OTP', fido2SecurityKey: 'FIDO2 Key',
+    windowsHelloForBusiness: 'Windows Hello', softwareOneTimePasscode: 'TOTP App',
+  }
+  for (const u of authDetails) {
+    for (const m of (u.authMethods ?? [])) {
+      const lbl = METHOD_LABELS[m] ?? m
+      methodMap[lbl] = (methodMap[lbl] || 0) + 1
+    }
+  }
+  const authMethodDist = Object.entries(methodMap)
+    .map(([method, count]) => ({ method, count }))
+    .sort((a, b) => b.count - a.count)
+
+  return NextResponse.json({
+    profileScores: profileScores.slice(0, 50),
+    avgProfileScore: avgScore,
+    totalUsers: users.length,
+    accountAge: ageGroups.map(({ range, count }) => ({ range, count })),
+    authMethodDist,
+    authMethodError: authResp.status === 'rejected' ? 'Grant Reports.Read.All permission' : null,
+  })
+}
+
+// scope=signin_intel (failed sign-ins heatmap + location data)
+async function handleSigninIntel(token: string) {
+  const [failedResp, allResp] = await Promise.allSettled([
+    graphGet('/auditLogs/signIns?$filter=status/errorCode ne 0&$top=200&$select=userId,userDisplayName,userPrincipalName,status,createdDateTime,ipAddress,location,appDisplayName&$orderby=createdDateTime desc', token),
+    graphGet('/auditLogs/signIns?$top=500&$select=userId,userDisplayName,status,createdDateTime,location,appDisplayName&$orderby=createdDateTime desc', token),
+  ])
+
+  const failed: any[] = failedResp.status === 'fulfilled' ? (failedResp.value.value ?? []) : []
+  const all: any[]    = allResp.status    === 'fulfilled' ? (allResp.value.value    ?? []) : []
+
+  // Group failures by user
+  const userMap: Record<string, { name: string; count: number; lastFail: string; errors: number[] }> = {}
+  for (const s of failed) {
+    const key = s.userId || s.userPrincipalName
+    if (!userMap[key]) userMap[key] = { name: s.userDisplayName || s.userPrincipalName, count: 0, lastFail: s.createdDateTime, errors: [] }
+    userMap[key].count++
+    if (s.status?.errorCode) userMap[key].errors.push(s.status.errorCode)
+    if (s.createdDateTime > userMap[key].lastFail) userMap[key].lastFail = s.createdDateTime
+  }
+
+  const ERROR_NAMES: Record<number, string> = {
+    50126: 'Invalid credentials', 50074: 'MFA required',
+    53003: 'Conditional access block', 50057: 'Account disabled',
+    50053: 'Account locked out', 50055: 'Password expired',
+    50020: 'User not found', 70011: 'Invalid scope',
+    16000: 'MSA not supported', 50076: 'MFA info required',
+  }
+
+  const errorCounts: Record<number, number> = {}
+  for (const s of failed) {
+    const code = s.status?.errorCode
+    if (code) errorCounts[code] = (errorCounts[code] || 0) + 1
+  }
+  const errorBreakdown = Object.entries(errorCounts)
+    .map(([code, count]) => ({ code: parseInt(code), name: ERROR_NAMES[parseInt(code)] || `Error ${code}`, count }))
+    .sort((a, b) => b.count - a.count).slice(0, 10)
+
+  const locMap: Record<string, number> = {}
+  for (const s of all) {
+    const loc = [s.location?.city, s.location?.countryOrRegion].filter(Boolean).join(', ')
+    if (loc) locMap[loc] = (locMap[loc] || 0) + 1
+  }
+  const topLocations = Object.entries(locMap)
+    .map(([loc, count]) => ({ loc, count }))
+    .sort((a, b) => b.count - a.count).slice(0, 10)
+
+  return NextResponse.json({
+    totalFailed:    failed.length,
+    totalSignIns:   all.length,
+    topFailingUsers: Object.values(userMap).sort((a, b) => b.count - a.count).slice(0, 20),
+    errorBreakdown,
+    topLocations,
+    signInError: failedResp.status === 'rejected' ? 'Grant AuditLog.Read.All permission' : null,
+  })
+}
+
+// scope=device_intel (devices + registered owners)
+async function handleDeviceIntel(token: string) {
+  const devicesData = await graphGetSafe(
+    '/devices?$select=id,displayName,operatingSystem,operatingSystemVersion,isCompliant,isManaged,trustType,approximateLastSignInDateTime,registrationDateTime&$top=999',
+    token, { value: [] }
+  )
+  const devices: any[] = devicesData?.value ?? []
+
+  const batchSize = 8
+  const enriched: any[] = []
+  const now = Date.now()
+
+  for (let i = 0; i < devices.length; i += batchSize) {
+    const batch = devices.slice(i, i + batchSize)
+    const results = await Promise.allSettled(
+      batch.map(async (d: any) => {
+        const ownersData = await graphGetSafe(
+          `/devices/${d.id}/registeredOwners?$select=id,displayName,mail,userPrincipalName`, token, { value: [] }
+        )
+        const owners = (ownersData?.value ?? []).map((o: any) => ({
+          id: o.id, displayName: o.displayName, mail: o.mail || o.userPrincipalName,
+        }))
+        const lastSeenDays = d.approximateLastSignInDateTime
+          ? Math.floor((now - new Date(d.approximateLastSignInDateTime).getTime()) / 86400000)
+          : null
+        return {
+          id: d.id, displayName: d.displayName,
+          operatingSystem: d.operatingSystem, operatingSystemVersion: d.operatingSystemVersion,
+          isCompliant: d.isCompliant, isManaged: d.isManaged, trustType: d.trustType,
+          lastSeenDays, registrationDateTime: d.registrationDateTime,
+          owners, stale: lastSeenDays !== null && lastSeenDays > 90,
+        }
+      })
+    )
+    for (const r of results) if (r.status === 'fulfilled') enriched.push(r.value)
+  }
+
+  return NextResponse.json({
+    devices: enriched,
+    total:           enriched.length,
+    staleCount:      enriched.filter(d => d.stale).length,
+    noOwnerCount:    enriched.filter(d => d.owners.length === 0).length,
+    nonCompliant:    enriched.filter(d => !d.isCompliant).length,
+  })
 }
 
 // scope=org_structure
@@ -664,6 +1005,24 @@ export async function GET(req: NextRequest) {
 
       case 'org_structure':
         return handleOrgStructure(token)
+
+      case 'admin_roles':
+        return handleAdminRoles(token)
+
+      case 'app_security':
+        return handleAppSecurity(token)
+
+      case 'directory_health':
+        return handleDirectoryHealth(token)
+
+      case 'directory_insights':
+        return handleDirectoryInsights(token)
+
+      case 'signin_intel':
+        return handleSigninIntel(token)
+
+      case 'device_intel':
+        return handleDeviceIntel(token)
 
       default:
         return NextResponse.json(
