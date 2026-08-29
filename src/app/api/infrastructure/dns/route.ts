@@ -1,10 +1,10 @@
-export const dynamic = 'force-dynamic'
+﻿export const dynamic = 'force-dynamic'
 import { NextResponse, NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'placeholder-service-key'
 )
 
 const SUSPECT_TLDS = new Set(['.xyz','.top','.pw','.tk','.ml','.ga','.cf','.gq','.icu','.cam','.surf','.click','.download'])
