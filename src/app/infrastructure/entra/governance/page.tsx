@@ -308,14 +308,52 @@ function CompactTable({ headers, rows, empty }: { headers: string[]; rows: React
   )
 }
 
+function SearchInput({ value, onChange, placeholder = 'Search…' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="relative mb-2">
+      <Search className="w-3 h-3 text-[#334155] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-8 pr-8 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44] transition-colors"
+      />
+      {value && (
+        <button onClick={() => onChange('')}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#334155] hover:text-[#64748b] text-[10px] leading-none">✕</button>
+      )}
+    </div>
+  )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function exportCsv(filename: string, rows: Record<string, any>[]) {
+  if (!rows.length) return
+  const headers = Object.keys(rows[0])
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => headers.map(h => {
+      const v = String(r[h] ?? '')
+      return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v
+    }).join(',')),
+  ].join('\n')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  a.download = filename
+  a.click()
+}
+
 // ── Feature Views ─────────────────────────────────────────────────────────────
 
 function AppSecretsView({ d, onRefresh, loading }: { d: AppSecretsData; onRefresh: () => void; loading: boolean }) {
-  const creds = [...(d.credentials ?? [])].sort((a, b) => a.daysLeft - b.daysLeft)
-  const critical = creds.filter(c => c.daysLeft < 30).length
-  const warning  = creds.filter(c => c.daysLeft >= 30 && c.daysLeft < 60).length
-  const notice   = creds.filter(c => c.daysLeft >= 60 && c.daysLeft < 90).length
-  const ok       = creds.filter(c => c.daysLeft >= 90).length
+  const [search, setSearch] = useState('')
+  const all  = [...(d.credentials ?? [])].sort((a, b) => a.daysLeft - b.daysLeft)
+  const creds = search ? all.filter(c => c.appName?.toLowerCase().includes(search.toLowerCase()) || c.displayName?.toLowerCase().includes(search.toLowerCase())) : all
+  const critical = all.filter(c => c.daysLeft < 30).length
+  const warning  = all.filter(c => c.daysLeft >= 30 && c.daysLeft < 60).length
+  const notice   = all.filter(c => c.daysLeft >= 60 && c.daysLeft < 90).length
+  const ok       = all.filter(c => c.daysLeft >= 90).length
   return (
     <div>
       <ViewHeader title="App Secret & Certificate Monitor" desc="Credential expiry across all app registrations." onRefresh={onRefresh} loading={loading} />
@@ -325,7 +363,14 @@ function AppSecretsView({ d, onRefresh, loading }: { d: AppSecretsData; onRefres
         { label: 'Notice <90d',   value: notice,   color: 'purple' },
         { label: 'OK',            value: ok,        color: 'green' },
       ]} />
-      {creds.length === 0 ? <EmptyView label="No app registrations found" /> : (
+      {all.length > 0 && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Filter by app name or credential…" /></div>
+          <button onClick={() => exportCsv('app-secrets.csv', creds.map(c => ({ App: c.appName, Credential: c.displayName, Type: c.credentialType, Expires: c.endDateTime, DaysLeft: c.daysLeft })))}
+            className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+        </div>
+      )}
+      {creds.length === 0 ? <EmptyView label={search ? 'No matches' : 'No app registrations found'} /> : (
         <CompactTable headers={['App Name', 'Credential', 'Type', 'Expires', 'Days Left', 'Status']} empty={false}
           rows={creds.map((c, i) => {
             const { label, cls } = secretStatus(c.daysLeft)
@@ -350,57 +395,103 @@ function AppSecretsView({ d, onRefresh, loading }: { d: AppSecretsData; onRefres
   )
 }
 
+function getRoleCategory(name: string): string {
+  const n = name.toLowerCase()
+  if (n === 'global administrator' || n.includes('privileged role')) return 'Global'
+  if (n.includes('security') || n.includes('compliance') || n.includes('attack')) return 'Security'
+  if (n.includes('exchange') || n.includes('mail flow')) return 'Exchange / Mail'
+  if (n.includes('sharepoint') || n.includes('sites')) return 'SharePoint'
+  if (n.includes('teams') || n.includes('telephon')) return 'Teams'
+  if (n.includes('intune') || (n.includes('device') && !n.includes('reader'))) return 'Device'
+  if (n.includes('user administrator') || n.includes('helpdesk') || n.includes('authentication') || n.includes('password admin')) return 'Identity'
+  if (n.includes('application') || n.includes('cloud app')) return 'Apps'
+  if (n.includes('billing') || n.includes('license admin') || n.includes('subscription')) return 'Billing'
+  if (n.includes('ai ') || n.includes('copilot')) return 'AI'
+  if (n.includes('reader') || n.includes('global reader')) return 'Read-Only'
+  return 'Other'
+}
+
 function AdminRolesView({ d, onRefresh, loading }: { d: AdminRolesData; onRefresh: () => void; loading: boolean }) {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [search, setSearch]     = useState('')
+  const [catFilter, setCatFilter] = useState('All')
   const assignments = d.assignments ?? []
+
+  const categories = ['All', ...Array.from(new Set(assignments.map(a => getRoleCategory(a.roleName)))).sort()]
+
+  const filtered = assignments.filter(a => {
+    const matchCat = catFilter === 'All' || getRoleCategory(a.roleName) === catFilter
+    const q = search.toLowerCase()
+    const matchQ = !q || a.roleName.toLowerCase().includes(q) || a.members.some(m =>
+      m.displayName?.toLowerCase().includes(q) || m.mail?.toLowerCase().includes(q)
+    )
+    return matchCat && matchQ
+  })
+
   return (
     <div>
-      <ViewHeader title="Admin Role Assignments" desc="All privileged role members in your Entra ID tenant." onRefresh={onRefresh} loading={loading} />
+      <ViewHeader title="Admin Role Assignments" desc="All privileged roles in your Entra ID tenant, grouped by category." onRefresh={onRefresh} loading={loading} />
       {d.rolesError && <PermBanner message={d.rolesError} />}
       <StatRow stats={[
-        { label: 'Total Assignments', value: d.total ?? 0,         color: 'cyan' },
+        { label: 'Total Assignments',    value: d.total ?? 0,         color: 'cyan' },
         { label: 'High-Privilege Roles', value: d.highPrivCount ?? 0, color: 'red' },
-        { label: 'Roles Found',       value: assignments.length,   color: 'purple' },
+        { label: 'Roles Found',          value: assignments.length,   color: 'purple' },
       ]} />
       {assignments.length === 0 ? <EmptyView label="No role assignments found" icon={Crown} /> : (
-        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden divide-y divide-[#0d1e35]">
-          {assignments.map((a, i) => (
-            <div key={i}>
-              <button
-                onClick={() => setExpanded(expanded === a.roleName ? null : a.roleName)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#0d1e35] transition-colors text-left"
-              >
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.isHighPriv ? 'bg-[#ef4444]' : 'bg-[#475569]'}`}
-                  style={a.isHighPriv ? { boxShadow: '0 0 6px #ef444488' } : {}} />
-                <span className="flex-1 text-[11px] font-semibold text-[#e2e8f0] truncate">{a.roleName}</span>
-                {a.isHighPriv && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-[#ef444418] text-[#ef4444] border-[#ef444430] shrink-0">HIGH PRIV</span>
-                )}
-                <span className="text-[10px] text-[#475569] font-mono shrink-0">{a.members.length} member{a.members.length !== 1 ? 's' : ''}</span>
-                {expanded === a.roleName ? <ChevronDown className="w-3.5 h-3.5 text-[#475569] shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-[#475569] shrink-0" />}
+        <>
+          {/* Category filter pills */}
+          <div className="flex flex-wrap gap-1 mb-2">
+            {categories.map(c => (
+              <button key={c} onClick={() => setCatFilter(c)}
+                className={`text-[10px] px-2 py-0.5 rounded border transition-all ${catFilter === c ? 'bg-[#00d4ff12] border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
+                {c}
               </button>
-              {expanded === a.roleName && (
-                <div className="bg-[#060b18] px-3 pb-2 divide-y divide-[#0d1e35]">
-                  {a.members.map((m, j) => (
-                    <div key={j} className="flex items-center gap-3 py-2">
-                      <div className="w-6 h-6 rounded-lg bg-[#7c3aed22] border border-[#7c3aed33] flex items-center justify-center text-[9px] font-bold text-[#a78bfa] shrink-0">
-                        {(m.displayName || '?').slice(0, 2).toUpperCase()}
+            ))}
+            <button onClick={() => exportCsv('admin-roles.csv', assignments.flatMap(a => a.members.map(m => ({ Role: a.roleName, Category: getRoleCategory(a.roleName), HighPriv: a.isHighPriv, Name: m.displayName, Email: m.mail, Enabled: m.accountEnabled, Type: m.principalType }))))}
+              className="ml-auto text-[10px] px-2.5 py-0.5 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+          </div>
+          <SearchInput value={search} onChange={setSearch} placeholder="Search role name or member…" />
+          <div className="rounded-lg border border-[#1a2f4a] overflow-hidden divide-y divide-[#0d1e35]">
+            {filtered.map((a, i) => (
+              <div key={i}>
+                <button
+                  onClick={() => setExpanded(expanded === a.roleName ? null : a.roleName)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[#0d1e35] transition-colors text-left"
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.isHighPriv ? 'bg-[#ef4444]' : 'bg-[#475569]'}`}
+                    style={a.isHighPriv ? { boxShadow: '0 0 6px #ef444488' } : {}} />
+                  <span className="flex-1 text-[11px] font-semibold text-[#e2e8f0] truncate">{a.roleName}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#334155] shrink-0">{getRoleCategory(a.roleName)}</span>
+                  {a.isHighPriv && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-[#ef444418] text-[#ef4444] border-[#ef444430] shrink-0">HIGH PRIV</span>
+                  )}
+                  <span className="text-[10px] text-[#475569] font-mono shrink-0">{a.members.length} member{a.members.length !== 1 ? 's' : ''}</span>
+                  {expanded === a.roleName ? <ChevronDown className="w-3.5 h-3.5 text-[#475569] shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-[#475569] shrink-0" />}
+                </button>
+                {expanded === a.roleName && (
+                  <div className="bg-[#060b18] px-3 pb-2 divide-y divide-[#0d1e35]">
+                    {a.members.map((m, j) => (
+                      <div key={j} className="flex items-center gap-3 py-2">
+                        <div className="w-6 h-6 rounded-lg bg-[#7c3aed22] border border-[#7c3aed33] flex items-center justify-center text-[9px] font-bold text-[#a78bfa] shrink-0">
+                          {(m.displayName || '?').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-medium text-[#c8d8f0] truncate">{m.displayName}</p>
+                          <p className="text-[10px] text-[#475569] font-mono truncate">{m.mail}</p>
+                        </div>
+                        {m.principalType === 'servicePrincipal' && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#3b82f618] text-[#60a5fa] border-[#3b82f630] shrink-0">App</span>
+                        )}
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.accountEnabled ? 'bg-[#10b981]' : 'bg-[#ef4444]'}`} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-medium text-[#c8d8f0] truncate">{m.displayName}</p>
-                        <p className="text-[10px] text-[#475569] font-mono truncate">{m.mail}</p>
-                      </div>
-                      {m.principalType === 'servicePrincipal' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border bg-[#3b82f618] text-[#60a5fa] border-[#3b82f630] shrink-0">App</span>
-                      )}
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.accountEnabled ? 'bg-[#10b981]' : 'bg-[#ef4444]'}`} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {filtered.length === 0 && <div className="text-center py-8 text-[11px] text-[#334155]">No roles match</div>}
+          </div>
+        </>
       )}
     </div>
   )
@@ -512,22 +603,7 @@ function SigninIntelView({ d, onRefresh, loading }: { d: SigninIntelData; onRefr
         ))}
       </div>
 
-      {tab === 'users' && (
-        (d.topFailingUsers ?? []).length === 0
-          ? <EmptyView label="No sign-in failures in the last 7 days" icon={CheckCircle} />
-          : <CompactTable headers={['User', 'Failures', 'Last Failure', 'Error Codes']} empty={false}
-              rows={(d.topFailingUsers ?? []).map((u, i) => (
-                <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                  <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{u.name}</td>
-                  <td className="px-3 py-1.5">
-                    <span className={`font-bold font-mono ${u.count > 10 ? 'text-[#ef4444]' : u.count > 3 ? 'text-[#f59e0b]' : 'text-[#94a3b8]'}`}>{u.count}</span>
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{fmtDT(u.lastFail)}</td>
-                  <td className="px-3 py-1.5 text-[#475569] font-mono text-[10px]">{u.errors.slice(0, 3).join(', ')}</td>
-                </tr>
-              ))}
-            />
-      )}
+      {tab === 'users' && <SigninFailingUsersTable users={d.topFailingUsers ?? []} />}
       {tab === 'errors' && (
         (d.errorBreakdown ?? []).length === 0
           ? <EmptyView label="No error data" icon={CheckCircle} />
@@ -572,6 +648,33 @@ function SigninIntelView({ d, onRefresh, loading }: { d: SigninIntelData; onRefr
   )
 }
 
+function SigninFailingUsersTable({ users }: { users: SigninIntelData['topFailingUsers'] }) {
+  const [search, setSearch] = useState('')
+  const rows = search ? users.filter(u => u.name?.toLowerCase().includes(search.toLowerCase())) : users
+  if (users.length === 0) return <EmptyView label="No sign-in failures in the last 7 days" icon={CheckCircle} />
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search user name…" /></div>
+        <button onClick={() => exportCsv('signin-failures.csv', rows.map(u => ({ User: u.name, Failures: u.count, LastFail: u.lastFail, Errors: u.errors.join(' | ') })))}
+          className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+      </div>
+      <CompactTable headers={['User', 'Failures', 'Last Failure', 'Error Codes']} empty={rows.length === 0}
+        rows={rows.map((u, i) => (
+          <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+            <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{u.name}</td>
+            <td className="px-3 py-1.5">
+              <span className={`font-bold font-mono ${u.count > 10 ? 'text-[#ef4444]' : u.count > 3 ? 'text-[#f59e0b]' : 'text-[#94a3b8]'}`}>{u.count}</span>
+            </td>
+            <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{fmtDT(u.lastFail)}</td>
+            <td className="px-3 py-1.5 text-[#475569] font-mono text-[10px]">{u.errors.slice(0, 3).join(', ')}</td>
+          </tr>
+        ))}
+      />
+    </div>
+  )
+}
+
 function DirectoryHealthView({ d, onRefresh, loading }: { d: DirectoryHealthData; onRefresh: () => void; loading: boolean }) {
   return (
     <div>
@@ -604,13 +707,34 @@ function DirectoryHealthView({ d, onRefresh, loading }: { d: DirectoryHealthData
       )}
 
       {/* Deleted users */}
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569] mb-2">
-        Recently Deleted Users ({(d.deletedUsers ?? []).length})
-      </p>
-      {(d.deletedUsers ?? []).length === 0
-        ? <EmptyView label="No recently deleted users" icon={CheckCircle} />
+      <DeletedUsersTable users={d.deletedUsers ?? []} />
+    </div>
+  )
+}
+
+function DeletedUsersTable({ users }: { users: DirectoryHealthData['deletedUsers'] }) {
+  const [search, setSearch] = useState('')
+  const rows = search ? users.filter(u =>
+    u.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    u.mail?.toLowerCase().includes(search.toLowerCase()) ||
+    u.department?.toLowerCase().includes(search.toLowerCase())
+  ) : users
+  return (
+    <>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569]">
+          Recently Deleted Users ({users.length})
+        </p>
+        {users.length > 0 && (
+          <button onClick={() => exportCsv('deleted-users.csv', rows.map(u => ({ Name: u.displayName, Email: u.mail, Department: u.department, Deleted: u.deletedDateTime, DaysLeft: u.daysUntilPermanent })))}
+            className="text-[10px] px-2.5 py-0.5 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+        )}
+      </div>
+      {users.length > 0 && <SearchInput value={search} onChange={setSearch} placeholder="Search deleted users…" />}
+      {rows.length === 0
+        ? <EmptyView label={search ? 'No matches' : 'No recently deleted users'} icon={CheckCircle} />
         : <CompactTable headers={['Name', 'Email', 'Department', 'Deleted', 'Days Until Permanent']} empty={false}
-            rows={(d.deletedUsers ?? []).map((u, i) => (
+            rows={rows.map((u, i) => (
               <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
                 <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{u.displayName}</td>
                 <td className="px-3 py-1.5 font-mono text-[#64748b]">{u.mail}</td>
@@ -625,7 +749,7 @@ function DirectoryHealthView({ d, onRefresh, loading }: { d: DirectoryHealthData
             ))}
           />
       }
-    </div>
+    </>
   )
 }
 
@@ -744,12 +868,17 @@ function DirectoryInsightsView({ d, onRefresh, loading }: { d: DirectoryInsights
 
 function DeviceIntelView({ d, onRefresh, loading }: { d: DeviceIntelData; onRefresh: () => void; loading: boolean }) {
   const [filter, setFilter] = useState<'all' | 'stale' | 'noowner' | 'noncompliant'>('all')
+  const [search, setSearch] = useState('')
   const devices = d.devices ?? []
   const filtered = devices.filter(dev => {
-    if (filter === 'stale') return dev.stale
-    if (filter === 'noowner') return dev.owners.length === 0
-    if (filter === 'noncompliant') return !dev.isCompliant
-    return true
+    const matchFilter = filter === 'stale' ? dev.stale
+      : filter === 'noowner' ? dev.owners.length === 0
+      : filter === 'noncompliant' ? !dev.isCompliant : true
+    const q = search.toLowerCase()
+    const matchQ = !q || dev.displayName?.toLowerCase().includes(q) ||
+      dev.operatingSystem?.toLowerCase().includes(q) ||
+      dev.owners.some(o => o.displayName?.toLowerCase().includes(q) || o.mail?.toLowerCase().includes(q))
+    return matchFilter && matchQ
   })
 
   return (
@@ -762,15 +891,17 @@ function DeviceIntelView({ d, onRefresh, loading }: { d: DeviceIntelData; onRefr
         { label: 'Non-Compliant',  value: d.nonCompliant ?? 0, color: d.nonCompliant > 0 ? 'red' : 'green' },
       ]} />
 
-      <div className="flex gap-1 mb-3 flex-wrap">
+      <div className="flex gap-1 mb-2 flex-wrap">
         {[['all', 'All'], ['stale', 'Stale'], ['noowner', 'No Owner'], ['noncompliant', 'Non-Compliant']].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k as typeof filter)}
             className={`text-[11px] px-2.5 py-1 rounded border transition-all ${filter === k ? 'bg-[#00d4ff12] border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
             {l}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-[#334155] self-center">{filtered.length} devices</span>
+        <button onClick={() => exportCsv('devices.csv', filtered.map(dev => ({ Device: dev.displayName, OS: `${dev.operatingSystem} ${dev.operatingSystemVersion}`, Owners: dev.owners.map(o => o.displayName).join(' | '), LastSeenDays: dev.lastSeenDays, Compliant: dev.isCompliant, Managed: dev.isManaged, Trust: dev.trustType })))}
+          className="ml-auto text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all shrink-0">Export CSV</button>
       </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search device name, OS or owner…" />
 
       {filtered.length === 0
         ? <EmptyView label="No devices match this filter" icon={Cpu} />
@@ -857,23 +988,40 @@ function MfaCoverageView({ d, onRefresh, loading }: { d: MfaCoverageData; onRefr
           </div>
         </div>
       )}
-      {(d.users ?? []).length > 0 && (
-        <CompactTable headers={['Name', 'Email', 'Department', 'MFA Status']} empty={false}
-          rows={(d.users ?? []).map(u => (
-            <tr key={u.id} className="hover:bg-[#0d1e35] transition-colors">
-              <td className="px-3 py-1.5 text-[#e2e8f0]">{u.displayName}</td>
-              <td className="px-3 py-1.5 text-[#64748b] font-mono">{u.mail}</td>
-              <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
-              <td className="px-3 py-1.5">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${u.mfaRegistered ? 'bg-[#10b98118] text-[#10b981] border-[#10b98130]' : 'bg-[#ef444418] text-[#ef4444] border-[#ef444430]'}`}>
-                  {u.mfaRegistered ? 'Registered' : 'Not Registered'}
-                </span>
-              </td>
-            </tr>
-          ))}
-        />
-      )}
+      {(d.users ?? []).length > 0 && <MfaUserTable users={d.users ?? []} />}
       {(d.users ?? []).length === 0 && (d.departments ?? []).length === 0 && <EmptyView label="No MFA data" />}
+    </div>
+  )
+}
+
+function MfaUserTable({ users }: { users: MfaCoverageData['users'] }) {
+  const [search, setSearch] = useState('')
+  const rows = search ? users.filter(u =>
+    u.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    u.mail?.toLowerCase().includes(search.toLowerCase()) ||
+    u.department?.toLowerCase().includes(search.toLowerCase())
+  ) : users
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search by name, email or department…" /></div>
+        <button onClick={() => exportCsv('mfa-coverage.csv', rows.map(u => ({ Name: u.displayName, Email: u.mail, Department: u.department, MFA: u.mfaRegistered })))}
+          className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+      </div>
+      <CompactTable headers={['Name', 'Email', 'Department', 'MFA Status']} empty={rows.length === 0}
+        rows={rows.map(u => (
+          <tr key={u.id} className="hover:bg-[#0d1e35] transition-colors">
+            <td className="px-3 py-1.5 text-[#e2e8f0]">{u.displayName}</td>
+            <td className="px-3 py-1.5 text-[#64748b] font-mono">{u.mail}</td>
+            <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
+            <td className="px-3 py-1.5">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${u.mfaRegistered ? 'bg-[#10b98118] text-[#10b981] border-[#10b98130]' : 'bg-[#ef444418] text-[#ef4444] border-[#ef444430]'}`}>
+                {u.mfaRegistered ? 'Registered' : 'Not Registered'}
+              </span>
+            </td>
+          </tr>
+        ))}
+      />
     </div>
   )
 }
@@ -944,24 +1092,30 @@ function RoleChangesView({ d, onRefresh, loading }: { d: RoleChangesData; onRefr
 
 function StaleAccountsView({ d, onRefresh, loading }: { d: StaleAccountsData; onRefresh: () => void; loading: boolean }) {
   const allLicensed = d.allLicensed ?? []
-  const noSignIn = allLicensed.filter(u => !u.hasRecentSignIn)
-  const withSignIn = allLicensed.filter(u => u.hasRecentSignIn)
-  const windowDays = d.windowDays ?? 7
+  const noSignIn    = allLicensed.filter(u => !u.hasRecentSignIn)
+  const withSignIn  = allLicensed.filter(u => u.hasRecentSignIn)
+  const windowDays  = d.windowDays ?? 7
   const [showAll, setShowAll] = useState(false)
-  const rows = showAll ? allLicensed : noSignIn
+  const [search, setSearch]   = useState('')
+  const base = showAll ? allLicensed : noSignIn
+  const rows = search ? base.filter(u =>
+    u.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    u.mail?.toLowerCase().includes(search.toLowerCase()) ||
+    u.department?.toLowerCase().includes(search.toLowerCase())
+  ) : base
   return (
     <div>
       <ViewHeader title="Licensed User Sign-In Activity" desc={`Sign-in status within the last ${windowDays} days (Entra P0 window).`} onRefresh={onRefresh} loading={loading} />
       <StatRow stats={[
-        { label: 'Total Licensed',      value: d.totalLicensed ?? 0, color: 'cyan' },
-        { label: `Active (${windowDays}d)`, value: withSignIn.length,  color: 'green' },
-        { label: 'No Recent Sign-In',   value: noSignIn.length,      color: noSignIn.length > 0 ? 'amber' : 'green' },
+        { label: 'Total Licensed',          value: d.totalLicensed ?? 0, color: 'cyan' },
+        { label: `Active (${windowDays}d)`, value: withSignIn.length,    color: 'green' },
+        { label: 'No Recent Sign-In',       value: noSignIn.length,      color: noSignIn.length > 0 ? 'amber' : 'green' },
       ]} />
       <div className="rounded border border-[#1a2f4a] bg-[#0a1525] px-3 py-1.5 mb-3 flex items-center gap-1.5 text-[10px] text-[#475569]">
         <Info className="w-3 h-3 shrink-0 text-[#334155]" />
         Sign-in logs cover only the last {windowDays} days on Entra P0. &ldquo;No sign-in&rdquo; includes users on leave or using cached credentials.
       </div>
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <button onClick={() => setShowAll(false)}
           className={`text-[11px] px-2.5 py-1 rounded border transition-all ${!showAll ? 'bg-[#f59e0b18] border-[#f59e0b30] text-[#f59e0b]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
           No Sign-In ({noSignIn.length})
@@ -970,10 +1124,13 @@ function StaleAccountsView({ d, onRefresh, loading }: { d: StaleAccountsData; on
           className={`text-[11px] px-2.5 py-1 rounded border transition-all ${showAll ? 'bg-[#00d4ff12] border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
           All Licensed ({d.totalLicensed ?? 0})
         </button>
+        <button onClick={() => exportCsv('sign-in-activity.csv', rows.map(u => ({ Name: u.displayName, Email: u.mail, Department: u.department, RecentSignIn: u.hasRecentSignIn, Created: u.createdDateTime })))}
+          className="ml-auto text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
       </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email or department…" />
       {rows.length === 0
-        ? <EmptyView label={showAll ? 'No licensed users found' : 'All licensed users have recent sign-in activity'} />
-        : <CompactTable headers={['User', 'Email', 'Department', 'Sign-In (7d)', 'Created']} empty={false}
+        ? <EmptyView label={search ? 'No matches' : showAll ? 'No licensed users found' : 'All licensed users have recent sign-in activity'} />
+        : <CompactTable headers={['User', 'Email', 'Department', `Sign-In (${windowDays}d)`, 'Created']} empty={false}
             rows={rows.map(u => (
               <tr key={u.id} className="hover:bg-[#0d1e35] transition-colors">
                 <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{u.displayName}</td>
@@ -1044,16 +1201,28 @@ function LicenseWasteView({ d, onRefresh, loading }: { d: LicenseWasteData; onRe
 }
 
 function GuestsView({ d, onRefresh, loading }: { d: GuestsData; onRefresh: () => void; loading: boolean }) {
-  const guests = d.guests ?? []
+  const [search, setSearch] = useState('')
+  const all    = d.guests ?? []
+  const guests = search ? all.filter(g =>
+    g.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    g.mail?.toLowerCase().includes(search.toLowerCase())
+  ) : all
   return (
     <div>
       <ViewHeader title="Guest & External User Audit" desc="External identities and pending invitations in your tenant." onRefresh={onRefresh} loading={loading} />
       <StatRow stats={[
-        { label: 'Total', value: d.total ?? 0, color: 'cyan' },
-        { label: 'Pending Invitation', value: d.pending ?? 0, color: 'amber' },
-        { label: 'Active', value: d.active ?? 0, color: 'green' },
+        { label: 'Total',             value: d.total ?? 0,   color: 'cyan' },
+        { label: 'Pending Invitation',value: d.pending ?? 0, color: 'amber' },
+        { label: 'Active',            value: d.active ?? 0,  color: 'green' },
       ]} />
-      {guests.length === 0 ? <EmptyView label="No guest accounts found" /> : (
+      {all.length > 0 && (
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search by name or email…" /></div>
+          <button onClick={() => exportCsv('guests.csv', guests.map(g => ({ Name: g.displayName, Email: g.mail, State: g.userState, Created: g.createdDateTime, DaysSince: g.daysSinceInvite })))}
+            className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+        </div>
+      )}
+      {guests.length === 0 ? <EmptyView label={search ? 'No matches' : 'No guest accounts found'} /> : (
         <CompactTable headers={['Name', 'Email', 'State', 'Created', 'Days Since Invite']} empty={false}
           rows={guests.map(g => (
             <tr key={g.id} className="hover:bg-[#0d1e35] transition-colors">
@@ -1077,15 +1246,28 @@ function GuestsView({ d, onRefresh, loading }: { d: GuestsData; onRefresh: () =>
 }
 
 function DisabledAccountsView({ d, onRefresh, loading }: { d: DisabledAccountsData; onRefresh: () => void; loading: boolean }) {
-  const accounts = d.accounts ?? []
+  const [search, setSearch] = useState('')
+  const all      = d.accounts ?? []
+  const accounts = search ? all.filter(a =>
+    a.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    a.mail?.toLowerCase().includes(search.toLowerCase()) ||
+    a.department?.toLowerCase().includes(search.toLowerCase())
+  ) : all
   return (
     <div>
       <ViewHeader title="Disabled Account Cleanup" desc="Disabled accounts that still hold active licenses." onRefresh={onRefresh} loading={loading} />
       <StatRow stats={[
-        { label: 'Total Disabled', value: d.totalDisabled ?? 0, color: 'cyan' },
+        { label: 'Total Disabled',     value: d.totalDisabled ?? 0, color: 'cyan' },
         { label: 'With Active Licenses', value: d.withLicenses ?? 0, color: 'red' },
       ]} />
-      {accounts.length === 0 ? <EmptyView label="No disabled accounts found" /> : (
+      {all.length > 0 && (
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search by name, email or department…" /></div>
+          <button onClick={() => exportCsv('disabled-accounts.csv', accounts.map(a => ({ Name: a.displayName, Email: a.mail, Department: a.department, Licenses: (a.licenses ?? []).join(' | ') })))}
+            className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+        </div>
+      )}
+      {accounts.length === 0 ? <EmptyView label={search ? 'No matches' : 'No disabled accounts found'} /> : (
         <CompactTable headers={['Name', 'Email', 'Department', 'Licenses']} empty={false}
           rows={accounts.map(a => (
             <tr key={a.id} className="hover:bg-[#0d1e35] transition-colors">
@@ -1103,18 +1285,27 @@ function DisabledAccountsView({ d, onRefresh, loading }: { d: DisabledAccountsDa
 
 function AuditTimelineView({ d, onRefresh, loading }: { d: AuditTimelineData; onRefresh: () => void; loading: boolean }) {
   const [catFilter, setCatFilter] = useState('All')
+  const [search, setSearch] = useState('')
   const all = d.events ?? []
-  const events = all.filter(e => catFilter === 'All' || e.category === catFilter)
+  const events = all.filter(e => {
+    const matchCat = catFilter === 'All' || e.category === catFilter
+    const q = search.toLowerCase()
+    return matchCat && (!q || e.activityDisplayName?.toLowerCase().includes(q) ||
+      e.initiatedBy?.toLowerCase().includes(q) || e.target?.toLowerCase().includes(q))
+  })
   return (
     <div>
       <ViewHeader title="Tenant Change Timeline" desc="Chronological log of configuration and directory changes." onRefresh={onRefresh} loading={loading} />
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
           className="bg-[#060b18] border border-[#1a2f4a] rounded px-2.5 py-1 text-[11px] text-[#94a3b8] outline-none">
           {AUDIT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <span className="text-[10px] text-[#334155]">{events.length} events</span>
+        <button onClick={() => exportCsv('audit-timeline.csv', events.map(e => ({ Date: e.activityDateTime, Activity: e.activityDisplayName, Category: e.category, By: e.initiatedBy, Target: e.target, Result: e.result })))}
+          className="ml-auto text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
       </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search activity, actor or target…" />
       {events.length === 0 ? <EmptyView label="No audit events found" /> : (
         <CompactTable headers={['Date', 'Activity', 'Category', 'Initiated By', 'Target', 'Result']} empty={false}
           rows={events.map(e => (
@@ -1134,17 +1325,29 @@ function AuditTimelineView({ d, onRefresh, loading }: { d: AuditTimelineData; on
 }
 
 function PasswordResetsView({ d, onRefresh, loading }: { d: PasswordResetsData; onRefresh: () => void; loading: boolean }) {
-  const resets = d.resets ?? []
+  const [search, setSearch] = useState('')
+  const all = d.resets ?? []
+  const resets = search ? all.filter(r =>
+    r.targetUser?.toLowerCase().includes(search.toLowerCase()) ||
+    r.initiatedBy?.toLowerCase().includes(search.toLowerCase())
+  ) : all
   return (
     <div>
       <ViewHeader title="Password Reset Activity" desc="Password reset events from the last 7 days." onRefresh={onRefresh} loading={loading} />
       <StatRow stats={[
-        { label: 'Total', value: d.total ?? 0, color: 'cyan' },
+        { label: 'Total',        value: d.total ?? 0,       color: 'cyan' },
         { label: 'Admin Resets', value: d.adminResets ?? 0, color: 'amber' },
         { label: 'Self-Service', value: d.selfService ?? 0, color: 'green' },
-        { label: 'Failed', value: d.failed ?? 0, color: 'red' },
+        { label: 'Failed',       value: d.failed ?? 0,      color: 'red' },
       ]} />
-      {resets.length === 0 ? <EmptyView label="No password reset events in the last 7 days" /> : (
+      {all.length > 0 && (
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search by user or actor…" /></div>
+          <button onClick={() => exportCsv('password-resets.csv', resets.map(r => ({ Date: r.activityDateTime, User: r.targetUser, By: r.initiatedBy, Activity: r.activity, Result: r.result })))}
+            className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+        </div>
+      )}
+      {resets.length === 0 ? <EmptyView label={search ? 'No matches' : 'No password reset events in the last 7 days'} /> : (
         <CompactTable headers={['Date / Time', 'User', 'Initiated By', 'Activity', 'Result']} empty={false}
           rows={resets.map(r => (
             <tr key={r.id} className="hover:bg-[#0d1e35] transition-colors">
@@ -1163,11 +1366,15 @@ function PasswordResetsView({ d, onRefresh, loading }: { d: PasswordResetsData; 
 
 function GroupHealthView({ d, onRefresh, loading }: { d: GroupHealthData; onRefresh: () => void; loading: boolean }) {
   const [filter, setFilter] = useState<'all' | 'issues' | 'orphaned' | 'external'>('all')
+  const [search, setSearch] = useState('')
   const groups = d.groups ?? []
-  const filtered = filter === 'issues' ? groups.filter(g => g.issues.length > 0)
-    : filter === 'orphaned' ? groups.filter(g => g.ownerCount === 0)
-    : filter === 'external' ? groups.filter(g => g.externalCount > 0)
-    : groups
+  const filtered = groups.filter(g => {
+    const matchFilter = filter === 'issues' ? g.issues.length > 0
+      : filter === 'orphaned' ? g.ownerCount === 0
+      : filter === 'external' ? g.externalCount > 0 : true
+    const q = search.toLowerCase()
+    return matchFilter && (!q || g.displayName?.toLowerCase().includes(q))
+  })
   return (
     <div>
       <ViewHeader title="Group Health Report" desc="Groups with governance issues — orphaned, empty, or with external members." onRefresh={onRefresh} loading={loading} />
@@ -1179,14 +1386,17 @@ function GroupHealthView({ d, onRefresh, loading }: { d: GroupHealthData; onRefr
         { label: 'Empty',        value: d.empty ?? 0,        color: 'purple' },
         { label: 'With External',value: d.withExternal ?? 0, color: d.withExternal > 0 ? 'amber' : 'green' },
       ]} />
-      <div className="flex gap-1 mb-2">
+      <div className="flex gap-1 mb-2 flex-wrap">
         {[['all', 'All'], ['issues', 'Issues'], ['orphaned', 'Orphaned'], ['external', 'External Members']].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k as typeof filter)}
             className={`text-[11px] px-2.5 py-1 rounded border transition-all ${filter === k ? 'bg-[#00d4ff12] border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#94a3b8]'}`}>
             {l}
           </button>
         ))}
+        <button onClick={() => exportCsv('groups.csv', filtered.map(g => ({ Group: g.displayName, Type: g.groupType, Members: g.memberCount, Owners: g.ownerCount, External: g.externalCount, Issues: g.issues.join(' | ') })))}
+          className="ml-auto text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all shrink-0">Export CSV</button>
       </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search group name…" />
       {filtered.length === 0 ? <EmptyView label="No groups match" /> : (
         <CompactTable headers={['Group Name', 'Type', 'Members', 'Owners', 'External', 'Issues']} empty={false}
           rows={filtered.map(g => (
@@ -1318,12 +1528,31 @@ export default function GovernancePage() {
         const users = (json.stale ?? []).map((u: any) => ({ ...u, licensed: u.hasLicense }))
         return { totalLicensed: json.totalLicensed ?? 0, staleCount: users.length, users, allLicensed: json.allLicensed ?? [], signInsAvailable: json.signInsAvailable ?? false, windowDays: json.windowDays ?? 7 }
       }
-      case 'license_waste':
-        return { skus: json.skus ?? [], disabledWithLicenses: (json.disabledWithLicense ?? []).map((u: any) => ({ ...u, licenses: [] })), subscriptionError: json.subscriptionError ?? null }
+      case 'license_waste': {
+        const skuMap: Record<string, string> = {}
+        for (const s of (json.skus ?? [])) skuMap[s.skuId] = s.skuPartNumber
+        return {
+          skus: json.skus ?? [],
+          disabledWithLicenses: (json.disabledWithLicense ?? []).map((u: any) => ({
+            ...u,
+            licenses: (u.assignedLicenses ?? []).map((l: any) => skuMap[l.skuId] ?? l.skuId ?? '?'),
+          })),
+          subscriptionError: json.subscriptionError ?? null,
+        }
+      }
       case 'guests':
         return { total: json.total ?? 0, pending: json.pending ?? 0, active: json.active ?? 0, guests: (json.guests ?? []).map((g: any) => ({ ...g, userState: g.externalUserState, daysSinceInvite: g.daysSince })) }
       case 'disabled_accounts':
-        return { totalDisabled: json.total ?? 0, withLicenses: json.withLicense ?? 0, accounts: (json.accounts ?? []).map((a: any) => ({ ...a, licenses: [] })) }
+        return {
+          totalDisabled: json.total ?? 0,
+          withLicenses: json.withLicense ?? 0,
+          accounts: (json.accounts ?? []).map((a: any) => ({
+            ...a,
+            licenses: a.hasLicense
+              ? (a.licenseCount > 0 ? [`${a.licenseCount} license${a.licenseCount !== 1 ? 's' : ''}`] : ['Licensed'])
+              : [],
+          })),
+        }
       case 'directory_insights':
         return { profileScores: json.profileScores ?? [], avgProfileScore: json.avgProfileScore ?? 0, totalUsers: json.totalUsers ?? 0, accountAge: json.accountAge ?? [], authMethodDist: json.authMethodDist ?? [], authMethodError: json.authMethodError ?? null }
       case 'device_intel':

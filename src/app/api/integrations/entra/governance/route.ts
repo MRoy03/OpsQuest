@@ -567,46 +567,52 @@ async function handleAdminRoles(token: string) {
     'Exchange Administrator', 'SharePoint Administrator', 'Teams Administrator',
     'Intune Administrator', 'User Administrator', 'Authentication Administrator',
     'Application Administrator', 'Cloud Application Administrator',
+    'Privileged Authentication Administrator', 'Hybrid Identity Administrator',
   ]
 
-  const [rolesResp, assignmentsResp] = await Promise.allSettled([
-    graphGet('/directoryRoles?$select=id,displayName,description', token),
+  // ─── IMPORTANT: must use roleDefinitions (not directoryRoles) ───────────
+  // directoryRoles.id is the role INSTANCE id (tenant-specific).
+  // roleAssignments.roleDefinitionId is the role DEFINITION id.
+  // Only roleDefinitions.id matches roleAssignments.roleDefinitionId.
+  const [defsResp, assignmentsResp] = await Promise.allSettled([
+    graphGet('/roleManagement/directory/roleDefinitions?$select=id,displayName&$top=300', token),
     graphGet(
-      '/roleManagement/directory/roleAssignments?$expand=principal($select=id,displayName,mail,userPrincipalName,accountEnabled)&$top=999',
+      '/roleManagement/directory/roleAssignments?$expand=principal($select=id,displayName,mail,userPrincipalName,accountEnabled,@odata.type)&$top=999',
       token
     ),
   ])
 
-  if (rolesResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
+  if (defsResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
     return NextResponse.json({
       assignments: [], total: 0, highPrivCount: 0,
       rolesError: 'Grant RoleManagement.Read.Directory permission in Azure Portal → App Registration → API Permissions.',
     })
   }
 
-  const roles: any[] = rolesResp.value.value ?? []
-  const raw: any[]   = assignmentsResp.value.value ?? []
+  const defs: any[] = defsResp.value.value ?? []
+  const raw: any[]  = assignmentsResp.value.value ?? []
 
+  // Build id → displayName map from role definitions
   const roleMap: Record<string, string> = {}
-  for (const r of roles) roleMap[r.id] = r.displayName
+  for (const r of defs) if (r.id && r.displayName) roleMap[r.id] = r.displayName
 
   const groups: Record<string, { roleName: string; isHighPriv: boolean; members: any[] }> = {}
   for (const a of raw) {
-    const roleName = roleMap[a.roleDefinitionId] || a.roleDefinitionId
+    const roleName = roleMap[a.roleDefinitionId] || `Role ${a.roleDefinitionId?.slice(0, 8) ?? '?'}`
     if (!groups[a.roleDefinitionId]) {
       groups[a.roleDefinitionId] = {
         roleName,
-        isHighPriv: HIGH_PRIV.some(hp => roleName.includes(hp)),
+        isHighPriv: HIGH_PRIV.some(hp => roleName === hp || roleName.includes(hp)),
         members: [],
       }
     }
     if (a.principal) {
       groups[a.roleDefinitionId].members.push({
-        id:           a.principal.id,
-        displayName:  a.principal.displayName,
-        mail:         a.principal.mail || a.principal.userPrincipalName,
+        id:             a.principal.id,
+        displayName:    a.principal.displayName,
+        mail:           a.principal.mail || a.principal.userPrincipalName,
         accountEnabled: a.principal.accountEnabled,
-        principalType: (a.principal['@odata.type'] || '').replace('#microsoft.graph.', ''),
+        principalType:  (a.principal['@odata.type'] || '').replace('#microsoft.graph.', ''),
       })
     }
   }

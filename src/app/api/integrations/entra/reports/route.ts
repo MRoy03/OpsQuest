@@ -49,6 +49,92 @@ async function graphGetSafe(path: string, token: string, fallback: unknown = nul
   try { return await graphGet(path, token, base) } catch { return fallback }
 }
 
+// ── Report-specific fetcher ─────────────────────────────────────────────────
+// Microsoft's usage-report endpoints sometimes return CSV even when JSON is
+// requested via $format. This helper handles both formats and normalises the
+// CSV column names to their Graph JSON equivalents.
+
+function splitCsvLine(line: string): string[] {
+  const cols: string[] = []
+  let field = '', inQ = false
+  for (const ch of line) {
+    if (ch === '"') { inQ = !inQ }
+    else if (ch === ',' && !inQ) { cols.push(field.replace(/^"|"$/g, '')); field = '' }
+    else { field += ch }
+  }
+  cols.push(field.replace(/^"|"$/g, ''))
+  return cols
+}
+
+// Map known CSV column headers → Graph JSON property names
+const CSV_COL: Record<string, string> = {
+  'User Principal Name': 'userPrincipalName',
+  'Display Name': 'displayName',
+  'Is Deleted': 'isDeleted',
+  'Deleted Date': 'deletedDate',
+  'Created Date': 'createdDate',
+  'Last Activity Date': 'lastActivityDate',
+  'Item Count': 'itemCount',
+  'Storage Used (Byte)': 'storageUsedInBytes',
+  'Issue Warning Quota (Byte)': 'issueWarningQuotaInBytes',
+  'Prohibit Send Quota (Byte)': 'prohibitSendQuotaInBytes',
+  'Prohibit Send/Receive Quota (Byte)': 'prohibitSendReceiveQuotaInBytes',
+  'Report Period': 'reportPeriod',
+  'Report Refresh Date': 'reportRefreshDate',
+  // Teams CSV columns
+  'Team Chat Message Count': 'teamChatMessageCount',
+  'Private Chat Message Count': 'privateChatMessageCount',
+  'Call Count': 'callCount',
+  'Meeting Count': 'meetingCount',
+  'Meetings Organized Count': 'meetingsOrganizedCount',
+  'Meetings Attended Count': 'meetingsAttendedCount',
+  'Is Licensed': 'isLicensed',
+}
+
+function parseCsvToJson(csv: string): { value: any[] } {
+  const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+  if (lines.length < 2) return { value: [] }
+  const headers = splitCsvLine(lines[0])
+  const value = lines.slice(1).filter(l => l.trim()).map(line => {
+    const cols = splitCsvLine(line)
+    const obj: Record<string, any> = {}
+    headers.forEach((h, i) => {
+      const key = CSV_COL[h] ?? h
+      const val = cols[i] ?? ''
+      // Coerce numerics and booleans
+      if (/^\d+$/.test(val)) obj[key] = parseInt(val, 10)
+      else if (val === 'True' || val === 'False') obj[key] = val === 'True'
+      else obj[key] = val === '' ? null : val
+    })
+    return obj
+  })
+  return { value }
+}
+
+async function graphGetReport(path: string, token: string): Promise<any> {
+  // Use Accept: application/json which is more reliable than $format= for report endpoints
+  const resp = await fetch(`${GRAPH_BASE}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(30000),
+  })
+
+  if (!resp.ok) {
+    const err = await resp.text()
+    throw new Error(`Graph ${path} → ${resp.status}: ${err.slice(0, 200)}`)
+  }
+
+  const ct = resp.headers.get('content-type') ?? ''
+  if (ct.includes('text/csv') || ct.includes('application/octet-stream') || ct.includes('text/plain')) {
+    const text = await resp.text()
+    return parseCsvToJson(text)
+  }
+  return resp.json()
+}
+
 // ── Report handlers ────────────────────────────────────────────────────────
 
 // scope=license_sku  – License SKU breakdown
@@ -143,7 +229,7 @@ async function handleUserActivity(token: string) {
 // scope=mail_usage – Mail usage per licensed user (requires Reports.Read.All)
 async function handleMailUsage(token: string) {
   const [reportResp, usersResp] = await Promise.allSettled([
-    graphGet('/reports/getMailboxUsageDetail(period=\'D30\')?$format=application/json', token),
+    graphGetReport("/reports/getMailboxUsageDetail(period='D30')", token),
     graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
   ])
 
@@ -193,7 +279,7 @@ async function handleMailUsage(token: string) {
 // scope=teams_usage – Teams activity report (requires Reports.Read.All)
 async function handleTeamsUsage(token: string) {
   const [teamsResp, usersResp] = await Promise.allSettled([
-    graphGet('/reports/getTeamsUserActivityUserDetail(period=\'D30\')?$format=application/json', token),
+    graphGetReport("/reports/getTeamsUserActivityUserDetail(period='D30')", token),
     graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
   ])
 
