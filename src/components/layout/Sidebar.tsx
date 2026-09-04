@@ -11,10 +11,11 @@ import {
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2,
   Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
   Printer, Map, Calendar, Settings, Network, Lock, Globe, Crown,
-  ChevronDown, ChevronRight, Users,
+  ChevronDown, ChevronRight, Users, Sun, Moon,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useTheme } from '@/contexts/ThemeContext'
 import NotificationBell from '@/components/NotificationBell'
 
 const SUPERADMIN_EMAIL = 'roy62125@gmail.com'
@@ -101,6 +102,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
   const { user, loading, signOut } = useAuth()
+  const { theme, toggle } = useTheme()
 
   const isSuperAdmin = user?.email === SUPERADMIN_EMAIL
   const { role, granted_pages, loading: permsLoading } = usePermissions(
@@ -319,6 +321,41 @@ export default function Sidebar() {
           )
         })()}
       </nav>
+
+      {/* Theme toggle */}
+      <div className="px-3 pb-1">
+        <motion.button
+          onClick={toggle}
+          whileTap={{ scale: 0.92 }}
+          title={theme === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all duration-200
+            border-[#1a2f4a] bg-[#ffffff05] text-[#475569]
+            hover:border-[#7c3aed44] hover:bg-[#7c3aed08] hover:text-[#a78bfa]
+            group"
+        >
+          <span className="relative w-4 h-4 shrink-0">
+            <Sun  className={`absolute inset-0 w-4 h-4 transition-all duration-300 ${theme === 'light' ? 'opacity-100 rotate-0 scale-100 text-[#f59e0b]' : 'opacity-0 -rotate-90 scale-50'}`} />
+            <Moon className={`absolute inset-0 w-4 h-4 transition-all duration-300 ${theme === 'dark'  ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 rotate-90 scale-50'}`} />
+          </span>
+          <span className="text-xs flex-1 text-left">
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </span>
+          {/* Toggle pill */}
+          <span className={`relative w-8 h-4 rounded-full border transition-all duration-300 shrink-0 ${
+            theme === 'light'
+              ? 'bg-[#f59e0b22] border-[#f59e0b44]'
+              : 'bg-[#7c3aed11] border-[#7c3aed33]'
+          }`}>
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full transition-all duration-300 ${
+              theme === 'light'
+                ? 'left-[18px] bg-[#f59e0b]'
+                : 'left-0.5 bg-[#7c3aed]'
+            }`}
+              style={{ boxShadow: theme === 'light' ? '0 0 6px #f59e0b88' : '0 0 6px #7c3aed88' }}
+            />
+          </span>
+        </motion.button>
+      </div>
 
       {/* User area */}
       <div className="px-3 py-3 border-t border-[#1a2f4a] space-y-2">

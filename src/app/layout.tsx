@@ -12,9 +12,28 @@ export const metadata: Metadata = {
   description: 'Predict, prevent, and auto-resolve IT issues with gamified operations.',
 }
 
+// Inline script that runs before the first paint to apply the stored theme,
+// preventing a flash of the wrong theme (FOUT) on page load.
+const antiFoucScript = `
+(function(){
+  try {
+    var t = localStorage.getItem('opsquest-theme');
+    if (t === 'light' || t === 'dark') {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+  } catch(e) {}
+})();
+`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    // suppressHydrationWarning: ThemeProvider sets data-theme on <html> client-side;
+    // the attribute value may differ between SSR and first client render.
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
+      </head>
       <body className="flex min-h-screen bg-[#060b18] text-[#e2e8f0] antialiased">
         <AuthProvider>
           <AppShell>{children}</AppShell>

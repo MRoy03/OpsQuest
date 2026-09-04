@@ -3,6 +3,7 @@
 import { createContext, useEffect, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import ThemeProvider from '@/components/theme/ThemeProvider'
 
 interface AuthContextType {
   user: User | null
@@ -113,7 +114,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   return (
     <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, signInWithMicrosoft, resetPassword, updatePassword }}>
-      {children}
+      <ThemeProvider>
+        {children}
+      </ThemeProvider>
     </AuthContext.Provider>
   )
 }
