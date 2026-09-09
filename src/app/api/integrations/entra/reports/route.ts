@@ -89,6 +89,13 @@ const CSV_COL: Record<string, string> = {
   'Meetings Organized Count': 'meetingsOrganizedCount',
   'Meetings Attended Count': 'meetingsAttendedCount',
   'Is Licensed': 'isLicensed',
+  // OneDrive CSV columns
+  'File Count': 'fileCount',
+  'Active File Count': 'activeFileCount',
+  'Storage Allocated (Byte)': 'storageAllocatedInBytes',
+  'Owner Display Name': 'ownerDisplayName',
+  'Site URL': 'siteUrl',
+  'Owner Principal Name': 'ownerPrincipalName',
 }
 
 function parseCsvToJson(csv: string): { value: any[] } {
@@ -321,6 +328,65 @@ async function handleTeamsUsage(token: string) {
   return NextResponse.json({ rows, totalUsers: rows.length, activeUsers, totalMessages, totalMeetings, reportError })
 }
 
+// scope=onedrive_usage – OneDrive storage report (requires Reports.Read.All)
+async function handleOneDriveUsage(token: string) {
+  const [reportResp, usersResp] = await Promise.allSettled([
+    graphGetReport("/reports/getOneDriveUsageAccountDetail(period='D30')", token),
+    graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+  ])
+
+  let oneDriveData: any[] = []
+  let reportError: string | null = null
+
+  if (reportResp.status === 'fulfilled') {
+    oneDriveData = reportResp.value?.value ?? []
+  } else {
+    reportError = reportResp.reason?.message?.slice(0, 200) ?? 'OneDrive report unavailable — requires Reports.Read.All permission'
+  }
+
+  const users = usersResp.status === 'fulfilled' ? (usersResp.value?.value ?? []) : []
+  const userMap: Record<string, any> = {}
+  for (const u of users) {
+    const key = (u.mail ?? '').toLowerCase()
+    userMap[key] = { id: u.id, displayName: u.displayName, department: u.department }
+  }
+
+  const rows = oneDriveData
+    .filter((r: any) => !r.isDeleted)
+    .map((r: any) => {
+      const upn = (r.userPrincipalName ?? r.ownerPrincipalName ?? '').toLowerCase()
+      const enriched = userMap[upn] ?? {}
+      const usedBytes = r.storageUsedInBytes ?? 0
+      const allocBytes = r.storageAllocatedInBytes ?? 0
+      return {
+        userPrincipalName: r.userPrincipalName ?? r.ownerPrincipalName ?? '',
+        displayName: r.displayName ?? enriched.displayName ?? r.ownerDisplayName ?? upn,
+        department: enriched.department ?? '—',
+        siteUrl: r.siteUrl ?? '—',
+        fileCount: r.fileCount ?? 0,
+        activeFileCount: r.activeFileCount ?? 0,
+        storageUsedGB: usedBytes ? +(usedBytes / 1073741824).toFixed(2) : 0,
+        storageAllocatedGB: allocBytes ? +(allocBytes / 1073741824).toFixed(0) : 1024,
+        usagePct: allocBytes && usedBytes ? Math.round((usedBytes / allocBytes) * 100) : 0,
+        lastActivity: r.lastActivityDate ?? null,
+        isLicensed: r.isLicensed ?? false,
+      }
+    })
+
+  const totalStorageGB = rows.reduce((s: number, r: any) => s + r.storageUsedGB, 0)
+  const nearQuota = rows.filter((r: any) => r.usagePct >= 80).length
+  const activeUsers = rows.filter((r: any) => r.lastActivity).length
+
+  return NextResponse.json({
+    rows,
+    totalUsers: rows.length,
+    activeUsers,
+    totalStorageGB: +totalStorageGB.toFixed(2),
+    nearQuota,
+    reportError,
+  })
+}
+
 // scope=overview – All report summaries in one call
 async function handleOverview(token: string) {
   const [licResp, activityResp] = await Promise.allSettled([
@@ -352,8 +418,9 @@ export async function GET(req: NextRequest) {
       case 'license_sku':   return handleLicenseSku(token)
       case 'user_activity': return handleUserActivity(token)
       case 'mail_usage':    return handleMailUsage(token)
-      case 'teams_usage':   return handleTeamsUsage(token)
-      case 'overview':      return handleOverview(token)
+      case 'teams_usage':    return handleTeamsUsage(token)
+      case 'onedrive_usage': return handleOneDriveUsage(token)
+      case 'overview':       return handleOverview(token)
       default:              return NextResponse.json({ error: `Unknown scope: ${scope}` }, { status: 400 })
     }
   } catch (e: any) {

@@ -468,3 +468,43 @@ html[data-theme="light"] .animate-glow-pulse {
   0%, 100% { box-shadow: 0 0 6px rgba(124,58,237,0.30); }
   50%       { box-shadow: 0 0 18px rgba(124,58,237,0.60), 0 0 36px rgba(124,58,237,0.20); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT THEME — Hover / Focus pseudo-class overrides
+   Tailwind generates hover:bg-[#0d1e35] as a SEPARATE class
+   (.hover\:bg-\[\#0d1e35\]:hover) from the plain .bg-\[\#0d1e35\] class.
+   The static overrides above do NOT catch these — add them explicitly.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hover-state backgrounds ─────────────────────────────────────────────── */
+html[data-theme="light"] .hover\:bg-\[\#0d1e35\]:hover  { background-color: #ddd2ff !important; }
+html[data-theme="light"] .hover\:bg-\[\#0a1525\]:hover  { background-color: #e4daff !important; }
+html[data-theme="light"] .hover\:bg-\[\#060b18\]:hover  { background-color: #ede6ff !important; }
+html[data-theme="light"] .hover\:bg-\[\#080f1d\]:hover  { background-color: #ede8ff !important; }
+html[data-theme="light"] .hover\:bg-\[\#0f2340\]:hover  { background-color: #ddd2ff !important; }
+html[data-theme="light"] .hover\:bg-\[\#132035\]:hover  { background-color: #d8ceff !important; }
+html[data-theme="light"] .hover\:bg-\[\#ffffff03\]:hover { background-color: rgba(15,5,36,0.025) !important; }
+html[data-theme="light"] .hover\:bg-\[\#ffffff08\]:hover { background-color: rgba(15,5,36,0.06)  !important; }
+html[data-theme="light"] .hover\:bg-\[\#ffffff0d\]:hover { background-color: rgba(15,5,36,0.08)  !important; }
+html[data-theme="light"] .hover\:bg-\[\#00d4ff11\]:hover { background-color: rgba(0,168,204,0.20) !important; }
+html[data-theme="light"] .hover\:bg-\[\#00d4ff08\]:hover { background-color: rgba(0,168,204,0.14) !important; }
+
+/* ── Hover-state borders ─────────────────────────────────────────────────── */
+html[data-theme="light"] .hover\:border-\[\#1e3352\]:hover   { border-color: #c0aed8 !important; }
+html[data-theme="light"] .hover\:border-\[\#2a3f5a\]:hover   { border-color: #c4b4e4 !important; }
+html[data-theme="light"] .hover\:border-\[\#1a2f4a\]:hover   { border-color: #b8a4e0 !important; }
+html[data-theme="light"] .hover\:border-\[\#00d4ff30\]:hover { border-color: rgba(0,168,204,0.55) !important; }
+
+/* ── Hover-state text colours ────────────────────────────────────────────── */
+html[data-theme="light"] .hover\:text-\[\#e2e8f0\]:hover { color: #0f0524 !important; }
+html[data-theme="light"] .hover\:text-\[\#94a3b8\]:hover { color: #2d1272 !important; }
+html[data-theme="light"] .hover\:text-\[\#00d4ff\]:hover { color: #0369a1 !important; }
+
+/* ── Focus / focus-within state ──────────────────────────────────────────── */
+html[data-theme="light"] .focus\:border-\[\#00d4ff44\]:focus              { border-color: rgba(0,168,204,0.70) !important; }
+html[data-theme="light"] .focus-within\:border-\[\#00d4ff44\]:focus-within { border-color: rgba(0,168,204,0.70) !important; }
+html[data-theme="light"] .focus-within\:border-\[\#00d4ff33\]:focus-within { border-color: rgba(0,168,204,0.60) !important; }
+
+/* ── Missing static backgrounds ──────────────────────────────────────────── */
+html[data-theme="light"] .bg-\[\#1e3352\] { background-color: #d0c4f0 !important; }
+html[data-theme="light"] .bg-\[\#0d1a2d\] { background-color: #e2d8ff !important; }

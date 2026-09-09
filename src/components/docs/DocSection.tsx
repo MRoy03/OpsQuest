@@ -10,6 +10,7 @@ interface DocContent {
   content?: string
   steps?: string[]
   items?: DocItem[]
+  code?: string   // multi-line boilerplate code block
 }
 interface DocEntry {
   id: string
@@ -130,7 +131,7 @@ function DocCard({ entry, searchTerm }: { entry: DocEntry; searchTerm: string })
                       {section.steps.map((step, i) => {
                         const key = `${entry.id}-${sIdx}`
                         const done = checkedSteps[key]?.has(i)
-                        const isCode = step.startsWith('docker') || step.startsWith('kubectl') || step.startsWith('terraform') || step.startsWith('git') || step.startsWith('az ') || step.startsWith('npm')
+                        const isCode = step.startsWith('docker') || step.startsWith('kubectl') || step.startsWith('terraform') || step.startsWith('git') || step.startsWith('az ') || step.startsWith('npm') || step.startsWith('gh ') || step.startsWith('helm') || step.startsWith('gitlab-runner')
                         return (
                           <div key={i} className={`flex items-start gap-3 rounded-lg transition-all ${done ? 'opacity-50' : ''}`}>
                             <button
@@ -155,6 +156,18 @@ function DocCard({ entry, searchTerm }: { entry: DocEntry; searchTerm: string })
                     </div>
                   )}
 
+                  {section.code && (
+                    <div className="rounded-lg border border-[#1a2f4a] overflow-hidden mt-1">
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-[#080f1d] border-b border-[#1a2f4a]">
+                        <span className="text-[10px] text-[#475569] font-mono uppercase tracking-wider">boilerplate — click copy to use</span>
+                        <CopyButton text={section.code} />
+                      </div>
+                      <div className="overflow-x-auto">
+                        <pre className="text-[10px] font-mono text-[#10b981] p-3 leading-relaxed whitespace-pre">{section.code}</pre>
+                      </div>
+                    </div>
+                  )}
+
                   {section.items && (
                     <div className="space-y-2">
                       {section.items.map((item, i) => (
@@ -163,7 +176,7 @@ function DocCard({ entry, searchTerm }: { entry: DocEntry; searchTerm: string })
                             <p className={`text-[11px] font-semibold ${c.heading}`}>{item.label}</p>
                             <CopyButton text={item.path} />
                           </div>
-                          <p className="text-[11px] text-[#64748b] font-mono mt-1 leading-relaxed">{item.path}</p>
+                          <p className="text-[11px] text-[#64748b] font-mono mt-1 leading-relaxed whitespace-pre-wrap">{item.path}</p>
                         </div>
                       ))}
                     </div>

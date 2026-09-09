@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import {
   Package, Activity, Mail, Users, RefreshCw, AlertTriangle,
   CheckCircle, Search, BarChart2, MessageSquare, Video, Phone,
-  TrendingUp, TrendingDown, Minus, Download, Info,
+  TrendingUp, TrendingDown, Minus, Download, Info, HardDrive,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -34,6 +34,13 @@ interface TeamsRow {
   isLicensed: boolean; isDeleted: boolean
 }
 
+interface OneDriveRow {
+  userPrincipalName: string; displayName: string; department: string
+  siteUrl: string; fileCount: number; activeFileCount: number
+  storageUsedGB: number; storageAllocatedGB: number
+  usagePct: number; lastActivity: string | null; isLicensed: boolean
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const SKU_NAMES: Record<string, string> = {
@@ -47,10 +54,11 @@ const SKU_NAMES: Record<string, string> = {
 }
 
 const TABS = [
-  { key: 'license_sku',   label: 'License SKU',      icon: Package },
-  { key: 'user_activity', label: 'Sign-In Activity',  icon: Activity },
-  { key: 'mail_usage',    label: 'Mail Usage',        icon: Mail },
-  { key: 'teams_usage',   label: 'Teams Usage',       icon: MessageSquare },
+  { key: 'license_sku',    label: 'License SKU',      icon: Package },
+  { key: 'user_activity',  label: 'Sign-In Activity', icon: Activity },
+  { key: 'mail_usage',     label: 'Mail Usage',        icon: Mail },
+  { key: 'teams_usage',    label: 'Teams Usage',       icon: MessageSquare },
+  { key: 'onedrive_usage', label: 'OneDrive Usage',    icon: HardDrive },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -471,6 +479,117 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
   )
 }
 
+// ── OneDrive Usage View ────────────────────────────────────────────────────
+
+function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'storage' | 'name' | 'files'>('storage')
+  const rows: OneDriveRow[] = data.rows ?? []
+
+  const filtered = useMemo(() => {
+    let list = [...rows]
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(r =>
+        r.displayName?.toLowerCase().includes(q) ||
+        r.userPrincipalName?.toLowerCase().includes(q) ||
+        r.department?.toLowerCase().includes(q)
+      )
+    }
+    if (sortBy === 'storage') list.sort((a, b) => b.storageUsedGB - a.storageUsedGB)
+    if (sortBy === 'name')    list.sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
+    if (sortBy === 'files')   list.sort((a, b) => b.fileCount - a.fileCount)
+    return list
+  }, [rows, search, sortBy])
+
+  return (
+    <div className="space-y-3">
+      {data.reportError && <PermBanner message={data.reportError} />}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <SumCard label="Accounts"        value={data.totalUsers ?? 0}                     color="cyan" />
+        <SumCard label="Active (30d)"    value={data.activeUsers ?? 0}                    color="green" />
+        <SumCard label="Total Storage"   value={`${data.totalStorageGB ?? 0} GB`}         color="purple" />
+        <SumCard label="Near Quota (80%+)" value={data.nearQuota ?? 0}                   color={data.nearQuota > 0 ? 'amber' : 'green'} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="w-3 h-3 text-[#334155] absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search users…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-7 pr-3 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44] w-48"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          className="bg-[#060b18] border border-[#1a2f4a] rounded px-2 py-1 text-[11px] text-[#94a3b8] outline-none"
+        >
+          <option value="storage">Sort: Storage Used</option>
+          <option value="name">Sort: Name</option>
+          <option value="files">Sort: File Count</option>
+        </select>
+        <button
+          onClick={() => exportCsv('onedrive-usage.csv', filtered.map(r => ({
+            User: r.displayName, Email: r.userPrincipalName, Department: r.department,
+            Files: r.fileCount, ActiveFiles: r.activeFileCount,
+            StorageGB: r.storageUsedGB, AllocatedGB: r.storageAllocatedGB,
+            UsagePct: `${r.usagePct}%`, LastActivity: r.lastActivity ?? 'None',
+          })))}
+          className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all"
+        >
+          <Download className="w-3 h-3" /> CSV
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-[#334155]">
+          <HardDrive className="w-6 h-6 mb-2 opacity-30" />
+          <p className="text-xs">{data.reportError ? 'Report data unavailable' : 'No OneDrive data found'}</p>
+          {!data.reportError && (
+            <p className="text-[11px] text-[#334155] mt-1">Requires <code className="font-mono bg-[#0a1525] px-1 rounded">Reports.Read.All</code> permission</p>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
+          <table className="w-full text-[11px]">
+            <thead>
+              <TableHeader headers={['User', 'Email', 'Dept', 'Files', 'Active Files', 'Storage', 'Usage', 'Last Activity']} />
+            </thead>
+            <tbody className="divide-y divide-[#0d1e35]">
+              {filtered.map((r, i) => {
+                const bc = r.usagePct >= 90 ? '#ef4444' : r.usagePct >= 80 ? '#f59e0b' : '#10b981'
+                return (
+                  <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+                    <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{r.displayName}</td>
+                    <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{r.userPrincipalName}</td>
+                    <td className="px-3 py-1.5 text-[#64748b]">{r.department}</td>
+                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.fileCount.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 font-mono text-[#64748b]">{r.activeFileCount.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.storageUsedGB} GB</td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-16 h-1 bg-[#1a2f4a] rounded-full">
+                          <div className="h-1 rounded-full" style={{ width: `${Math.min(r.usagePct, 100)}%`, background: bc }} />
+                        </div>
+                        <span className="font-mono text-[10px] font-bold" style={{ color: bc }}>{r.usagePct}%</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 text-[#64748b]">{fmt(r.lastActivity)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function EntraReportsPage() {
@@ -509,8 +628,9 @@ export default function EntraReportsPage() {
     switch (activeTab) {
       case 'license_sku':   return <LicenseSkuView   {...props} />
       case 'user_activity': return <UserActivityView {...props} />
-      case 'mail_usage':    return <MailUsageView    {...props} />
-      case 'teams_usage':   return <TeamsUsageView   {...props} />
+      case 'mail_usage':     return <MailUsageView      {...props} />
+      case 'teams_usage':    return <TeamsUsageView     {...props} />
+      case 'onedrive_usage': return <OneDriveUsageView  {...props} />
       default: return null
     }
   }
