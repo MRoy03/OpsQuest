@@ -73,7 +73,7 @@ export async function GET(
           token
         ),
         // Groups + directory roles — requires Directory.Read.All or RoleManagement.Read.Directory
-        graphGetSafe(
+        graphGet(
           `/users/${encodeURIComponent(id)}/memberOf?$select=id,displayName,@odata.type,roleTemplateId&$top=100`,
           token
         ),
@@ -118,6 +118,9 @@ export async function GET(
     return NextResponse.json({
       profile:        profileRes.status      === 'fulfilled' ? profileRes.value          : null,
       memberOf:       memberOfRes.status     === 'fulfilled' ? (memberOfRes.value?.value ?? [])    : [],
+      memberOfError:  memberOfRes.status     === 'rejected'
+        ? 'Grant Directory.Read.All and click "Grant admin consent" in Azure Portal → App Registration → API Permissions.'
+        : null,
       devices:        devicesRes.status      === 'fulfilled' ? (devicesRes.value?.value ?? [])     : [],
       authMethods:    authMethodsRes.status  === 'fulfilled' ? (authMethodsRes.value?.value ?? []) : [],
       licenseDetails: licensesRes.status     === 'fulfilled' ? (licensesRes.value?.value ?? [])    : [],

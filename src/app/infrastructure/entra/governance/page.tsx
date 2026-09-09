@@ -66,8 +66,22 @@ interface GroupHealthData {
   groupsError?: string | null
 }
 interface OrgStructureData {
-  totalUsers: number; totalDepartments: number; totalLocations: number
-  departments: { department: string; count: number; locations: string[]; topTitles: string[] }[]
+  totalUsers: number
+  totalDepartments: number
+  totalLocations: number
+  totalOffices?: number
+  departments: {
+    department: string
+    count: number
+    locations: string[]
+    topTitles: string[]
+    users?: { id: string; displayName: string; mail: string; jobTitle: string }[]
+  }[]
+  offices?: {
+    name: string
+    count: number
+    departments: string[]
+  }[]
 }
 
 // ── NEW Types ────────────────────────────────────────────────────────────────
@@ -516,7 +530,12 @@ function AppSecurityView({ d, onRefresh, loading }: { d: AppSecurityData; onRefr
             {l}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-[#334155] self-center">{d.totalSPs} enterprise apps total</span>
+        <span className="text-[10px] text-[#334155] self-center mr-auto">{d.totalSPs} enterprise apps total</span>
+        <button onClick={() => tab === 'creds'
+          ? exportCsv('sp-creds.csv', creds.map(c => ({ App: c.appName, Publisher: c.publisher, Type: c.credType, Name: c.credName, Expires: c.endDateTime, DaysLeft: c.daysLeft, Status: c.status })))
+          : exportCsv('oauth-grants.csv', grants.map(g => ({ App: g.clientName, Principal: g.principalName, ConsentType: g.consentType, Scopes: g.scopes.join(' | '), HighRiskScopes: g.highRiskScopes.join(' | '), Risk: g.risk })))
+        }
+          className="text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
       </div>
 
       {tab === 'creds' && (
@@ -786,10 +805,14 @@ function DirectoryInsightsView({ d, onRefresh, loading }: { d: DirectoryInsights
 
       {tab === 'profile' && (
         <div className="space-y-2">
-          <div className="relative">
-            <Search className="w-3 h-3 text-[#334155] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44]" />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3 h-3 text-[#334155] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44]" />
+            </div>
+            <button onClick={() => exportCsv('profile-completeness.csv', filtered.map(u => ({ Name: u.displayName, Email: u.mail, Department: u.department, Score: `${u.score}%`, MissingFields: u.missing.join(' | '), Licensed: u.licensed })))}
+              className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
           </div>
           {filtered.length === 0 ? <EmptyView label="No users" /> : (
             <CompactTable headers={['User', 'Email', 'Dept', 'Score', 'Missing Fields', 'Licensed']} empty={false}
@@ -866,6 +889,16 @@ function DirectoryInsightsView({ d, onRefresh, loading }: { d: DirectoryInsights
   )
 }
 
+function getOsDisplay(os: string, version: string): string {
+  if (!os) return '—'
+  if (os.toLowerCase().includes('windows')) {
+    const build = parseInt((version || '').split('.')[2] ?? '0', 10)
+    if (build >= 22000) return 'Windows 11'
+    if (build > 0) return 'Windows 10'
+  }
+  return os
+}
+
 function DeviceIntelView({ d, onRefresh, loading }: { d: DeviceIntelData; onRefresh: () => void; loading: boolean }) {
   const [filter, setFilter] = useState<'all' | 'stale' | 'noowner' | 'noncompliant'>('all')
   const [search, setSearch] = useState('')
@@ -898,7 +931,7 @@ function DeviceIntelView({ d, onRefresh, loading }: { d: DeviceIntelData; onRefr
             {l}
           </button>
         ))}
-        <button onClick={() => exportCsv('devices.csv', filtered.map(dev => ({ Device: dev.displayName, OS: `${dev.operatingSystem} ${dev.operatingSystemVersion}`, Owners: dev.owners.map(o => o.displayName).join(' | '), LastSeenDays: dev.lastSeenDays, Compliant: dev.isCompliant, Managed: dev.isManaged, Trust: dev.trustType })))}
+        <button onClick={() => exportCsv('devices.csv', filtered.map(dev => ({ Device: dev.displayName, OS: getOsDisplay(dev.operatingSystem, dev.operatingSystemVersion), Owners: dev.owners.map(o => o.displayName).join(' | '), LastSeenDays: dev.lastSeenDays, Compliant: dev.isCompliant, Managed: dev.isManaged, Trust: dev.trustType })))}
           className="ml-auto text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all shrink-0">Export CSV</button>
       </div>
       <SearchInput value={search} onChange={setSearch} placeholder="Search device name, OS or owner…" />
@@ -914,7 +947,7 @@ function DeviceIntelView({ d, onRefresh, loading }: { d: DeviceIntelData; onRefr
                     {dev.displayName}
                   </span>
                 </td>
-                <td className="px-3 py-1.5 text-[#64748b] text-[10px]">{dev.operatingSystem} {dev.operatingSystemVersion}</td>
+                <td className="px-3 py-1.5 text-[#64748b] text-[10px]">{getOsDisplay(dev.operatingSystem, dev.operatingSystemVersion)}</td>
                 <td className="px-3 py-1.5">
                   {dev.owners.length === 0
                     ? <span className="text-[#ef4444] text-[10px]">No owner</span>
@@ -1028,7 +1061,12 @@ function MfaUserTable({ users }: { users: MfaCoverageData['users'] }) {
 
 function ServicePrincipalsView({ d, onRefresh, loading }: { d: ServicePrincipalsData; onRefresh: () => void; loading: boolean }) {
   const [expanded, setExpanded] = useState<string | null>(null)
-  const principals = d.principals ?? []
+  const [search, setSearch] = useState('')
+  const all = d.principals ?? []
+  const principals = search ? all.filter(p =>
+    p.appName?.toLowerCase().includes(search.toLowerCase()) ||
+    p.publisher?.toLowerCase().includes(search.toLowerCase())
+  ) : all
   return (
     <div>
       <ViewHeader title="Overprivileged App Audit" desc="Application permissions granted to Microsoft Graph API." onRefresh={onRefresh} loading={loading} />
@@ -1036,9 +1074,15 @@ function ServicePrincipalsView({ d, onRefresh, loading }: { d: ServicePrincipals
         <Info className="w-3 h-3 shrink-0 mt-0.5" />
         App-level permissions may allow broad data access without user context.
       </div>
-      {principals.length === 0 ? <EmptyView label="No risky permissions found" /> : (
-        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden divide-y divide-[#0d1e35]">
-          {principals.map(p => (
+      {all.length === 0 ? <EmptyView label="No risky permissions found" /> : (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search app name or publisher…" /></div>
+            <button onClick={() => exportCsv('app-permissions.csv', all.flatMap(p => p.permissions.map(perm => ({ App: p.appName, Publisher: p.publisher, Permission: perm.value, Type: perm.type, Risk: perm.risk, MaxRisk: p.maxRisk }))))}
+              className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+          </div>
+          <div className="rounded-lg border border-[#1a2f4a] overflow-hidden divide-y divide-[#0d1e35]">
+            {principals.map(p => (
             <div key={p.appId}>
               <div onClick={() => setExpanded(expanded === p.appId ? null : p.appId)}
                 className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#0d1e35] transition-colors">
@@ -1062,29 +1106,43 @@ function ServicePrincipalsView({ d, onRefresh, loading }: { d: ServicePrincipals
               )}
             </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   )
 }
 
 function RoleChangesView({ d, onRefresh, loading }: { d: RoleChangesData; onRefresh: () => void; loading: boolean }) {
-  const changes = d.changes ?? []
+  const [search, setSearch] = useState('')
+  const all = d.changes ?? []
+  const changes = search ? all.filter(c =>
+    c.activityDisplayName?.toLowerCase().includes(search.toLowerCase()) ||
+    c.initiatedBy?.toLowerCase().includes(search.toLowerCase()) ||
+    c.targetUser?.toLowerCase().includes(search.toLowerCase())
+  ) : all
   return (
     <div>
       <ViewHeader title="Admin Role Change History" desc="Last 7 days of privileged role assignments and removals." onRefresh={onRefresh} loading={loading} />
-      {changes.length === 0 ? <EmptyView label="No role changes in the last 7 days" /> : (
-        <CompactTable headers={['Date / Time', 'Activity', 'Actor', 'Target', 'Result']} empty={false}
-          rows={changes.map(c => (
-            <tr key={c.id} className="hover:bg-[#0d1e35] transition-colors">
-              <td className="px-3 py-1.5 font-mono text-[10px] text-[#64748b] whitespace-nowrap">{fmtDT(c.activityDateTime)}</td>
-              <td className="px-3 py-1.5 text-[#94a3b8]">{c.activityDisplayName}</td>
-              <td className="px-3 py-1.5 text-[#64748b]">{c.initiatedBy}</td>
-              <td className="px-3 py-1.5 text-[#94a3b8]">{c.targetUser}</td>
-              <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${resultCls(c.result)}`}>{c.result}</span></td>
-            </tr>
-          ))}
-        />
+      {all.length === 0 ? <EmptyView label="No role changes in the last 7 days" /> : (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1"><SearchInput value={search} onChange={setSearch} placeholder="Search activity, actor or target…" /></div>
+            <button onClick={() => exportCsv('role-changes.csv', changes.map(c => ({ Date: c.activityDateTime, Activity: c.activityDisplayName, Actor: c.initiatedBy, Target: c.targetUser, Result: c.result })))}
+              className="shrink-0 text-[10px] px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+          </div>
+          <CompactTable headers={['Date / Time', 'Activity', 'Actor', 'Target', 'Result']} empty={changes.length === 0}
+            rows={changes.map(c => (
+              <tr key={c.id} className="hover:bg-[#0d1e35] transition-colors">
+                <td className="px-3 py-1.5 font-mono text-[10px] text-[#64748b] whitespace-nowrap">{fmtDT(c.activityDateTime)}</td>
+                <td className="px-3 py-1.5 text-[#94a3b8]">{c.activityDisplayName}</td>
+                <td className="px-3 py-1.5 text-[#64748b]">{c.initiatedBy}</td>
+                <td className="px-3 py-1.5 text-[#94a3b8]">{c.targetUser}</td>
+                <td className="px-3 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${resultCls(c.result)}`}>{c.result}</span></td>
+              </tr>
+            ))}
+          />
+        </>
       )}
     </div>
   )
@@ -1183,7 +1241,11 @@ function LicenseWasteView({ d, onRefresh, loading }: { d: LicenseWasteData; onRe
       )}
       {disabled.length > 0 && (
         <>
-          <p className="text-[10px] text-[#475569] font-medium uppercase tracking-wider mb-2">Disabled Users with Active Licenses</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] text-[#475569] font-medium uppercase tracking-wider">Disabled Users with Active Licenses ({disabled.length})</p>
+            <button onClick={() => exportCsv('disabled-licensed.csv', disabled.map(u => ({ Name: u.displayName, Email: u.mail, Licenses: (u.licenses ?? []).map(skuName).join(' | ') })))}
+              className="text-[10px] px-2.5 py-0.5 rounded border border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">Export CSV</button>
+          </div>
           <CompactTable headers={['Name', 'Email', 'SKUs Assigned']} empty={false}
             rows={disabled.map(u => (
               <tr key={u.id} className="hover:bg-[#0d1e35] transition-colors">
@@ -1434,39 +1496,217 @@ function GroupHealthView({ d, onRefresh, loading }: { d: GroupHealthData; onRefr
 }
 
 function OrgStructureView({ d, onRefresh, loading }: { d: OrgStructureData; onRefresh: () => void; loading: boolean }) {
+  const [tab, setTab] = useState<'dept' | 'office'>('dept')
+  const [expandedCard, setExpandedCard] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
   const depts = d.departments ?? []
+  const offices = d.offices ?? []
+
+  const filteredDepts = depts.filter(dept =>
+    !search || dept.department?.toLowerCase().includes(search.toLowerCase())
+  )
+  const filteredOffices = offices.filter(o =>
+    !search || o.name?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const expandedDept = expandedCard && tab === 'dept'
+    ? depts.find(dept => dept.department === expandedCard)
+    : null
+  const expandedOffice = expandedCard && tab === 'office'
+    ? offices.find(o => o.name === expandedCard)
+    : null
+
+  function toggleCard(key: string) {
+    setExpandedCard(prev => prev === key ? null : key)
+  }
+
   return (
-    <div>
-      <ViewHeader title="Org Structure Overview" desc="Departments, locations and workforce distribution." onRefresh={onRefresh} loading={loading} />
-      <StatRow stats={[
-        { label: 'Total Users',  value: d.totalUsers ?? 0,       color: 'cyan' },
-        { label: 'Departments',  value: d.totalDepartments ?? 0, color: 'purple' },
-        { label: 'Locations',    value: d.totalLocations ?? 0,   color: 'green' },
-      ]} />
-      {depts.length === 0 ? <EmptyView label="No department data found" /> : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-          {depts.map((dept, i) => (
-            <div key={i} className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] px-3 py-2 hover:bg-[#0d1e35] transition-colors">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-semibold text-[#e2e8f0] truncate">{dept.department || 'Unknown'}</span>
-                <span className="text-xs font-bold text-[#00d4ff] ml-2 shrink-0">{dept.count}</span>
-              </div>
-              {dept.locations.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {dept.locations.slice(0, 2).map((loc, j) => (
-                    <span key={j} className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#475569]">{loc}</span>
-                  ))}
-                  {dept.locations.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#334155]">+{dept.locations.length - 2}</span>}
-                </div>
-              )}
-              {dept.topTitles.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <Briefcase className="w-2.5 h-2.5 text-[#334155] shrink-0" />
-                  <span className="text-[10px] text-[#475569] truncate">{dept.topTitles.slice(0, 2).join(' · ')}</span>
-                </div>
-              )}
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-2">
+          {[
+            { label: 'Total Users', value: d.totalUsers },
+            { label: 'Departments', value: d.totalDepartments },
+            { label: 'Offices', value: d.totalOffices ?? offices.length },
+            { label: 'Locations', value: d.totalLocations },
+          ].map(s => (
+            <div key={s.label} className="bg-[#0a1525] border border-[#1a2f4a] rounded-lg px-3 py-1.5 text-center">
+              <p className="text-[11px] text-[#475569]">{s.label}</p>
+              <p className="text-base font-bold text-[#00d4ff]">{s.value}</p>
             </div>
           ))}
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-[#0a1525] border border-[#1a2f4a] hover:border-[#00d4ff33] text-[#94a3b8] hover:text-[#00d4ff] transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-[#060b18] border border-[#1a2f4a] rounded-lg p-1 w-fit">
+        {([
+          { key: 'dept' as const, label: 'By Department' },
+          { key: 'office' as const, label: 'By Office' },
+        ] as const).map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setExpandedCard(null) }}
+            className={`text-xs px-3 py-1.5 rounded-md transition-all ${
+              tab === t.key
+                ? 'bg-[#00d4ff15] text-[#00d4ff] border border-[#00d4ff30]'
+                : 'text-[#475569] hover:text-[#94a3b8]'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#475569]" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={tab === 'dept' ? 'Search departments…' : 'Search offices…'}
+          className="w-full bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-9 pr-3 py-2 text-xs text-[#e2e8f0] placeholder-[#475569] outline-none focus:border-[#00d4ff33] transition-colors"
+        />
+      </div>
+
+      {/* Department cards */}
+      {tab === 'dept' && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+            {filteredDepts.map((dept, i) => {
+              const key = dept.department
+              const isExpanded = expandedCard === key
+              return (
+                <button
+                  key={i}
+                  onClick={() => toggleCard(key)}
+                  className={`rounded-lg border transition-all text-left w-full ${
+                    isExpanded
+                      ? 'border-[#00d4ff44] bg-[#00d4ff08]'
+                      : 'border-[#1a2f4a] bg-[#0a1525] hover:bg-[#0d1e35] hover:border-[#2a3f5a]'
+                  }`}
+                >
+                  <div className="px-3 py-2.5 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#e2e8f0] truncate">{dept.department || 'Unassigned'}</p>
+                      <p className="text-[10px] text-[#475569] mt-0.5">{dept.count} users</p>
+                      {dept.topTitles.length > 0 && (
+                        <p className="text-[10px] text-[#64748b] mt-1 truncate">{dept.topTitles.slice(0, 2).join(' · ')}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[10px] font-mono text-[#00d4ff] bg-[#00d4ff0f] px-1.5 py-0.5 rounded">
+                        {dept.count}
+                      </span>
+                      {dept.locations.length > 0 && (
+                        <span className="text-[9px] text-[#475569]">{dept.locations[0]}</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          {/* Expanded user list for selected dept */}
+          {expandedDept && (
+            <div className="rounded-lg border border-[#00d4ff22] bg-[#060b18] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-[#00d4ff]">{expandedDept.department} — {expandedDept.count} users</p>
+                <button onClick={() => setExpandedCard(null)} className="text-[#475569] hover:text-[#94a3b8] text-[10px]">✕ Close</button>
+              </div>
+              {expandedDept.users && expandedDept.users.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
+                  {expandedDept.users.map((u, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded bg-[#0a1525] border border-[#1a2f4a] px-2 py-1.5">
+                      <div className="w-6 h-6 rounded-full bg-[#00d4ff15] border border-[#00d4ff33] flex items-center justify-center text-[9px] font-bold text-[#00d4ff] shrink-0">
+                        {u.displayName?.charAt(0) ?? '?'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-[#e2e8f0] truncate">{u.displayName}</p>
+                        <p className="text-[9px] text-[#475569] truncate">{u.jobTitle || u.mail || '—'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#475569] text-center py-4">No user details available</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Office cards */}
+      {tab === 'office' && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+            {filteredOffices.length === 0 ? (
+              <p className="col-span-3 text-xs text-[#475569] text-center py-8">
+                No office data available. Ensure users have officeLocation set in Entra ID.
+              </p>
+            ) : filteredOffices.map((office, i) => {
+              const key = office.name
+              const isExpanded = expandedCard === key
+              return (
+                <button
+                  key={i}
+                  onClick={() => toggleCard(key)}
+                  className={`rounded-lg border transition-all text-left w-full ${
+                    isExpanded
+                      ? 'border-[#7c3aed44] bg-[#7c3aed08]'
+                      : 'border-[#1a2f4a] bg-[#0a1525] hover:bg-[#0d1e35] hover:border-[#2a3f5a]'
+                  }`}
+                >
+                  <div className="px-3 py-2.5 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#e2e8f0] truncate">{office.name}</p>
+                      <p className="text-[10px] text-[#475569] mt-0.5">{office.count} users</p>
+                      {office.departments.length > 0 && (
+                        <p className="text-[10px] text-[#64748b] mt-1 truncate">{office.departments.slice(0, 2).join(' · ')}</p>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-mono text-[#a78bfa] bg-[#7c3aed0f] px-1.5 py-0.5 rounded shrink-0">
+                      {office.count}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          {/* Expanded dept list for selected office */}
+          {expandedOffice && (
+            <div className="rounded-lg border border-[#7c3aed22] bg-[#060b18] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-[#a78bfa]">{expandedOffice.name} — {expandedOffice.count} users</p>
+                <button onClick={() => setExpandedCard(null)} className="text-[#475569] hover:text-[#94a3b8] text-[10px]">✕ Close</button>
+              </div>
+              {expandedOffice.departments.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {expandedOffice.departments.map((dept, i) => {
+                    const deptData = depts.find(d => d.department === dept)
+                    return (
+                      <span key={i} className="text-[10px] bg-[#0a1525] border border-[#1a2f4a] rounded px-2 py-1 text-[#94a3b8]">
+                        {dept}{deptData ? ` (${deptData.count})` : ''}
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[#475569]">No departments mapped to this office</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1589,9 +1829,27 @@ export default function GovernancePage() {
       case 'directory_health':
         return { deletedUsers: json.deletedUsers ?? [], domains: json.domains ?? [], deletedError: json.deletedError ?? null, domainsError: json.domainsError ?? null }
       case 'org_structure': {
-        const departments = (json.byDepartment ?? []).map((d: any) => ({ department: d.name, count: d.count, locations: d.locations ?? [], topTitles: (d.titles ?? []).slice(0, 3) }))
+        const departments = (json.byDepartment ?? []).map((d: any) => ({
+          department: d.name,
+          count: d.count,
+          locations: d.locations ?? [],
+          topTitles: (d.titles ?? []).slice(0, 3),
+          users: d.users ?? [],
+        }))
+        const offices = (json.byOffice ?? []).map((o: any) => ({
+          name: o.name,
+          count: o.count,
+          departments: o.departments ?? [],
+        }))
         const allLocs = new Set(departments.flatMap((d: any) => d.locations as string[]))
-        return { totalUsers: json.totalUsers ?? 0, totalDepartments: json.totalDepts ?? 0, totalLocations: allLocs.size, departments }
+        return {
+          totalUsers: json.totalUsers ?? 0,
+          totalDepartments: json.totalDepts ?? 0,
+          totalLocations: allLocs.size,
+          totalOffices: json.totalOffices ?? offices.length,
+          departments,
+          offices,
+        }
       }
       default: return json
     }

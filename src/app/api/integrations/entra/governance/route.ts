@@ -7,6 +7,7 @@ const TENANT_ID     = process.env.ENTRA_TENANT_ID
 const CLIENT_ID     = process.env.ENTRA_CLIENT_ID
 const CLIENT_SECRET = process.env.ENTRA_CLIENT_SECRET
 const GRAPH_BASE    = 'https://graph.microsoft.com/v1.0'
+const GRAPH_BETA    = 'https://graph.microsoft.com/beta'
 
 // ---------------------------------------------------------------------------
 // Token cache
@@ -42,8 +43,8 @@ async function getToken(): Promise<string> {
 // Graph helpers
 // ---------------------------------------------------------------------------
 
-async function graphGet(path: string, token: string) {
-  const resp = await fetch(`${GRAPH_BASE}${path}`, {
+async function graphGet(path: string, token: string, base = GRAPH_BASE) {
+  const resp = await fetch(`${base}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15000),
   })
@@ -54,8 +55,8 @@ async function graphGet(path: string, token: string) {
   return resp.json()
 }
 
-async function graphGetSafe(path: string, token: string, fallback: unknown = null) {
-  try { return await graphGet(path, token) } catch { return fallback }
+async function graphGetSafe(path: string, token: string, fallback: unknown = null, base = GRAPH_BASE) {
+  try { return await graphGet(path, token, base) } catch { return fallback }
 }
 
 async function graphCount(path: string, token: string): Promise<number> {
@@ -583,10 +584,58 @@ async function handleAdminRoles(token: string) {
   ])
 
   if (defsResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
-    return NextResponse.json({
-      assignments: [], total: 0, highPrivCount: 0,
-      rolesError: 'Grant RoleManagement.Read.Directory permission in Azure Portal → App Registration → API Permissions.',
-    })
+    // Fallback: try directoryRoles (requires only Directory.Read.All)
+    try {
+      const rolesData = await graphGet('/directoryRoles?$select=id,displayName,roleTemplateId', token)
+      const roles: any[] = rolesData.value ?? []
+
+      const results = await Promise.allSettled(
+        roles.map(async (role: any) => {
+          const membersData = await graphGetSafe(
+            `/directoryRoles/${role.id}/members?$select=id,displayName,mail,userPrincipalName,accountEnabled&$top=100`,
+            token,
+            { value: [] }
+          )
+          const members: any[] = membersData?.value ?? []
+          if (members.length === 0) return null
+          return {
+            roleName: role.displayName,
+            isHighPriv: HIGH_PRIV.some(hp => role.displayName === hp),
+            members: members.map((m: any) => ({
+              id: m.id,
+              displayName: m.displayName,
+              mail: m.mail || m.userPrincipalName,
+              accountEnabled: m.accountEnabled,
+              principalType: 'user',
+            }))
+          }
+        })
+      )
+
+      const assignments = results
+        .filter(r => r.status === 'fulfilled' && r.value !== null)
+        .map(r => (r as PromiseFulfilledResult<any>).value)
+        .sort((a: any, b: any) => {
+          if (a.isHighPriv && !b.isHighPriv) return -1
+          if (!a.isHighPriv && b.isHighPriv) return 1
+          return b.members.length - a.members.length
+        })
+
+      const total = assignments.reduce((s: number, a: any) => s + a.members.length, 0)
+
+      return NextResponse.json({
+        assignments,
+        total,
+        highPrivCount: assignments.filter((a: any) => a.isHighPriv).length,
+        rolesError: null,
+        fallbackNote: 'Showing via Directory API. Grant RoleManagement.Read.Directory + click "Grant admin consent" for full data.',
+      })
+    } catch {
+      return NextResponse.json({
+        assignments: [], total: 0, highPrivCount: 0,
+        rolesError: 'Grant RoleManagement.Read.Directory and click "Grant admin consent" in Azure Portal → App Registration → API Permissions.',
+      })
+    }
   }
 
   const defs: any[] = defsResp.value.value ?? []
@@ -733,11 +782,28 @@ async function handleDirectoryHealth(token: string) {
 async function handleDirectoryInsights(token: string) {
   const [usersResp, authResp] = await Promise.allSettled([
     graphGet('/users?$select=id,displayName,mail,department,jobTitle,mobilePhone,officeLocation,createdDateTime,accountEnabled,assignedLicenses&$top=999', token),
-    graphGetSafe('/reports/credentialUserRegistrationDetails?$top=999', token, { value: [] }),
+    graphGetSafe('/reports/credentialUserRegistrationDetails?$top=999', token, null),
   ])
 
-  const users: any[]      = usersResp.status === 'fulfilled' ? (usersResp.value.value  ?? []) : []
-  const authDetails: any[] = authResp.status  === 'fulfilled' ? (authResp.value?.value  ?? []) : []
+  const users: any[] = usersResp.status === 'fulfilled' ? (usersResp.value.value ?? []) : []
+
+  let authDetails: any[] = []
+  let authMethodError: string | null = null
+
+  if (authResp.status === 'fulfilled' && authResp.value !== null) {
+    authDetails = authResp.value?.value ?? []
+  } else {
+    // Try beta endpoint
+    const betaData = await graphGetSafe('/reports/authenticationMethodsUserRegistrationDetails?$top=999', token, null, GRAPH_BETA)
+    if (betaData !== null) {
+      authDetails = (betaData?.value ?? []).map((u: any) => ({
+        authMethods: u.methodsRegistered ?? [],
+      }))
+    } else {
+      authMethodError = 'Grant UserAuthenticationMethod.Read.All for auth method statistics'
+    }
+  }
+
   const now = Date.now()
 
   const FIELDS = ['department', 'jobTitle', 'mobilePhone', 'officeLocation']
@@ -791,7 +857,7 @@ async function handleDirectoryInsights(token: string) {
     totalUsers: users.length,
     accountAge: ageGroups.map(({ range, count }) => ({ range, count })),
     authMethodDist,
-    authMethodError: authResp.status === 'rejected' ? 'Grant Reports.Read.All permission' : null,
+    authMethodError,
   })
 }
 
@@ -900,31 +966,37 @@ async function handleDeviceIntel(token: string) {
 // scope=org_structure
 async function handleOrgStructure(token: string) {
   const data = await graphGet(
-    '/users?$filter=accountEnabled eq true&$select=id,displayName,department,jobTitle,city,country,usageLocation,officeLocation&$top=999',
+    '/users?$filter=accountEnabled eq true&$select=id,displayName,mail,department,jobTitle,city,country,officeLocation&$top=999',
     token
   )
   const users: any[] = data.value ?? []
 
   const deptMap: Record<
     string,
-    { name: string; count: number; titles: Set<string>; locations: Set<string>; enabledCount: number }
+    { name: string; count: number; titles: Set<string>; locations: Set<string>; enabledCount: number; users: { id: string; displayName: string; mail: string; jobTitle: string }[] }
   > = {}
 
   const locationMap: Record<string, number> = {}
+  const officeMap: Record<string, { name: string; count: number; depts: Set<string> }> = {}
 
   for (const u of users) {
     const dept = u.department ?? 'Unknown'
     if (!deptMap[dept]) {
-      deptMap[dept] = { name: dept, count: 0, titles: new Set(), locations: new Set(), enabledCount: 0 }
+      deptMap[dept] = { name: dept, count: 0, titles: new Set(), locations: new Set(), enabledCount: 0, users: [] }
     }
     deptMap[dept].count++
     deptMap[dept].enabledCount++
     if (u.jobTitle) deptMap[dept].titles.add(u.jobTitle)
+    deptMap[dept].users.push({ id: u.id, displayName: u.displayName, mail: u.mail, jobTitle: u.jobTitle })
     const loc = [u.city, u.country].filter(Boolean).join(', ')
     if (loc) {
       deptMap[dept].locations.add(loc)
       locationMap[loc] = (locationMap[loc] ?? 0) + 1
     }
+    const office = u.officeLocation?.trim() || 'No Office'
+    if (!officeMap[office]) officeMap[office] = { name: office, count: 0, depts: new Set() }
+    officeMap[office].count++
+    if (u.department) officeMap[office].depts.add(u.department)
   }
 
   const byDepartment = Object.values(deptMap)
@@ -935,17 +1007,24 @@ async function handleOrgStructure(token: string) {
       enabledCount: d.enabledCount,
       titles:       [...d.titles],
       locations:    [...d.locations],
+      users:        d.users,
     }))
 
   const byLocation = Object.entries(locationMap)
     .map(([location, count]) => ({ location, count }))
     .sort((a, b) => b.count - a.count)
 
+  const byOffice = Object.values(officeMap)
+    .sort((a, b) => b.count - a.count)
+    .map(o => ({ name: o.name, count: o.count, departments: [...o.depts] }))
+
   return NextResponse.json({
     byDepartment,
     totalUsers: users.length,
     totalDepts: byDepartment.length,
     byLocation,
+    byOffice,
+    totalOffices: byOffice.length,
   })
 }
 

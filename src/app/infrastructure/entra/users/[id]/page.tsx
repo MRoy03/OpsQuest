@@ -95,6 +95,7 @@ interface MailFolder {
 interface UserDetail {
   profile: UserProfile | null
   memberOf: MemberOf[]
+  memberOfError: string | null
   devices: RegisteredDevice[]
   authMethods: AuthMethod[]
   licenseDetails: LicenseDetail[]
@@ -183,6 +184,16 @@ function fmtBytes(bytes: number): string {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(0)} MB`
   return `${(bytes / 1073741824).toFixed(2)} GB`
+}
+function getOsDisplay(os: string, version: string): string {
+  if (!os) return '—'
+  const lower = os.toLowerCase()
+  if (lower.includes('windows')) {
+    const build = parseInt((version || '').split('.')[2] ?? '0', 10)
+    if (build >= 22000) return 'Windows 11'
+    if (build > 0) return 'Windows 10'
+  }
+  return os
 }
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
@@ -304,7 +315,7 @@ export default function UserProfilePage() {
     )
   }
 
-  const { profile, memberOf, devices, authMethods, licenseDetails, signIns, drive, mailFolders } = data
+  const { profile, memberOf, memberOfError, devices, authMethods, licenseDetails, signIns, drive, mailFolders } = data
   const color = avatarColor(profile.displayName)
 
   const directoryRoles = memberOf.filter(m => m['@odata.type'] === '#microsoft.graph.directoryRole')
@@ -497,7 +508,7 @@ export default function UserProfilePage() {
                     {devices.map(d => (
                       <tr key={d.id} className="border-b border-[#0a1525] hover:bg-[#ffffff03]">
                         <td className="px-5 py-3 font-medium text-[#e2e8f0]">{d.displayName || '—'}</td>
-                        <td className="px-5 py-3 text-[#64748b]">{d.operatingSystem || '—'}</td>
+                        <td className="px-5 py-3 text-[#64748b]">{getOsDisplay(d.operatingSystem, d.operatingSystemVersion)}</td>
                         <td className="px-5 py-3 text-[#64748b] font-mono text-[10px]">{d.operatingSystemVersion || '—'}</td>
                         <td className="px-5 py-3 text-[#64748b]">{d.trustType || '—'}</td>
                         <td className="px-5 py-3">
@@ -585,10 +596,15 @@ export default function UserProfilePage() {
 
         {/* ── Groups & Directory Roles ── */}
         <Section id="groups" title="Groups & Directory Roles" icon={Users} count={memberOf.length} color="#b45309">
-          {memberOf.length === 0
-            ? <p className="text-center py-8 text-xs text-[#475569]">
-                No memberships found. Requires Directory.Read.All on the App Registration.
-              </p>
+          {memberOfError
+            ? (
+              <div className="flex items-start gap-3 p-5">
+                <AlertTriangle className="w-4 h-4 text-[#f59e0b] shrink-0 mt-0.5" />
+                <p className="text-xs text-[#94a3b8]">{memberOfError}</p>
+              </div>
+            )
+            : memberOf.length === 0
+            ? <p className="text-center py-8 text-xs text-[#475569]">No group memberships found</p>
             : (
               <div className="p-5 space-y-4">
                 {/* Directory roles */}

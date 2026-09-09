@@ -49,6 +49,25 @@ async function graphGetSafe(path: string, token: string, fallback: unknown = nul
   try { return await graphGet(path, token, base) } catch { return fallback }
 }
 
+async function graphGetConsistency(path: string, token: string) {
+  const resp = await fetch(`${GRAPH_BASE}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ConsistencyLevel: 'eventual',
+    },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!resp.ok) {
+    const err = await resp.text()
+    throw new Error(`Graph ${path} → ${resp.status}: ${err.slice(0, 200)}`)
+  }
+  return resp.json()
+}
+
+async function graphGetSafeCL(path: string, token: string, fallback: unknown = null) {
+  try { return await graphGetConsistency(path, token) } catch { return fallback }
+}
+
 // ── Report-specific fetcher ─────────────────────────────────────────────────
 // Microsoft's usage-report endpoints sometimes return CSV even when JSON is
 // requested via $format. This helper handles both formats and normalises the
@@ -186,7 +205,7 @@ async function handleLicenseSku(token: string) {
 // scope=user_activity – Last sign-in per licensed user
 async function handleUserActivity(token: string) {
   const [usersResp, signInsResp] = await Promise.allSettled([
-    graphGet('/users?$select=id,displayName,mail,department,assignedLicenses,accountEnabled,createdDateTime&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses,accountEnabled,createdDateTime&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
     graphGetSafe('/auditLogs/signIns?$select=userPrincipalName,userDisplayName,createdDateTime,appDisplayName,clientAppUsed,status&$filter=status/errorCode eq 0&$top=500&$orderby=createdDateTime desc', token, { value: [] }),
   ])
 
@@ -237,7 +256,7 @@ async function handleUserActivity(token: string) {
 async function handleMailUsage(token: string) {
   const [reportResp, usersResp] = await Promise.allSettled([
     graphGetReport("/reports/getMailboxUsageDetail(period='D30')", token),
-    graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
   ])
 
   let mailboxData: any[] = []
@@ -287,7 +306,7 @@ async function handleMailUsage(token: string) {
 async function handleTeamsUsage(token: string) {
   const [teamsResp, usersResp] = await Promise.allSettled([
     graphGetReport("/reports/getTeamsUserActivityUserDetail(period='D30')", token),
-    graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
   ])
 
   let teamsData: any[] = []
@@ -332,7 +351,7 @@ async function handleTeamsUsage(token: string) {
 async function handleOneDriveUsage(token: string) {
   const [reportResp, usersResp] = await Promise.allSettled([
     graphGetReport("/reports/getOneDriveUsageAccountDetail(period='D30')", token),
-    graphGet('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
   ])
 
   let oneDriveData: any[] = []
