@@ -116,8 +116,6 @@ export async function POST(req: NextRequest) {
       .filter(r => r.roleTemplateId && ADMIN_ROLE_TEMPLATE_IDS.has(r.roleTemplateId))
       .map(r => r.displayName)
 
-    const targetRole = hasAdminRole ? 'admin' : 'user'
-
     // Read current role in DB
     const { data: current } = await supabase
       .from('user_roles')
@@ -127,7 +125,15 @@ export async function POST(req: NextRequest) {
 
     const currentRole = current?.role ?? 'user'
 
-    // Upsert if role changed
+    // Policy:
+    //   • Only UPGRADE: if Microsoft confirms admin roles, grant 'admin' to plain users.
+    //   • Never downgrade an existing 'admin' or 'superadmin' — those are protected.
+    //     This lets manually-granted admins keep access even if Graph can't read their
+    //     Microsoft roles (e.g. Directory.Read.All not yet consented).
+    const targetRole: string =
+      hasAdminRole && (currentRole === 'user' || !currentRole) ? 'admin' : currentRole
+
+    // Upsert only if something actually changed
     if (currentRole !== targetRole) {
       await supabase
         .from('user_roles')

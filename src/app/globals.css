@@ -269,7 +269,11 @@ html[data-theme="light"] .text-\[\#38bdf8\]  { color: #0369a1 !important; }
 html[data-theme="light"] .text-\[\#60a5fa\]  { color: #2563eb !important; }
 html[data-theme="light"] .text-\[\#3b82f6\]  { color: #1d4ed8 !important; }
 
-/* Keep accent text colours vibrant — they pop on light lavender */
+/* Accent text colours — darkened for legibility on light lavender (#f2ecff ≈ 0.88 luminance) */
+/* cyan #00d4ff has only 1.45:1 contrast on lavender — must darken */
+html[data-theme="light"] .text-\[\#00d4ff\]  { color: #0284a8 !important; }
+html[data-theme="light"] .text-\[\#a78bfa\]  { color: #6d28d9 !important; }
+html[data-theme="light"] .text-\[\#c084fc\]  { color: #7e22ce !important; }
 html[data-theme="light"] .text-\[\#10b981\]  { color: #047857 !important; }
 html[data-theme="light"] .text-\[\#f59e0b\]  { color: #b45309 !important; }
 html[data-theme="light"] .text-\[\#ef4444\]  { color: #b91c1c !important; }
@@ -499,6 +503,7 @@ html[data-theme="light"] .hover\:border-\[\#00d4ff30\]:hover { border-color: rgb
 html[data-theme="light"] .hover\:text-\[\#e2e8f0\]:hover { color: #0f0524 !important; }
 html[data-theme="light"] .hover\:text-\[\#94a3b8\]:hover { color: #2d1272 !important; }
 html[data-theme="light"] .hover\:text-\[\#00d4ff\]:hover { color: #0369a1 !important; }
+html[data-theme="light"] .hover\:text-\[\#a78bfa\]:hover { color: #5b21b6 !important; }
 
 /* ── Focus / focus-within state ──────────────────────────────────────────── */
 html[data-theme="light"] .focus\:border-\[\#00d4ff44\]:focus              { border-color: rgba(0,168,204,0.70) !important; }

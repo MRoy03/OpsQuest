@@ -38,8 +38,21 @@ export default function AuthCallback() {
     }
 
     // Subscribe before anything else — never miss an event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session && !done) {
+        // Sync Microsoft directory roles → OpsQuest role (non-blocking; 5 s max)
+        if (session.user.email) {
+          try {
+            await Promise.race([
+              fetch('/api/auth/sync-roles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: session.user.email }),
+              }),
+              new Promise(r => setTimeout(r, 5000)), // 5 s timeout
+            ])
+          } catch { /* non-fatal — role sync fails silently */ }
+        }
         finish('/', true, `Welcome back, ${session.user.email}`)
       }
       if (event === 'PASSWORD_RECOVERY' && !done) {
