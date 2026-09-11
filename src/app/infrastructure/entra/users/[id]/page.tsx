@@ -766,7 +766,7 @@ export default function UserProfilePage() {
             ) : (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a1525] border border-[#1a2f4a]">
                 <Inbox className="w-3.5 h-3.5 text-[#334155] shrink-0" />
-                <span className="text-[11px] text-[#475569]">Mailbox — grant <code className="text-[#a78bfa] font-mono text-[10px]">Mail.Read.All</code> permission to see folder sizes</span>
+                <span className="text-[11px] text-[#475569]">Mailbox — grant <code className="text-[#a78bfa] font-mono text-[10px]">Mail.Read or Mail.ReadBasic.All</code> permission to see folder sizes</span>
               </div>
             )}
           </div>

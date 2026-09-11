@@ -445,7 +445,7 @@ function AdminRolesView({ d, onRefresh, loading }: { d: AdminRolesData; onRefres
   return (
     <div>
       <ViewHeader title="Admin Role Assignments" desc="All privileged roles in your Entra ID tenant, grouped by category." onRefresh={onRefresh} loading={loading} />
-      {d.rolesError && <PermBanner message={d.rolesError} />}
+      {d.rolesError && assignments.length === 0 && <PermBanner message={d.rolesError} />}
       <StatRow stats={[
         { label: 'Total Assignments',    value: d.total ?? 0,         color: 'cyan' },
         { label: 'High-Privilege Roles', value: d.highPrivCount ?? 0, color: 'red' },
@@ -520,8 +520,8 @@ function AppSecurityView({ d, onRefresh, loading }: { d: AppSecurityData; onRefr
   return (
     <div>
       <ViewHeader title="Service Principal Credentials & OAuth Grants" desc="Expiring SP secrets + consent grants audit." onRefresh={onRefresh} loading={loading} />
-      {d.spError && <PermBanner message={d.spError} />}
-      {d.grantsError && <PermBanner message={d.grantsError} />}
+      {d.spError && creds.length === 0 && <PermBanner message={d.spError} />}
+      {d.grantsError && grants.length === 0 && <PermBanner message={d.grantsError} />}
 
       <div className="flex gap-1 mb-3">
         {([['creds', `Expiring Creds (${creds.length})`], ['oauth', `OAuth Grants (${grants.length})`]] as const).map(([k, l]) => (
@@ -606,7 +606,7 @@ function SigninIntelView({ d, onRefresh, loading }: { d: SigninIntelData; onRefr
   return (
     <div>
       <ViewHeader title="Sign-In Intelligence" desc="Failed sign-ins, error patterns, and geographic activity." onRefresh={onRefresh} loading={loading} />
-      {d.signInError && <PermBanner message={d.signInError} />}
+      {d.signInError && d.totalSignIns === 0 && d.totalFailed === 0 && <PermBanner message={d.signInError} />}
       <StatRow stats={[
         { label: 'Total Sign-ins',  value: d.totalSignIns ?? 0, color: 'cyan' },
         { label: 'Failed',          value: d.totalFailed ?? 0,  color: d.totalFailed > 10 ? 'red' : 'amber' },
@@ -793,7 +793,7 @@ function DirectoryInsightsView({ d, onRefresh, loading }: { d: DirectoryInsights
   return (
     <div>
       <ViewHeader title="Directory Insights" desc="Profile completeness, account age distribution, and MFA method breakdown." onRefresh={onRefresh} loading={loading} />
-      {d.authMethodError && <PermBanner message={d.authMethodError} />}
+      {d.authMethodError && (d.authMethodDist ?? []).length === 0 && <PermBanner message={d.authMethodError} />}
       <StatRow stats={[
         { label: 'Total Users',       value: d.totalUsers ?? 0,       color: 'cyan' },
         { label: 'Avg Profile Score', value: `${d.avgProfileScore ?? 0}%`, color: (d.avgProfileScore ?? 0) >= 80 ? 'green' : (d.avgProfileScore ?? 0) >= 50 ? 'amber' : 'red' },
@@ -1220,7 +1220,7 @@ function LicenseWasteView({ d, onRefresh, loading }: { d: LicenseWasteData; onRe
   return (
     <div>
       <ViewHeader title="License Waste Report" desc="Unused and over-provisioned Microsoft 365 licenses." onRefresh={onRefresh} loading={loading} />
-      {d.subscriptionError && <PermBanner message="License subscription data unavailable" permission="Organization.Read.All" />}
+      {d.subscriptionError && skus.length === 0 && <PermBanner message="License subscription data unavailable" permission="Organization.Read.All" />}
       {skus.length > 0 && (
         <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] divide-y divide-[#0d1e35] mb-3 overflow-hidden">
           {skus.map(sku => {

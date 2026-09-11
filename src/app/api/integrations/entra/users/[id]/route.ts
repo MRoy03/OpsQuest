@@ -132,7 +132,7 @@ export async function GET(
       mailFolders:    mailFoldersValue?.value ?? [],
       // null mailFoldersValue means graphGetSafe returned null → permission denied
       mailFolderError: mailFoldersValue === null
-        ? 'Grant Mail.Read.All or Mail.ReadBasic.All permission to see mailbox folder sizes.'
+        ? 'Grant Mail.Read or Mail.ReadBasic.All permission to see mailbox folder sizes.'
         : null,
     })
   } catch (err) {

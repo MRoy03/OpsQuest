@@ -142,7 +142,7 @@ function LicenseSkuView({ data, loading }: { data: { skus: SkuRow[]; subsError: 
 
   return (
     <div className="space-y-4">
-      {data.subsError && <PermBanner message={data.subsError} />}
+      {data.subsError && skus.length === 0 && <PermBanner message={data.subsError} />}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <SumCard label="Total SKUs"    value={skus.length}     color="cyan" />
         <SumCard label="Total Seats"   value={totalPurchased}  color="purple" />
@@ -251,7 +251,7 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
 
   return (
     <div className="space-y-3">
-      {data.signInError && (
+      {data.signInError && users.length === 0 && (
         <div className="rounded border border-[#f59e0b30] bg-[#f59e0b08] px-3 py-2 flex items-start gap-2 text-[11px] text-[#f59e0b]">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{data.signInError} — sign-in logs require AuditLog.Read.All. Showing license data only.</span>
@@ -342,7 +342,7 @@ function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
 
   return (
     <div className="space-y-3">
-      {data.reportError && <PermBanner message={data.reportError} />}
+      {data.reportError && rows.length === 0 && <PermBanner message={data.reportError} />}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <SumCard label="Mailboxes"       value={data.totalUsers ?? 0}       color="cyan" />
         <SumCard label="Total Storage"   value={`${data.totalStorageGB ?? 0} GB`} color="purple" />
@@ -413,7 +413,7 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
 
   return (
     <div className="space-y-3">
-      {data.reportError && <PermBanner message={data.reportError} />}
+      {data.reportError && rows.length === 0 && <PermBanner message={data.reportError} />}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <SumCard label="Users with Teams" value={data.totalUsers ?? 0}   color="cyan" />
         <SumCard label="Active (30d)"      value={data.activeUsers ?? 0} color="green" />
@@ -509,7 +509,7 @@ function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
 
   return (
     <div className="space-y-3">
-      {data.reportError && <PermBanner message={data.reportError} />}
+      {data.reportError && rows.length === 0 && <PermBanner message={data.reportError} />}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <SumCard label="Accounts"        value={data.totalUsers ?? 0}                     color="cyan" />
         <SumCard label="Active (30d)"    value={data.activeUsers ?? 0}                    color="green" />
