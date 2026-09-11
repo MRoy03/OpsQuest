@@ -59,6 +59,33 @@ async function graphGetSafe(path: string, token: string, fallback: unknown = nul
   try { return await graphGet(path, token, base) } catch { return fallback }
 }
 
+/** Like graphGetSafe but returns [data, errorMessage] so callers can surface the actual Graph error */
+async function graphTry(fn: () => Promise<any>): Promise<[any, string | null]> {
+  try { return [await fn(), null] } catch (e) { return [null, e instanceof Error ? e.message : String(e)] }
+}
+
+/** Follows @odata.nextLink pages, returns all items combined. Stops after maxPages to prevent runaway. */
+async function graphGetPaged(initialPath: string, token: string, maxPages = 5): Promise<any[]> {
+  const items: any[] = []
+  let nextUrl: string | null = `${GRAPH_BASE}${initialPath}`
+  let pages = 0
+  while (nextUrl && pages < maxPages) {
+    const resp: Response = await fetch(nextUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!resp.ok) {
+      const err: string = await resp.text()
+      throw new Error(`Graph paged ${nextUrl} → ${resp.status}: ${err.slice(0, 200)}`)
+    }
+    const pageData: { value?: any[]; '@odata.nextLink'?: string } = await resp.json()
+    items.push(...(pageData.value ?? []))
+    nextUrl = pageData['@odata.nextLink'] ?? null
+    pages++
+  }
+  return items
+}
+
 async function graphCount(path: string, token: string): Promise<number> {
   const resp = await fetch(`${GRAPH_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: 'eventual' },
@@ -138,11 +165,12 @@ async function handleAppSecrets(token: string) {
 
 // scope=mfa_coverage
 async function handleMfaCoverage(token: string) {
-  const data = await graphGet(
-    '/users?$filter=accountEnabled eq true&$select=id,displayName,mail,department,jobTitle&$top=200',
-    token
+  // Paginate up to 3 pages (≈3000 users) — per-user auth method calls are batched 10-at-a-time
+  const users: any[] = await graphGetPaged(
+    '/users?$filter=accountEnabled eq true&$select=id,displayName,mail,department,jobTitle&$top=999',
+    token,
+    3
   )
-  const users: any[] = data.value ?? []
 
   // Process in batches of 10; use null as fallback to detect 403
   const batchSize = 10
@@ -584,6 +612,14 @@ async function handleAdminRoles(token: string) {
   ])
 
   if (defsResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
+    // Capture the actual Graph error so we can surface it in the UI
+    const primaryErr =
+      defsResp.status === 'rejected'
+        ? String(defsResp.reason?.message ?? defsResp.reason)
+        : assignmentsResp.status === 'rejected'
+        ? String(assignmentsResp.reason?.message ?? assignmentsResp.reason)
+        : null
+
     // Fallback: try directoryRoles (requires only Directory.Read.All)
     try {
       const rolesData = await graphGet('/directoryRoles?$select=id,displayName,roleTemplateId', token)
@@ -632,7 +668,7 @@ async function handleAdminRoles(token: string) {
 
       // If ALL member fetches failed and we got nothing, surface a clear combined permission error
       const memberPermError = membersFetchFailed > 0 && assignments.length === 0
-        ? 'Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions.'
+        ? `Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions.${primaryErr ? ` ⚠️ Graph error: ${primaryErr}` : ''}`
         : null
 
       return NextResponse.json({
@@ -644,11 +680,12 @@ async function handleAdminRoles(token: string) {
           ? null
           : 'Showing via Directory API. Grant RoleManagement.Read.Directory + click "Grant admin consent" for full data.',
       })
-    } catch {
+    } catch (fallbackErr: any) {
       // /directoryRoles listing itself failed — both RoleManagement and Directory APIs need consent
+      const fallbackErrMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
       return NextResponse.json({
         assignments: [], total: 0, highPrivCount: 0,
-        rolesError: 'Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions.',
+        rolesError: `Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions. ⚠️ Primary: ${primaryErr ?? 'unknown'} | Fallback: ${fallbackErrMsg}`,
       })
     }
   }
@@ -687,9 +724,10 @@ async function handleAdminRoles(token: string) {
     return b.members.length - a.members.length
   })
 
+  const totalMembers = assignments.reduce((s, a) => s + a.members.length, 0)
   return NextResponse.json({
     assignments,
-    total: raw.length,
+    total: totalMembers,
     highPrivCount: assignments.filter(a => a.isHighPriv).length,
     rolesError: null,
   })
@@ -797,7 +835,7 @@ async function handleDirectoryHealth(token: string) {
 async function handleDirectoryInsights(token: string) {
   const [usersResp, authResp] = await Promise.allSettled([
     graphGet('/users?$select=id,displayName,mail,department,jobTitle,mobilePhone,officeLocation,createdDateTime,accountEnabled,assignedLicenses&$top=999', token),
-    graphGetSafe('/reports/credentialUserRegistrationDetails?$top=999', token, null),
+    graphTry(() => graphGet('/reports/credentialUserRegistrationDetails?$top=999', token)),
   ])
 
   const users: any[] = usersResp.status === 'fulfilled' ? (usersResp.value.value ?? []) : []
@@ -805,17 +843,22 @@ async function handleDirectoryInsights(token: string) {
   let authDetails: any[] = []
   let authMethodError: string | null = null
 
-  if (authResp.status === 'fulfilled' && authResp.value !== null) {
-    authDetails = authResp.value?.value ?? []
+  // authResp from graphTry returns [data, error]
+  const [authData1, authErr1] = authResp.status === 'fulfilled' ? authResp.value : [null, String(authResp.reason)]
+
+  if (authData1 !== null) {
+    authDetails = authData1?.value ?? []
   } else {
-    // Try beta endpoint
-    const betaData = await graphGetSafe('/reports/authenticationMethodsUserRegistrationDetails?$top=999', token, null, GRAPH_BETA)
+    // v1.0 endpoint failed — try beta
+    const [betaData, betaErr] = await graphTry(() =>
+      graphGet('/reports/authenticationMethodsUserRegistrationDetails?$top=999', token, GRAPH_BETA)
+    )
     if (betaData !== null) {
       authDetails = (betaData?.value ?? []).map((u: any) => ({
         authMethods: u.methodsRegistered ?? [],
       }))
     } else {
-      authMethodError = 'Grant UserAuthenticationMethod.Read.All for auth method statistics'
+      authMethodError = `Grant Reports.Read.All or UserAuthenticationMethod.Read.All for auth method statistics. ⚠️ v1.0: ${authErr1} | beta: ${betaErr}`
     }
   }
 
@@ -851,10 +894,21 @@ async function handleDirectoryInsights(token: string) {
   }
 
   const methodMap: Record<string, number> = {}
+  // v1.0 uses e.g. "microsoftAuthenticator"; beta uses "microsoftAuthenticatorApp" — map both
   const METHOD_LABELS: Record<string, string> = {
-    microsoftAuthenticator: 'Authenticator App', mobilePhone: 'SMS / Phone',
-    email: 'Email OTP', fido2SecurityKey: 'FIDO2 Key',
-    windowsHelloForBusiness: 'Windows Hello', softwareOneTimePasscode: 'TOTP App',
+    microsoftAuthenticator:            'Authenticator App',
+    microsoftAuthenticatorApp:         'Authenticator App',   // beta variant
+    mobilePhone:                       'SMS / Phone',
+    alternateMobilePhone:              'SMS / Phone',
+    email:                             'Email OTP',
+    fido2SecurityKey:                  'FIDO2 Key',
+    windowsHelloForBusiness:           'Windows Hello',
+    softwareOneTimePasscode:           'TOTP App',
+    temporaryAccessPass:               'Temp Access Pass',
+    hardwareOath:                      'Hardware OATH Token',
+    softwareOath:                      'Software OATH Token',
+    voiceMobile:                       'Voice Call',
+    voice:                             'Voice Call',
   }
   for (const u of authDetails) {
     for (const m of (u.authMethods ?? [])) {
@@ -885,6 +939,8 @@ async function handleSigninIntel(token: string) {
 
   const failed: any[] = failedResp.status === 'fulfilled' ? (failedResp.value.value ?? []) : []
   const all: any[]    = allResp.status    === 'fulfilled' ? (allResp.value.value    ?? []) : []
+  const failedErrMsg  = failedResp.status === 'rejected'  ? String(failedResp.reason?.message ?? failedResp.reason) : null
+  const allErrMsg     = allResp.status    === 'rejected'  ? String(allResp.reason?.message    ?? allResp.reason)    : null
 
   // Group failures by user
   const userMap: Record<string, { name: string; count: number; lastFail: string; errors: number[] }> = {}
@@ -924,7 +980,7 @@ async function handleSigninIntel(token: string) {
 
   // Surface a clear error if either call failed — both need AuditLog.Read.All
   const signInError = (failedResp.status === 'rejected' || allResp.status === 'rejected')
-    ? 'Grant AuditLog.Read.All permission (requires admin consent in Azure Portal → App Registration → API Permissions).'
+    ? `Grant AuditLog.Read.All permission (requires admin consent in Azure Portal → App Registration → API Permissions). ⚠️ Graph error: ${failedErrMsg ?? allErrMsg}`
     : null
 
   return NextResponse.json({

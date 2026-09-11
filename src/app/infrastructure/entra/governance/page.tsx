@@ -187,6 +187,12 @@ const NAV_GROUPS = [
       { key: 'org_structure',      label: 'Org Structure',       icon: Building2 },
     ],
   },
+  {
+    label: 'TOOLS',
+    items: [
+      { key: 'check_permissions',  label: 'Perm Diagnostics',   icon: ShieldCheck },
+    ],
+  },
 ]
 
 const AUDIT_CATEGORIES = [
@@ -1719,6 +1725,141 @@ function OrgStructureView({ d, onRefresh, loading }: { d: OrgStructureData; onRe
   )
 }
 
+// ── Permission Diagnostics View ───────────────────────────────────────────────
+
+interface PermResult {
+  id: string; name: string; permission: string; usedBy: readonly string[]
+  status: 'ok' | 'denied' | 'error'
+  httpStatus?: number; count?: number | string
+  errorCode?: string; errorMessage?: string; fix?: string
+}
+
+function PermCheckView() {
+  const [checking, setChecking] = useState(false)
+  const [results, setResults] = useState<PermResult[] | null>(null)
+  const [summary, setSummary] = useState<{ total: number; ok: number; denied: number; error: number } | null>(null)
+  const [testedAt, setTestedAt] = useState<string | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
+
+  async function runCheck() {
+    setChecking(true); setConfigError(null)
+    try {
+      const r = await fetch('/api/integrations/entra/check-permissions')
+      const json = await r.json()
+      if (json.configError) { setConfigError(json.configError); return }
+      setResults(json.results ?? [])
+      setSummary(json.summary ?? null)
+      setTestedAt(json.testedAt ?? null)
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : 'Fetch failed')
+    } finally { setChecking(false) }
+  }
+
+  const statusIcon = (s: string) =>
+    s === 'ok'
+      ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
+      : s === 'denied'
+      ? <XCircle className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
+      : <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-[#e2e8f0]">Graph API Permission Diagnostics</h2>
+          <p className="text-[11px] text-[#475569] mt-0.5">Live-test each Microsoft Graph permission used by OpsQuest to find missing admin consents.</p>
+        </div>
+        <button onClick={runCheck} disabled={checking}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#00d4ff30] bg-[#00d4ff0a] text-[#00d4ff] text-xs hover:bg-[#00d4ff18] transition-colors disabled:opacity-50">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          {checking ? 'Testing…' : results ? 'Re-run Check' : 'Run Permission Check'}
+        </button>
+      </div>
+
+      {configError && (
+        <div className="rounded border border-[#ef444430] bg-[#ef444408] px-3 py-2 mb-3 text-[11px] text-[#ef4444] flex gap-2">
+          <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>{configError}</span>
+        </div>
+      )}
+
+      {!results && !configError && (
+        <div className="rounded-lg border border-dashed border-[#1a2f4a] bg-[#0a1525] p-10 text-center">
+          <ShieldCheck className="w-8 h-8 text-[#00d4ff] mx-auto mb-3 opacity-50" />
+          <p className="text-[#64748b] text-xs">Click &ldquo;Run Permission Check&rdquo; above to test all Graph API permissions in real time.</p>
+          <p className="text-[10px] text-[#334155] mt-1">This calls each Graph endpoint with the app&apos;s credentials and shows exactly which ones are blocked.</p>
+        </div>
+      )}
+
+      {results && summary && (
+        <>
+          <StatRow stats={[
+            { label: 'Passed',       value: summary.ok,     color: 'green' },
+            { label: 'Denied (403)', value: summary.denied, color: 'red' },
+            { label: 'Errors',       value: summary.error,  color: 'amber' },
+            { label: 'Total',        value: summary.total,  color: 'cyan' },
+          ]} />
+
+          {summary.denied > 0 && (
+            <div className="rounded border border-[#ef444430] bg-[#ef444408] px-3 py-2 mb-3 text-[11px] text-[#ef4444] flex gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                <strong>{summary.denied} permission(s) blocked.</strong> Go to{' '}
+                <strong>Azure Portal → App Registration → API Permissions</strong>{' '}
+                and click <strong>&ldquo;Grant admin consent for [your tenant]&rdquo;</strong> for each denied item.
+              </span>
+            </div>
+          )}
+
+          {testedAt && <p className="text-[10px] text-[#334155] mb-2">Tested at {new Date(testedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'medium' })}</p>}
+
+          <div className="rounded-lg border border-[#1a2f4a] bg-[#0a1525] divide-y divide-[#0d1e35] overflow-hidden">
+            {results.map(r => (
+              <div key={r.id} className="px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  {statusIcon(r.status)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[12px] text-[#cbd5e1] font-medium">{r.name}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        r.status === 'ok'
+                          ? 'text-[#10b981] border-[#10b98130] bg-[#10b98108]'
+                          : r.status === 'denied'
+                          ? 'text-[#ef4444] border-[#ef444430] bg-[#ef444408]'
+                          : 'text-[#f59e0b] border-[#f59e0b30] bg-[#f59e0b08]'
+                      }`}>
+                        {r.status === 'ok'
+                          ? `✓ OK${typeof r.count === 'number' ? ` (${r.count} returned)` : ''}`
+                          : r.httpStatus ? `✗ HTTP ${r.httpStatus}` : `✗ ${r.status}`}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#475569] mt-0.5">
+                      <span className="text-[#334155]">Permission needed:</span> {r.permission}
+                    </p>
+                    {r.errorCode && (
+                      <p className="text-[10px] text-[#ef4444] mt-0.5">Error: <code className="font-mono">{r.errorCode}</code> — {r.errorMessage}</p>
+                    )}
+                    {!r.errorCode && r.errorMessage && (
+                      <p className="text-[10px] text-[#f59e0b] mt-0.5 break-all">{r.errorMessage}</p>
+                    )}
+                    {r.fix && (
+                      <p className="text-[10px] text-[#f59e0b] mt-1 flex gap-1">
+                        <span className="shrink-0">↳</span>
+                        <span>{r.fix}</span>
+                      </p>
+                    )}
+                    <p className="text-[10px] text-[#1e3352] mt-0.5">Used by: {r.usedBy.join(' · ')}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GovernancePage() {
@@ -1878,6 +2019,9 @@ export default function GovernancePage() {
   useEffect(() => { loadFeature(activeFeature) }, [activeFeature])
 
   function renderFeature() {
+    // Permission diagnostics manages its own state — skip the data-gating below
+    if (activeFeature === 'check_permissions') return <PermCheckView />
+
     const d = data[activeFeature]
     if (loading && !d) return <LoadingView />
     if (error && !d)  return <ErrorView message={error} />
@@ -1902,6 +2046,7 @@ export default function GovernancePage() {
       case 'group_health':       return <GroupHealthView       d={d as GroupHealthData}       {...props} />
       case 'directory_health':   return <DirectoryHealthView   d={d as DirectoryHealthData}   {...props} />
       case 'org_structure':      return <OrgStructureView      d={d as OrgStructureData}      {...props} />
+      case 'check_permissions':  return <PermCheckView />
       default:                   return null
     }
   }
