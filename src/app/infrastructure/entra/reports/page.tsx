@@ -19,6 +19,7 @@ interface ActivityUser {
   id: string; displayName: string; mail: string; department: string
   accountEnabled: boolean; createdDateTime: string; lastSignIn: string | null
   daysSinceSignIn: number | null; recentApps: string[]; licenseCount: number
+  signInCount: number
 }
 
 interface MailRow {
@@ -285,7 +286,8 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
         </select>
         <button onClick={() => exportCsv('user-activity.csv', sorted.map(u => ({
           Name: u.displayName, Email: u.mail, Department: u.department,
-          LastSignIn: u.lastSignIn ?? 'None', DaysSince: u.daysSinceSignIn ?? 'N/A', Licenses: u.licenseCount,
+          LastSignIn: u.lastSignIn ?? 'None', DaysSince: u.daysSinceSignIn ?? 'N/A',
+          SignIns: u.signInCount, Licenses: u.licenseCount,
         })))}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">
           <Download className="w-3 h-3" /> CSV
@@ -294,7 +296,7 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
 
       <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
         <table className="w-full text-[11px]">
-          <thead><TableHeader headers={['User', 'Email', 'Department', 'Last Sign-In', 'Recent Apps', 'Licenses']} /></thead>
+          <thead><TableHeader headers={['User', 'Email', 'Department', 'Last Sign-In', 'Sign-Ins', 'Recent Apps', 'Licenses']} /></thead>
           <tbody className="divide-y divide-[#0d1e35]">
             {sorted.map((u, i) => (
               <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
@@ -307,6 +309,7 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
                 <td className="px-3 py-1.5 font-mono text-[#64748b]">{u.mail}</td>
                 <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
                 <td className="px-3 py-1.5">{daysBadge(u.daysSinceSignIn)}</td>
+                <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{u.signInCount > 0 ? u.signInCount : '—'}</td>
                 <td className="px-3 py-1.5">
                   <div className="flex flex-wrap gap-1">
                     {u.recentApps.slice(0, 2).map((app, j) => (
@@ -320,7 +323,7 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-8 text-[11px] text-[#334155]">No users match</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-[11px] text-[#334155]">No users match</td></tr>
             )}
           </tbody>
         </table>
@@ -441,38 +444,40 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
         </div>
       ) : (
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
-          <table className="w-full text-[11px]">
-            <thead><TableHeader headers={['User', 'Email', 'Dept', 'Team Chats', 'Private', 'Calls', 'Meetings', 'Last Activity']} /></thead>
-            <tbody className="divide-y divide-[#0d1e35]">
-              {sorted.map((r, i) => (
-                <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                  <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{r.displayName}</td>
-                  <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{r.userPrincipalName}</td>
-                  <td className="px-3 py-1.5 text-[#64748b]">{r.department}</td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3 text-[#334155] shrink-0" />
-                      <span className="font-mono text-[#94a3b8]">{r.teamChatMessages.toLocaleString()}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.privateChatMessages.toLocaleString()}</td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-[#334155] shrink-0" />
-                      <span className="font-mono text-[#94a3b8]">{r.calls}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <Video className="w-3 h-3 text-[#334155] shrink-0" />
-                      <span className="font-mono text-[#94a3b8]">{r.meetings}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5 text-[#64748b]">{fmt(r.lastActivity)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead><TableHeader headers={['User', 'Email', 'Dept', 'Team Chats', 'Private', 'Calls', 'Meetings', 'Last Activity']} /></thead>
+              <tbody className="divide-y divide-[#0d1e35]">
+                {sorted.map((r, i) => (
+                  <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+                    <td className="px-3 py-1.5 text-[#e2e8f0] font-medium whitespace-nowrap">{r.displayName}</td>
+                    <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px] whitespace-nowrap">{r.userPrincipalName}</td>
+                    <td className="px-3 py-1.5 text-[#64748b] whitespace-nowrap">{r.department}</td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3 text-[#334155] shrink-0" />
+                        <span className="font-mono text-[#94a3b8]">{r.teamChatMessages.toLocaleString()}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.privateChatMessages.toLocaleString()}</td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-[#334155] shrink-0" />
+                        <span className="font-mono text-[#94a3b8]">{r.calls}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <Video className="w-3 h-3 text-[#334155] shrink-0" />
+                        <span className="font-mono text-[#94a3b8]">{r.meetings}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 text-[#64748b] whitespace-nowrap">{fmt(r.lastActivity)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

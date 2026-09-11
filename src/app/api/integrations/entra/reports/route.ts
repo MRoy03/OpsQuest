@@ -216,9 +216,13 @@ async function handleUserActivity(token: string) {
   // Build map of latest sign-in per UPN
   const lastSignIn: Record<string, string> = {}
   const appUsage: Record<string, Set<string>> = {}
+  const signInCounts: Record<string, number> = {}
   for (const si of signIns) {
     const upn = si.userPrincipalName?.toLowerCase()
-    if (upn && !lastSignIn[upn]) lastSignIn[upn] = si.createdDateTime
+    if (upn) {
+      signInCounts[upn] = (signInCounts[upn] || 0) + 1
+      if (!lastSignIn[upn]) lastSignIn[upn] = si.createdDateTime
+    }
     if (upn && si.appDisplayName) {
       if (!appUsage[upn]) appUsage[upn] = new Set()
       appUsage[upn].add(si.appDisplayName)
@@ -236,6 +240,7 @@ async function handleUserActivity(token: string) {
       daysSinceSignIn: last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : null,
       recentApps: appUsage[upn] ? [...appUsage[upn]].slice(0, 5) : [],
       licenseCount: (u.assignedLicenses ?? []).length,
+      signInCount: signInCounts[upn] ?? 0,
     }
   })
 

@@ -513,3 +513,52 @@ html[data-theme="light"] .focus-within\:border-\[\#00d4ff33\]:focus-within { bor
 /* ── Missing static backgrounds ──────────────────────────────────────────── */
 html[data-theme="light"] .bg-\[\#1e3352\] { background-color: #d0c4f0 !important; }
 html[data-theme="light"] .bg-\[\#0d1a2d\] { background-color: #e2d8ff !important; }
+
+/* ── Additional missing static backgrounds ──────────────────────────────── */
+html[data-theme="light"] .bg-\[\#0f2040\]  { background-color: #e4d8ff !important; }
+html[data-theme="light"] .bg-\[\#0f1e33\]  { background-color: #e4d8ff !important; }
+html[data-theme="light"] .bg-\[\#132035\]  { background-color: #d8ceff !important; }
+html[data-theme="light"] .bg-\[\#0d1f35\]  { background-color: #ddd2ff !important; }
+
+/* ── Gradient stop overrides ─────────────────────────────────────────────── */
+/* Tailwind gradient classes use --tw-gradient-from / --tw-gradient-to vars   */
+/* plus set background-image — override background-image directly to be safe  */
+
+html[data-theme="light"] .bg-gradient-to-b.from-\[\#0f2040\],
+html[data-theme="light"] .bg-gradient-to-b.from-\[\#0f1e33\] {
+  background-image: linear-gradient(to bottom, #e4d8ff, #ede6ff) !important;
+}
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#0d1e35\],
+html[data-theme="light"] .bg-gradient-to-b.from-\[\#0d1e35\] {
+  background-image: linear-gradient(to bottom right, #ddd2ff, #e9e0ff) !important;
+}
+html[data-theme="light"] .bg-gradient-to-b.from-\[\#0d1a2d\] {
+  background-image: linear-gradient(to bottom, #e2d8ff, #ede6ff) !important;
+}
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#0a1525\] {
+  background-image: linear-gradient(to bottom right, #e9e0ff, #f0eaff) !important;
+}
+
+/* Also override the CSS custom properties used by Tailwind v3/v4 gradient engine */
+html[data-theme="light"] .from-\[\#0f2040\] { --tw-gradient-from: #e4d8ff !important; }
+html[data-theme="light"] .from-\[\#0f1e33\] { --tw-gradient-from: #e4d8ff !important; }
+html[data-theme="light"] .from-\[\#0d1e35\] { --tw-gradient-from: #ddd2ff !important; }
+html[data-theme="light"] .from-\[\#0d1a2d\] { --tw-gradient-from: #e2d8ff !important; }
+html[data-theme="light"] .from-\[\#0a1525\] { --tw-gradient-from: #e9e0ff !important; }
+html[data-theme="light"] .from-\[\#060b18\] { --tw-gradient-from: #f2ecff !important; }
+html[data-theme="light"] .to-\[\#0a1525\]   { --tw-gradient-to:   #ede6ff !important; }
+html[data-theme="light"] .to-\[\#060b18\]   { --tw-gradient-to:   #f2ecff !important; }
+html[data-theme="light"] .to-\[\#0d1829\]   { --tw-gradient-to:   #e4d8ff !important; }
+html[data-theme="light"] .via-\[\#0d1e35\]  { --tw-gradient-via:  #ddd2ff !important; }
+
+/* ── CSS custom-property overrides for @theme inline tokens ─────────────── */
+html[data-theme="light"] {
+  --color-bg-base:        #f2ecff;
+  --color-bg-card:        #e4d8ff;
+  --color-bg-elevated:    #e0d6ff;
+  --color-border:         #b8a4e0;
+  --color-text-primary:   #0f0524;
+  --color-text-secondary: #2d1272;
+  --color-text-muted:     #5c3595;
+  --color-accent-cyan:    #0284a8;
+}

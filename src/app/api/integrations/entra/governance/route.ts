@@ -589,13 +589,20 @@ async function handleAdminRoles(token: string) {
       const rolesData = await graphGet('/directoryRoles?$select=id,displayName,roleTemplateId', token)
       const roles: any[] = rolesData.value ?? []
 
+      // Use null (not { value: [] }) so we can distinguish a permission error from a genuinely empty role
+      let membersFetchFailed = 0
+
       const results = await Promise.allSettled(
         roles.map(async (role: any) => {
           const membersData = await graphGetSafe(
             `/directoryRoles/${role.id}/members?$select=id,displayName,mail,userPrincipalName,accountEnabled&$top=100`,
             token,
-            { value: [] }
+            null  // null = API call failed (likely 403 — insufficient permissions)
           )
+          if (membersData === null) {
+            membersFetchFailed++
+            return null  // skip this role; tracked separately
+          }
           const members: any[] = membersData?.value ?? []
           if (members.length === 0) return null
           return {
@@ -623,17 +630,25 @@ async function handleAdminRoles(token: string) {
 
       const total = assignments.reduce((s: number, a: any) => s + a.members.length, 0)
 
+      // If ALL member fetches failed and we got nothing, surface a clear combined permission error
+      const memberPermError = membersFetchFailed > 0 && assignments.length === 0
+        ? 'Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions.'
+        : null
+
       return NextResponse.json({
         assignments,
         total,
         highPrivCount: assignments.filter((a: any) => a.isHighPriv).length,
-        rolesError: null,
-        fallbackNote: 'Showing via Directory API. Grant RoleManagement.Read.Directory + click "Grant admin consent" for full data.',
+        rolesError: memberPermError,
+        fallbackNote: memberPermError
+          ? null
+          : 'Showing via Directory API. Grant RoleManagement.Read.Directory + click "Grant admin consent" for full data.',
       })
     } catch {
+      // /directoryRoles listing itself failed — both RoleManagement and Directory APIs need consent
       return NextResponse.json({
         assignments: [], total: 0, highPrivCount: 0,
-        rolesError: 'Grant RoleManagement.Read.Directory and click "Grant admin consent" in Azure Portal → App Registration → API Permissions.',
+        rolesError: 'Grant RoleManagement.Read.Directory (for full data) OR Directory.Read.All with admin consent in Azure Portal → App Registration → API Permissions.',
       })
     }
   }
@@ -907,13 +922,18 @@ async function handleSigninIntel(token: string) {
     .map(([loc, count]) => ({ loc, count }))
     .sort((a, b) => b.count - a.count).slice(0, 10)
 
+  // Surface a clear error if either call failed — both need AuditLog.Read.All
+  const signInError = (failedResp.status === 'rejected' || allResp.status === 'rejected')
+    ? 'Grant AuditLog.Read.All permission (requires admin consent in Azure Portal → App Registration → API Permissions).'
+    : null
+
   return NextResponse.json({
     totalFailed:    failed.length,
     totalSignIns:   all.length,
     topFailingUsers: Object.values(userMap).sort((a, b) => b.count - a.count).slice(0, 20),
     errorBreakdown,
     topLocations,
-    signInError: failedResp.status === 'rejected' ? 'Grant AuditLog.Read.All permission' : null,
+    signInError,
   })
 }
 

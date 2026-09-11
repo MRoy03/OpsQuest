@@ -102,6 +102,7 @@ interface UserDetail {
   signIns: SignIn[]
   drive: { id: string; quota: DriveQuota } | null
   mailFolders: MailFolder[]
+  mailFolderError?: string | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -315,7 +316,7 @@ export default function UserProfilePage() {
     )
   }
 
-  const { profile, memberOf, memberOfError, devices, authMethods, licenseDetails, signIns, drive, mailFolders } = data
+  const { profile, memberOf, memberOfError, devices, authMethods, licenseDetails, signIns, drive, mailFolders, mailFolderError } = data
   const color = avatarColor(profile.displayName)
 
   const directoryRoles = memberOf.filter(m => m['@odata.type'] === '#microsoft.graph.directoryRole')
@@ -595,12 +596,25 @@ export default function UserProfilePage() {
         </Section>
 
         {/* ── Groups & Directory Roles ── */}
-        <Section id="groups" title="Groups & Directory Roles" icon={Users} count={memberOf.length} color="#b45309">
+        <Section id="groups" title="Groups & Directory Roles" icon={Users} count={memberOf.length} color="#b45309" defaultOpen={!!memberOfError}>
           {memberOfError
             ? (
-              <div className="flex items-start gap-3 p-5">
-                <AlertTriangle className="w-4 h-4 text-[#f59e0b] shrink-0 mt-0.5" />
-                <p className="text-xs text-[#94a3b8]">{memberOfError}</p>
+              <div className="p-5">
+                <div className="rounded-xl border border-[#f59e0b30] bg-[#f59e0b08] p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-[#f59e0b] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-[#f59e0b] mb-1">Permission required</p>
+                    <p className="text-xs text-[#94a3b8] mb-2">{memberOfError}</p>
+                    <a
+                      href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-[#60a5fa] hover:text-[#93c5fd] underline transition-colors"
+                    >
+                      Open Azure Portal → App Registration → API Permissions
+                    </a>
+                  </div>
+                </div>
               </div>
             )
             : memberOf.length === 0
@@ -743,6 +757,11 @@ export default function UserProfilePage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : mailFolderError ? (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-[#f59e0b08] border border-[#f59e0b30]">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" />
+                <span className="text-[11px] text-[#94a3b8]">{mailFolderError}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0a1525] border border-[#1a2f4a]">

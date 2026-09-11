@@ -622,47 +622,53 @@ function SigninIntelView({ d, onRefresh, loading }: { d: SigninIntelData; onRefr
         ))}
       </div>
 
-      {tab === 'users' && <SigninFailingUsersTable users={d.topFailingUsers ?? []} />}
-      {tab === 'errors' && (
-        (d.errorBreakdown ?? []).length === 0
-          ? <EmptyView label="No error data" icon={CheckCircle} />
-          : <CompactTable headers={['Error Code', 'Description', 'Count']} empty={false}
-              rows={(d.errorBreakdown ?? []).map((e, i) => (
-                <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                  <td className="px-3 py-1.5 font-mono text-[#a78bfa]">{e.code}</td>
-                  <td className="px-3 py-1.5 text-[#94a3b8]">{e.name}</td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1 bg-[#1a2f4a] rounded-full">
-                        <div className="h-1 rounded-full bg-[#ef4444]"
-                          style={{ width: `${Math.min(100, (e.count / (d.totalFailed || 1)) * 100)}%` }} />
+      {/* When permissions are fully missing, don't show confusing empty-state messages inside tabs */}
+      {d.signInError && d.totalSignIns === 0 && d.totalFailed === 0
+        ? <EmptyView label="No sign-in data — grant AuditLog.Read.All and admin consent (see banner above)." icon={Activity} />
+        : <>
+          {tab === 'users' && <SigninFailingUsersTable users={d.topFailingUsers ?? []} />}
+          {tab === 'errors' && (
+            (d.errorBreakdown ?? []).length === 0
+              ? <EmptyView label="No error data" icon={CheckCircle} />
+              : <CompactTable headers={['Error Code', 'Description', 'Count']} empty={false}
+                  rows={(d.errorBreakdown ?? []).map((e, i) => (
+                    <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+                      <td className="px-3 py-1.5 font-mono text-[#a78bfa]">{e.code}</td>
+                      <td className="px-3 py-1.5 text-[#94a3b8]">{e.name}</td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1 bg-[#1a2f4a] rounded-full">
+                            <div className="h-1 rounded-full bg-[#ef4444]"
+                              style={{ width: `${Math.min(100, (e.count / (d.totalFailed || 1)) * 100)}%` }} />
+                          </div>
+                          <span className="font-mono text-[#e2e8f0] text-[10px] w-6 text-right">{e.count}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                />
+          )}
+          {tab === 'locations' && (
+            (d.topLocations ?? []).length === 0
+              ? <EmptyView label="No location data" icon={MapPin} />
+              : <div className="space-y-1.5">
+                  {(d.topLocations ?? []).map((l, i) => {
+                    const max = Math.max(...(d.topLocations ?? []).map(x => x.count), 1)
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-1">
+                        <MapPin className="w-3 h-3 text-[#334155] shrink-0" />
+                        <span className="text-[11px] text-[#94a3b8] w-40 truncate shrink-0">{l.loc}</span>
+                        <div className="flex-1 h-1.5 bg-[#1a2f4a] rounded-full">
+                          <div className="h-1.5 rounded-full bg-[#00d4ff]" style={{ width: `${(l.count / max) * 100}%` }} />
+                        </div>
+                        <span className="text-[10px] text-[#475569] font-mono w-6 text-right shrink-0">{l.count}</span>
                       </div>
-                      <span className="font-mono text-[#e2e8f0] text-[10px] w-6 text-right">{e.count}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            />
-      )}
-      {tab === 'locations' && (
-        (d.topLocations ?? []).length === 0
-          ? <EmptyView label="No location data" icon={MapPin} />
-          : <div className="space-y-1.5">
-              {(d.topLocations ?? []).map((l, i) => {
-                const max = Math.max(...(d.topLocations ?? []).map(x => x.count), 1)
-                return (
-                  <div key={i} className="flex items-center gap-3 px-1">
-                    <MapPin className="w-3 h-3 text-[#334155] shrink-0" />
-                    <span className="text-[11px] text-[#94a3b8] w-40 truncate shrink-0">{l.loc}</span>
-                    <div className="flex-1 h-1.5 bg-[#1a2f4a] rounded-full">
-                      <div className="h-1.5 rounded-full bg-[#00d4ff]" style={{ width: `${(l.count / max) * 100}%` }} />
-                    </div>
-                    <span className="text-[10px] text-[#475569] font-mono w-6 text-right shrink-0">{l.count}</span>
-                  </div>
-                )
-              })}
-            </div>
-      )}
+                    )
+                  })}
+                </div>
+          )}
+        </>
+      }
     </div>
   )
 }

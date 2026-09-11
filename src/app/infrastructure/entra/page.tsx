@@ -365,7 +365,8 @@ export default function EntraPage() {
   const [syncing, setSyncing]   = useState(false)
   const [syncResult, setSyncResult] = useState<{ synced_at: string; users: number; groups: number } | null>(null)
   const [syncError, setSyncError]   = useState<string | null>(null)
-  const [search, setSearch]     = useState('')
+  const [search, setSearch]           = useState('')
+  const [deviceSearch, setDeviceSearch] = useState('')
 
   const [hoveredUser, setHoveredUser] = useState<EntraUser | null>(null)
   const [cardPos, setCardPos]         = useState({ x: 0, y: 0 })
@@ -456,6 +457,15 @@ export default function EntraPage() {
           u.jobTitle?.toLowerCase().includes(q))
       })
     : users
+
+  const filteredDevices = deviceSearch.trim()
+    ? devices.filter(d => {
+        const q = deviceSearch.toLowerCase()
+        return (d.displayName?.toLowerCase().includes(q) ||
+          d.operatingSystem?.toLowerCase().includes(q) ||
+          d.trustType?.toLowerCase().includes(q))
+      })
+    : devices
 
   const tabs: { key: Tab; label: string; icon: React.ElementType; count?: number }[] = [
     { key: 'overview', label: 'Overview',  icon: BarChart2 },
@@ -810,50 +820,75 @@ export default function EntraPage() {
 
               {/* ── DEVICES ── */}
               {tab === 'devices' && (
-                <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[#1a2f4a] bg-[#080f1d]">
-                        {['Device Name', 'OS', 'Version', 'Trust Type', 'Compliant', 'Managed', 'Registered'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-[#334155] font-semibold tracking-wider text-[10px] uppercase">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading
-                        ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
-                        : devices.map((d, idx) => (
-                          <motion.tr key={d.id}
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            transition={{ delay: Math.min(idx * 0.02, 0.3) }}
-                            className="border-b border-[#0a1525] hover:bg-[#0d1e35] transition-colors">
-                            <td className="px-4 py-3 text-[#c8d8f0] font-semibold">{d.displayName}</td>
-                            <td className="px-4 py-3 text-[#64748b]">{d.operatingSystem}</td>
-                            <td className="px-4 py-3 text-[#475569] font-mono text-[10px]">{d.operatingSystemVersion}</td>
-                            <td className="px-4 py-3">
-                              <span className="px-2 py-0.5 rounded bg-[#132035] border border-[#1a2f4a] text-[10px] text-[#64748b]">{d.trustType || '—'}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              {d.isCompliant
-                                ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" style={{ filter: 'drop-shadow(0 0 4px #10b98188)' }} />
-                                : <XCircle className="w-3.5 h-3.5 text-[#ef4444]" />}
-                            </td>
-                            <td className="px-4 py-3">
-                              {d.isManaged
-                                ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" style={{ filter: 'drop-shadow(0 0 4px #10b98188)' }} />
-                                : <XCircle className="w-3.5 h-3.5 text-[#ef4444]" />}
-                            </td>
-                            <td className="px-4 py-3 text-[#475569] text-[10px] font-mono">
-                              {d.registrationDateTime ? new Date(d.registrationDateTime).toLocaleDateString('en-GB') : '—'}
-                            </td>
-                          </motion.tr>
-                        ))
-                      }
-                    </tbody>
-                  </table>
-                  {!loading && devices.length === 0 && (
-                    <div className="text-center py-12 text-[#334155] text-xs">No devices found</div>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-[#334155] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input type="text" placeholder="Search by device name, OS, or trust type…"
+                      value={deviceSearch} onChange={e => setDeviceSearch(e.target.value)}
+                      className="w-full bg-[#0a1525] border border-[#1a2f4a] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#e2e8f0] placeholder-[#1e3352] outline-none transition-all duration-200 focus:border-[#00d4ff55]"
+                      onFocus={e => (e.target.style.boxShadow = '0 0 0 1px #00d4ff33, 0 0 20px #00d4ff15')}
+                      onBlur={e => (e.target.style.boxShadow = '')}
+                    />
+                    {deviceSearch && (
+                      <button onClick={() => setDeviceSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#334155] hover:text-[#64748b] text-[10px] transition-colors">
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
+                  {deviceSearch && (
+                    <p className="text-[10px] text-[#334155]">
+                      <span className="text-[#00d4ff]">{filteredDevices.length}</span> of {devices.length} devices match
+                      &ldquo;<span className="text-[#64748b]">{deviceSearch}</span>&rdquo;
+                    </p>
                   )}
+                  <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[#1a2f4a] bg-[#080f1d]">
+                          {['Device Name', 'OS', 'Version', 'Trust Type', 'Compliant', 'Managed', 'Registered'].map(h => (
+                            <th key={h} className="text-left px-4 py-3 text-[#334155] font-semibold tracking-wider text-[10px] uppercase">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading
+                          ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+                          : filteredDevices.map((d, idx) => (
+                            <motion.tr key={d.id}
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                              transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                              className="border-b border-[#0a1525] hover:bg-[#0d1e35] transition-colors">
+                              <td className="px-4 py-3 text-[#c8d8f0] font-semibold">{d.displayName}</td>
+                              <td className="px-4 py-3 text-[#64748b]">{d.operatingSystem}</td>
+                              <td className="px-4 py-3 text-[#475569] font-mono text-[10px]">{d.operatingSystemVersion}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-0.5 rounded bg-[#132035] border border-[#1a2f4a] text-[10px] text-[#64748b]">{d.trustType || '—'}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {d.isCompliant
+                                  ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" style={{ filter: 'drop-shadow(0 0 4px #10b98188)' }} />
+                                  : <XCircle className="w-3.5 h-3.5 text-[#ef4444]" />}
+                              </td>
+                              <td className="px-4 py-3">
+                                {d.isManaged
+                                  ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" style={{ filter: 'drop-shadow(0 0 4px #10b98188)' }} />
+                                  : <XCircle className="w-3.5 h-3.5 text-[#ef4444]" />}
+                              </td>
+                              <td className="px-4 py-3 text-[#475569] text-[10px] font-mono">
+                                {d.registrationDateTime ? new Date(d.registrationDateTime).toLocaleDateString('en-GB') : '—'}
+                              </td>
+                            </motion.tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                    {!loading && filteredDevices.length === 0 && (
+                      <div className="text-center py-12 text-[#334155] text-xs">
+                        {deviceSearch ? `No devices match "${deviceSearch}"` : 'No devices found'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

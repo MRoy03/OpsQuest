@@ -115,6 +115,9 @@ export async function GET(
         ),
       ])
 
+    // graphGetSafe never rejects; a null value means the call failed (likely 403)
+    const mailFoldersValue = mailFoldersRes.status === 'fulfilled' ? mailFoldersRes.value : null
+
     return NextResponse.json({
       profile:        profileRes.status      === 'fulfilled' ? profileRes.value          : null,
       memberOf:       memberOfRes.status     === 'fulfilled' ? (memberOfRes.value?.value ?? [])    : [],
@@ -126,7 +129,11 @@ export async function GET(
       licenseDetails: licensesRes.status     === 'fulfilled' ? (licensesRes.value?.value ?? [])    : [],
       signIns:        signInsRes.status      === 'fulfilled' ? (signInsRes.value?.value ?? [])     : [],
       drive:          driveRes.status        === 'fulfilled' ? driveRes.value                      : null,
-      mailFolders:    mailFoldersRes.status  === 'fulfilled' ? (mailFoldersRes.value?.value ?? []) : [],
+      mailFolders:    mailFoldersValue?.value ?? [],
+      // null mailFoldersValue means graphGetSafe returned null → permission denied
+      mailFolderError: mailFoldersValue === null
+        ? 'Grant Mail.Read.All or Mail.ReadBasic.All permission to see mailbox folder sizes.'
+        : null,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
