@@ -1729,15 +1729,15 @@ function OrgStructureView({ d, onRefresh, loading }: { d: OrgStructureData; onRe
 
 interface PermResult {
   id: string; name: string; permission: string; usedBy: readonly string[]
-  status: 'ok' | 'denied' | 'error'
+  status: 'ok' | 'denied' | 'error' | 'premium_required'
   httpStatus?: number; count?: number | string
-  errorCode?: string; errorMessage?: string; fix?: string
+  errorCode?: string; errorMessage?: string; fix?: string; note?: string
 }
 
 function PermCheckView() {
   const [checking, setChecking] = useState(false)
   const [results, setResults] = useState<PermResult[] | null>(null)
-  const [summary, setSummary] = useState<{ total: number; ok: number; denied: number; error: number } | null>(null)
+  const [summary, setSummary] = useState<{ total: number; ok: number; denied: number; premiumRequired?: number; error: number } | null>(null)
   const [testedAt, setTestedAt] = useState<string | null>(null)
   const [configError, setConfigError] = useState<string | null>(null)
 
@@ -1760,6 +1760,8 @@ function PermCheckView() {
       ? <CheckCircle className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
       : s === 'denied'
       ? <XCircle className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
+      : s === 'premium_required'
+      ? <Lock className="w-3.5 h-3.5 text-[#a78bfa] shrink-0" />
       : <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
 
   return (
@@ -1794,19 +1796,30 @@ function PermCheckView() {
       {results && summary && (
         <>
           <StatRow stats={[
-            { label: 'Passed',       value: summary.ok,     color: 'green' },
-            { label: 'Denied (403)', value: summary.denied, color: 'red' },
-            { label: 'Errors',       value: summary.error,  color: 'amber' },
-            { label: 'Total',        value: summary.total,  color: 'cyan' },
+            { label: 'Passed',        value: summary.ok,                  color: 'green' },
+            { label: 'Denied (403)',  value: summary.denied,              color: 'red' },
+            { label: 'Needs Premium', value: summary.premiumRequired ?? 0, color: 'purple' },
+            { label: 'Errors',        value: summary.error,               color: 'amber' },
           ]} />
 
           {summary.denied > 0 && (
             <div className="rounded border border-[#ef444430] bg-[#ef444408] px-3 py-2 mb-3 text-[11px] text-[#ef4444] flex gap-2">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>
-                <strong>{summary.denied} permission(s) blocked.</strong> Go to{' '}
+                <strong>{summary.denied} permission(s) blocked (403).</strong> Go to{' '}
                 <strong>Azure Portal → App Registration → API Permissions</strong>{' '}
                 and click <strong>&ldquo;Grant admin consent for [your tenant]&rdquo;</strong> for each denied item.
+              </span>
+            </div>
+          )}
+
+          {(summary.premiumRequired ?? 0) > 0 && (
+            <div className="rounded border border-[#a78bfa30] bg-[#a78bfa08] px-3 py-2 mb-3 text-[11px] text-[#a78bfa] flex gap-2">
+              <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                <strong>{summary.premiumRequired} section(s) require Azure AD Premium P1 or P2.</strong>{' '}
+                Sign-in logs and auth method reports are not available on free/basic Entra ID plans.{' '}
+                Upgrade at <strong>Azure Portal → Azure Active Directory → Licenses</strong>.
               </span>
             </div>
           )}
@@ -1826,10 +1839,14 @@ function PermCheckView() {
                           ? 'text-[#10b981] border-[#10b98130] bg-[#10b98108]'
                           : r.status === 'denied'
                           ? 'text-[#ef4444] border-[#ef444430] bg-[#ef444408]'
+                          : r.status === 'premium_required'
+                          ? 'text-[#a78bfa] border-[#a78bfa30] bg-[#a78bfa08]'
                           : 'text-[#f59e0b] border-[#f59e0b30] bg-[#f59e0b08]'
                       }`}>
                         {r.status === 'ok'
-                          ? `✓ OK${typeof r.count === 'number' ? ` (${r.count} returned)` : ''}`
+                          ? `✓ OK${typeof r.count === 'number' ? ` (${r.count} returned)` : typeof r.count === 'string' && r.count !== 'ok' ? ` — ${r.count}` : ''}`
+                          : r.status === 'premium_required'
+                          ? '🔒 Premium P1 Required'
                           : r.httpStatus ? `✗ HTTP ${r.httpStatus}` : `✗ ${r.status}`}
                       </span>
                     </div>
@@ -1840,13 +1857,16 @@ function PermCheckView() {
                       <p className="text-[10px] text-[#ef4444] mt-0.5">Error: <code className="font-mono">{r.errorCode}</code> — {r.errorMessage}</p>
                     )}
                     {!r.errorCode && r.errorMessage && (
-                      <p className="text-[10px] text-[#f59e0b] mt-0.5 break-all">{r.errorMessage}</p>
+                      <p className={`text-[10px] mt-0.5 break-all ${r.status === 'premium_required' ? 'text-[#a78bfa]' : 'text-[#f59e0b]'}`}>{r.errorMessage}</p>
                     )}
                     {r.fix && (
-                      <p className="text-[10px] text-[#f59e0b] mt-1 flex gap-1">
+                      <p className={`text-[10px] mt-1 flex gap-1 ${r.status === 'premium_required' ? 'text-[#a78bfa]' : 'text-[#f59e0b]'}`}>
                         <span className="shrink-0">↳</span>
                         <span>{r.fix}</span>
                       </p>
+                    )}
+                    {r.note && (
+                      <p className="text-[10px] text-[#475569] mt-0.5 italic">{r.note}</p>
                     )}
                     <p className="text-[10px] text-[#1e3352] mt-0.5">Used by: {r.usedBy.join(' · ')}</p>
                   </div>

@@ -29,7 +29,8 @@ async function getToken(): Promise<string> {
   )
   const json = await resp.json()
   if (!resp.ok) throw new Error(json.error_description || 'Token fetch failed')
-  tokenCache = { token: json.access_token, expires: Date.now() + (json.expires_in - 60) * 1000 }
+  // 5-min cache so newly-granted admin consent permissions propagate quickly
+  tokenCache = { token: json.access_token, expires: Date.now() + 5 * 60 * 1000 }
   return tokenCache.token
 }
 
@@ -204,14 +205,27 @@ async function handleLicenseSku(token: string) {
 
 // scope=user_activity – Last sign-in per licensed user
 async function handleUserActivity(token: string) {
+  // Sign-in logs need AuditLog.Read.All AND Azure AD Premium P1+ license.
+  // Use graphGet (throws on error) so we can detect the error type and surface it clearly.
   const [usersResp, signInsResp] = await Promise.allSettled([
     graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses,accountEnabled,createdDateTime&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
-    graphGetSafe('/auditLogs/signIns?$select=userPrincipalName,userDisplayName,createdDateTime,appDisplayName,clientAppUsed,status&$filter=status/errorCode eq 0&$top=500&$orderby=createdDateTime desc', token, { value: [] }),
+    graphGet('/auditLogs/signIns?$select=userPrincipalName,userDisplayName,createdDateTime,appDisplayName,clientAppUsed,status&$filter=status/errorCode eq 0&$top=500&$orderby=createdDateTime desc', token),
   ])
 
   const users = usersResp.status === 'fulfilled' ? (usersResp.value?.value ?? []) : []
   const signIns = signInsResp.status === 'fulfilled' ? (signInsResp.value?.value ?? []) : []
-  const signInError = signInsResp.status === 'rejected' ? (signInsResp.reason?.message?.slice(0, 120) ?? 'Sign-in log unavailable') : null
+
+  let signInError: string | null = null
+  if (signInsResp.status === 'rejected') {
+    const rawMsg = String(signInsResp.reason?.message ?? signInsResp.reason ?? '')
+    if (rawMsg.includes('NonPremiumTenant') || rawMsg.includes('premium license') || rawMsg.includes('AADSTS50196')) {
+      signInError = '🔒 Sign-in logs require Azure AD Premium P1 or P2. Your tenant is on a free/basic plan — last sign-in and recent apps columns will be empty. Upgrade at Azure Portal → Azure Active Directory → Licenses.'
+    } else if (rawMsg.includes('403') || rawMsg.includes('Authorization_RequestDenied')) {
+      signInError = `Grant AuditLog.Read.All permission with admin consent in Azure Portal → App Registration → API Permissions. ⚠️ ${rawMsg.slice(0, 150)}`
+    } else {
+      signInError = `Sign-in logs unavailable: ${rawMsg.slice(0, 150)}`
+    }
+  }
 
   // Build map of latest sign-in per UPN
   const lastSignIn: Record<string, string> = {}

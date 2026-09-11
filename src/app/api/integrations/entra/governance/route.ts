@@ -32,9 +32,12 @@ async function getToken(): Promise<string> {
   )
   const json = await resp.json()
   if (!resp.ok) throw new Error(json.error_description || 'Token fetch failed')
+  // Cache for 5 min only — ensures newly-granted admin consent permissions
+  // propagate within 5 minutes (the token includes all app permissions at issuance time;
+  // a token issued before admin consent was clicked won't have the new permission).
   tokenCache = {
     token:   json.access_token,
-    expires: Date.now() + (json.expires_in - 60) * 1000,
+    expires: Date.now() + 5 * 60 * 1000,
   }
   return tokenCache.token
 }
@@ -603,12 +606,33 @@ async function handleAdminRoles(token: string) {
   // directoryRoles.id is the role INSTANCE id (tenant-specific).
   // roleAssignments.roleDefinitionId is the role DEFINITION id.
   // Only roleDefinitions.id matches roleAssignments.roleDefinitionId.
+  //
+  // NOTE: roleDefinitions requires $top ≥ 20 (min page size constraint).
+  //       roleAssignments with $expand limits page size — use 100 and paginate.
   const [defsResp, assignmentsResp] = await Promise.allSettled([
-    graphGet('/roleManagement/directory/roleDefinitions?$select=id,displayName&$top=300', token),
-    graphGet(
-      '/roleManagement/directory/roleAssignments?$expand=principal($select=id,displayName,mail,userPrincipalName,accountEnabled,@odata.type)&$top=999',
-      token
-    ),
+    graphGet('/roleManagement/directory/roleDefinitions?$select=id,displayName&$top=100', token),
+    (async () => {
+      // Paginate role assignments: $expand limits effective page size
+      const items: any[] = []
+      let nextUrl: string | null =
+        `${GRAPH_BASE}/roleManagement/directory/roleAssignments?$expand=principal($select=id,displayName,mail,userPrincipalName,accountEnabled,@odata.type)&$top=100`
+      let pages = 0
+      while (nextUrl && pages < 10) {
+        const resp: Response = await fetch(nextUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(20000),
+        })
+        if (!resp.ok) {
+          const err: string = await resp.text()
+          throw new Error(`Graph roleAssignments → ${resp.status}: ${err.slice(0, 200)}`)
+        }
+        const pageData: { value?: any[]; '@odata.nextLink'?: string } = await resp.json()
+        items.push(...(pageData.value ?? []))
+        nextUrl = pageData['@odata.nextLink'] ?? null
+        pages++
+      }
+      return { value: items }
+    })(),
   ])
 
   if (defsResp.status === 'rejected' || assignmentsResp.status === 'rejected') {
@@ -858,7 +882,17 @@ async function handleDirectoryInsights(token: string) {
         authMethods: u.methodsRegistered ?? [],
       }))
     } else {
-      authMethodError = `Grant Reports.Read.All or UserAuthenticationMethod.Read.All for auth method statistics. ⚠️ v1.0: ${authErr1} | beta: ${betaErr}`
+      // Detect the two distinct failure modes
+      const combinedErr = `${authErr1 ?? ''} ${betaErr ?? ''}`.toLowerCase()
+      const isPremium = combinedErr.includes('resource not found') || combinedErr.includes('nonpremiumtenant') || combinedErr.includes('premium')
+      const isDenied  = combinedErr.includes('403') || combinedErr.includes('authorization_requestdenied')
+      if (isPremium) {
+        authMethodError = '🔒 Auth method registration reports require Azure AD Premium P1 or P2 license. Upgrade your Entra ID plan to see this data.'
+      } else if (isDenied) {
+        authMethodError = `Grant Reports.Read.All permission with admin consent. ⚠️ v1.0: ${authErr1} | beta: ${betaErr}`
+      } else {
+        authMethodError = `Auth method data unavailable. ⚠️ v1.0: ${authErr1} | beta: ${betaErr}`
+      }
     }
   }
 
@@ -978,10 +1012,21 @@ async function handleSigninIntel(token: string) {
     .map(([loc, count]) => ({ loc, count }))
     .sort((a, b) => b.count - a.count).slice(0, 10)
 
-  // Surface a clear error if either call failed — both need AuditLog.Read.All
-  const signInError = (failedResp.status === 'rejected' || allResp.status === 'rejected')
-    ? `Grant AuditLog.Read.All permission (requires admin consent in Azure Portal → App Registration → API Permissions). ⚠️ Graph error: ${failedErrMsg ?? allErrMsg}`
-    : null
+  // Detect the "no premium license" error from the raw Graph error text
+  const rawErr = failedErrMsg ?? allErrMsg ?? ''
+  const isPremiumRequired = rawErr.includes('NonPremiumTenant') || rawErr.includes('premium license') || rawErr.includes('AADSTS50196')
+  const isPermissionDenied = rawErr.includes('Authorization_RequestDenied') || rawErr.includes('403')
+
+  let signInError: string | null = null
+  if (failedResp.status === 'rejected' || allResp.status === 'rejected') {
+    if (isPremiumRequired) {
+      signInError = '🔒 Sign-in logs require Azure AD Premium P1 or P2 license. Your tenant is on a free/basic plan. Upgrade at Azure Portal → Azure Active Directory → Licenses to see sign-in intelligence data.'
+    } else if (isPermissionDenied) {
+      signInError = `Grant AuditLog.Read.All permission with admin consent in Azure Portal → App Registration → API Permissions. ⚠️ Graph error: ${rawErr}`
+    } else {
+      signInError = `Sign-in log unavailable. ⚠️ Graph error: ${rawErr}`
+    }
+  }
 
   return NextResponse.json({
     totalFailed:    failed.length,
