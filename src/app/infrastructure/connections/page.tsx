@@ -114,7 +114,7 @@ export default function ConnectionsPage() {
   return (
     <>
       <TopBar title="Connection Monitor" subtitle="Live TCP/UDP connection snapshot from every managed device — refreshed each agent heartbeat" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-full mx-auto space-y-5">
 
           {/* Stats */}

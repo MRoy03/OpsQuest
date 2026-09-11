@@ -73,7 +73,7 @@ export default function DocsPage() {
   return (
     <>
       <TopBar title="Documentation Hub" subtitle={`${totalGuides}+ guides — M365, Azure, SAP, DevOps, Hardware, DBMS/ERP, IT Fundamentals`} />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="text-center pb-2">
             <h2 className="text-xl font-bold text-[#e2e8f0]">IT Knowledge Base</h2>

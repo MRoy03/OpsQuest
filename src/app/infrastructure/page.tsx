@@ -112,7 +112,7 @@ export default function InfrastructurePage() {
   return (
     <>
       <TopBar title="Infrastructure Monitor" subtitle="Device health · Entra ID · Aruba · Sophos · Cameras" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-6">
 
           {/* Agent status banner */}

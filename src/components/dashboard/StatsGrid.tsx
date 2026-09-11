@@ -110,8 +110,14 @@ export default function StatsGrid() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08, duration: 0.4, ease: 'easeOut' }}
-            whileHover={{ scale: 1.02, boxShadow: c.glow }}
-            className={`${c.bg} border ${c.border} rounded-xl p-4 cursor-default transition-colors`}
+            whileHover={{
+              scale: 1.025,
+              rotateX: 2,
+              rotateY: -1.5,
+              boxShadow: `${c.glow}, 0 12px 32px rgba(0,0,0,0.55)`,
+            }}
+            style={{ perspective: 900, transformStyle: 'preserve-3d' }}
+            className={`${c.bg} border ${c.border} rounded-xl p-4 cursor-default card-hover`}
           >
             <div className="flex items-start justify-between">
               <div>

@@ -332,7 +332,7 @@ export default function ActivityPage() {
         title="Activity Monitor"
         subtitle={`${totalDevices} device${totalDevices !== 1 ? 's' : ''} · ${totalActive} active apps · ${date}`}
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-5">
 
           <div className="rounded-lg border border-[#f59e0b33] bg-[#f59e0b08] px-4 py-3 text-xs text-[#f59e0b]">

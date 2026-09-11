@@ -564,7 +564,7 @@ export default function DBMSERPPage() {
         title="DBMS, ERP & Problem Solving"
         subtitle="Database management, SQL reference, ERP systems, data troubleshooting and IT problem solving methodology"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={DBMS_ERP_DOCS} />
         </div>

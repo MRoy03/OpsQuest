@@ -1032,7 +1032,7 @@ export default function SAPPage() {
         title="SAP S/4HANA Public Cloud"
         subtitle="Complete admin and consultant reference — Fiori, FICO, MM, SD, QM, PM, BASIS, Integration, ABAP & Cloud Dev"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={SAP_DOCS} />
         </div>

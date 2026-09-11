@@ -311,7 +311,7 @@ export default function BulkPage() {
   return (
     <>
       <TopBar title="Bulk Actions" subtitle="Send commands to multiple agents simultaneously" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 

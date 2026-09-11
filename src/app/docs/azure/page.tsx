@@ -783,7 +783,7 @@ export default function AzurePage() {
         title="Microsoft Azure Guide"
         subtitle="Virtual Machines, Networking, Entra ID, App Service, SQL, Storage, Key Vault, Monitor, AKS, Cost Management"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={AZURE_DOCS} />
         </div>

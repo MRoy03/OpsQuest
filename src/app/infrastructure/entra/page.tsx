@@ -478,7 +478,7 @@ export default function EntraPage() {
     return (
       <>
         <TopBar title="Entra ID Monitor" subtitle="Microsoft Graph API" />
-        <div className="flex-1 p-6 grid-bg overflow-y-auto flex items-center justify-center">
+        <div className="page-content grid-bg flex items-center justify-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl border border-[#7c3aed44] bg-gradient-to-b from-[#0f1e33] to-[#0a1525] p-8 max-w-md text-center"
             style={{ boxShadow: '0 0 0 1px #7c3aed22, 0 24px 64px #7c3aed18' }}>
@@ -507,7 +507,7 @@ export default function EntraPage() {
   return (
     <>
       <TopBar title="Entra ID Monitor" subtitle="Microsoft Graph — Identity, Compliance & Governance" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-4">
 
           {/* Sync bar */}
@@ -761,7 +761,7 @@ export default function EntraPage() {
                     </p>
                   )}
 
-                  <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
+                  <div className="overflow-x-auto rounded-xl border border-[#1a2f4a] overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-[#1a2f4a] bg-[#080f1d]">
@@ -842,7 +842,7 @@ export default function EntraPage() {
                       &ldquo;<span className="text-[#64748b]">{deviceSearch}</span>&rdquo;
                     </p>
                   )}
-                  <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
+                  <div className="overflow-x-auto rounded-xl border border-[#1a2f4a] overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-[#1a2f4a] bg-[#080f1d]">
@@ -904,7 +904,7 @@ export default function EntraPage() {
                       </p>
                     </motion.div>
                   : loading
-                  ? <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
+                  ? <div className="overflow-x-auto rounded-xl border border-[#1a2f4a] overflow-hidden">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b border-[#1a2f4a] bg-[#080f1d]">
                           {['User','UPN','Risk Level','Risk State','Last Updated'].map(h => (
@@ -921,7 +921,7 @@ export default function EntraPage() {
                       <p className="text-sm font-bold text-[#10b981]">No risky users detected</p>
                       <p className="text-xs text-[#475569] mt-1">All sign-in risk states are clean</p>
                     </motion.div>
-                  : <div className="rounded-xl border border-[#1a2f4a] overflow-hidden">
+                  : <div className="overflow-x-auto rounded-xl border border-[#1a2f4a] overflow-hidden">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-[#1a2f4a] bg-[#080f1d]">

@@ -1599,7 +1599,7 @@ export default function HardwarePage() {
         title="Hardware & Network Guide"
         subtitle="Crimping, punching, cabling, connectors, firewall, servers, infrastructure, access points"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={HARDWARE_DOCS} />
         </div>

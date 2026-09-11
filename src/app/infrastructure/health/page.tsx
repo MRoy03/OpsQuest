@@ -70,7 +70,7 @@ export default function HealthPage() {
   return (
     <>
       <TopBar title="Endpoint Health Score" subtitle="Security posture and device health scored 0–100 from existing agent data" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-5">
 
           {/* Stats */}

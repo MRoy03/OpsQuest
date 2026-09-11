@@ -44,7 +44,7 @@ export default function EnrollmentPage() {
   return (
     <>
       <TopBar title="Agent Enrollment" subtitle="Generate pre-configured agent packages for new machines" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* ── Generator ── */}

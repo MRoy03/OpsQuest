@@ -69,7 +69,7 @@ export default function PortsPage() {
   return (
     <>
       <TopBar title="Port Security Audit" subtitle="Fleet-wide open/listening port inventory with risk classification" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-5">
 
           {/* Stats */}

@@ -872,7 +872,7 @@ export default function ITRecapPage() {
         title="IT Topics Quick Recap"
         subtitle="Networking, Active Directory, Security, Computer Architecture, OS, Cloud, ITIL, PowerShell and more"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={IT_RECAP_DOCS} />
         </div>

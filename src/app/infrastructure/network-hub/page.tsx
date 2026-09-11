@@ -87,7 +87,7 @@ export default function NetworkHubPage() {
   return (
     <>
       <TopBar title="Network" subtitle="Topology, connections, ports, DNS and printer fleet across all managed devices" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-6">
 
           <div className="flex items-center gap-2">

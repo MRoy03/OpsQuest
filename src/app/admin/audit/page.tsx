@@ -84,7 +84,7 @@ export default function AuditPage() {
   return (
     <>
       <TopBar title="Audit Log" subtitle="All admin actions — commands, device updates, sync events" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-4">
 
           {/* Filters */}

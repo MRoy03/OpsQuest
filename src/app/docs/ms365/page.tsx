@@ -659,7 +659,7 @@ export default function MS365Page() {
         title="Microsoft 365 Admin Guide"
         subtitle="Exchange Online, Entra ID, Teams, SharePoint, Defender, Intune, Purview, and M365 Admin Center"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto">
           <DocSection sections={MS365_DOCS} />
         </div>

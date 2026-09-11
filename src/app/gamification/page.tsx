@@ -5,7 +5,7 @@ export default function GamificationPage() {
   return (
     <>
       <TopBar title="Achievements & Leaderboard" subtitle="XP rewards, levels, and team rankings" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <GamificationHub />
       </div>
     </>

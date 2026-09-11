@@ -108,7 +108,7 @@ export default function NetworkPage() {
   return (
     <>
       <TopBar title="Network Monitor" subtitle="Aruba Instant On · Sophos Firewall / Central" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-5xl mx-auto space-y-5">
 
           {/* Tabs */}

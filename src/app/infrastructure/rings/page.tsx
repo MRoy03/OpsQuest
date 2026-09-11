@@ -124,7 +124,7 @@ export default function RingsPage() {
   return (
     <>
       <TopBar title="Update Ring Management" subtitle="Define deferral policies and assign devices to update rings" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-5">
 
           {/* Pipeline diagram */}

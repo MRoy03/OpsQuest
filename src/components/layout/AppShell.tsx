@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { useSessionHeartbeat } from '@/hooks/useSessionHeartbeat'
+import { SidebarProvider } from '@/contexts/SidebarContext'
 
 const ADMIN_EMAIL    = 'roy62125@gmail.com'
 const ALLOWED_DOMAIN = 'jil-jupiter.com'
@@ -56,11 +57,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (!user || !isAllowed) return null
 
   return (
-    <>
+    <SidebarProvider>
       <Sidebar />
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {children}
       </main>
-    </>
+    </SidebarProvider>
   )
 }

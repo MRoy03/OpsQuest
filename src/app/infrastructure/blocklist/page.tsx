@@ -114,7 +114,7 @@ export default function BlocklistPage() {
         title="Software Blocklist"
         subtitle="Define forbidden apps — violations are detected automatically on each device heartbeat"
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-5">
 
           {/* ── Stat bar ── */}

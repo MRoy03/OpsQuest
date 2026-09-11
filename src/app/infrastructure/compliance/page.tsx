@@ -204,7 +204,7 @@ export default function CompliancePage() {
   return (
     <>
       <TopBar title="Compliance" subtitle="Policy evaluation across all managed devices" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-5">
 
           {/* Summary cards */}

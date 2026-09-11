@@ -5,7 +5,7 @@ export default function SolverPage() {
   return (
     <>
       <TopBar title="Problem Solver Console" subtitle="AI-powered instant issue resolution" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <ProblemSolverConsole />
       </div>
     </>

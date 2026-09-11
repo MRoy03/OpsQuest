@@ -130,7 +130,7 @@ export default function FirewallPage() {
   return (
     <>
       <TopBar title="Firewall Events" subtitle="Windows Security log — rule changes and blocked connections" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-4">
 
           {/* Summary tiles */}

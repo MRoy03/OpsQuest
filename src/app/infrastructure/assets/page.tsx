@@ -163,7 +163,7 @@ export default function AssetsPage() {
   return (
     <>
       <TopBar title="Hardware Asset Records" subtitle="Track purchase dates, warranties, locations, and ownership for all devices" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-5">
 
           {/* Stats */}

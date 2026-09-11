@@ -11,11 +11,12 @@ import {
   AlertTriangle, Monitor, Shield, ClipboardList, ShieldCheck, BarChart2,
   Camera, Layers, UserPlus, ShieldAlert, Package, HardDrive, RefreshCcw,
   Printer, Map, Calendar, Settings, Network, Lock, Globe, Crown,
-  ChevronDown, ChevronRight, Users,
+  ChevronDown, ChevronRight, Users, X,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePermissions } from '@/hooks/usePermissions'
 import NotificationBell from '@/components/NotificationBell'
+import { useSidebar } from '@/contexts/SidebarContext'
 
 const SUPERADMIN_EMAIL = 'roy62125@gmail.com'
 
@@ -100,6 +101,7 @@ const ALL_ADMIN_HREFS = ADMIN_GROUPS.flatMap(g => g.items.map(i => i.href))
 export default function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
+  const { isOpen, close } = useSidebar()
   const { user, loading, signOut } = useAuth()
   const isSuperAdmin = user?.email === SUPERADMIN_EMAIL
   const { role, granted_pages, loading: permsLoading } = usePermissions(
@@ -152,10 +154,34 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-screen sticky top-0 border-r border-[#1a2f4a] bg-[#0a1525]">
+    <>
+      {/* Mobile backdrop — only visible when sidebar is open on small screens */}
+      <div
+        onClick={close}
+        aria-hidden="true"
+        className={[
+          'fixed inset-0 bg-black/50 z-20 lg:hidden transition-opacity duration-300',
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+        ].join(' ')}
+      />
+
+    <aside className={[
+      'fixed lg:sticky inset-y-0 left-0 z-30 w-60 shrink-0 flex flex-col h-screen',
+      'border-r border-[#1a2f4a] bg-[#0a1525] sidebar-shadow',
+      'transition-transform duration-300 ease-in-out',
+      isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+    ].join(' ')}>
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-[#1a2f4a]">
+      <div className="px-5 py-4 border-b border-[#1a2f4a] relative">
         <div className="flex items-center gap-3">
+          {/* Close button — mobile only */}
+          <button
+            onClick={close}
+            aria-label="Close sidebar"
+            className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-[#475569] hover:text-[#94a3b8] hover:bg-[#ffffff08] transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
           <motion.div
             animate={{ boxShadow: ['0 0 8px #00d4ff22', '0 0 20px #00d4ff44', '0 0 8px #00d4ff22'] }}
             transition={{ duration: 2.5, repeat: Infinity }}
@@ -354,5 +380,6 @@ export default function Sidebar() {
         )}
       </div>
     </aside>
+    </>
   )
 }

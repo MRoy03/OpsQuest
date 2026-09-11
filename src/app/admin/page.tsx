@@ -5,7 +5,7 @@ export default function AdminPage() {
   return (
     <>
       <TopBar title="Knowledge Lab" subtitle="Manage solutions, categories, and IT knowledge base" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <AdminKnowledgeLab />
       </div>
     </>

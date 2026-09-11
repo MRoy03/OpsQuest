@@ -390,7 +390,7 @@ export default function CatalogPage() {
   return (
     <>
       <TopBar title="App Deployment Catalog" subtitle="Browse, deploy via winget or download approved applications" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-5">
 
           {/* Seed banner (shown when DB is empty) */}

@@ -584,7 +584,7 @@ function StorageSection({ disks, logical, partitions }: { disks: DiskInfo[]; log
             {showParts ? '▲ Hide' : '▶ Show'} {partitions.length} partition{partitions.length !== 1 ? 's' : ''}
           </button>
           {showParts && (
-            <div className="rounded-lg overflow-hidden border border-[#1a2f4a]">
+            <div className="overflow-x-auto rounded-lg overflow-hidden border border-[#1a2f4a]">
               <table className="w-full text-[10px]">
                 <thead>
                   <tr className="bg-[#060b18] text-[#475569]">
@@ -761,7 +761,7 @@ function SoftwareSection({
         </div>
       ) : (
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#060b18]">
                 <tr className="border-b border-[#1a2f4a]">
@@ -842,7 +842,7 @@ function ServicesSection({ services, agentId, onCommandQueued }: { services: Ser
         />
       </div>
       <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
-        <div className="max-h-72 overflow-y-auto">
+        <div className="max-h-72 overflow-y-auto overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-[#060b18]">
               <tr className="border-b border-[#1a2f4a] text-[#475569]">
@@ -916,7 +916,7 @@ function UpdatesSection({ updates, agentId, onCommandQueued }: { updates: Update
           <CheckCircle className="w-4 h-4" /> System is up to date
         </div>
       ) : (
-        <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
+        <div className="overflow-x-auto rounded-lg border border-[#1a2f4a] overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#1a2f4a] bg-[#060b18] text-[#475569]">
@@ -1987,7 +1987,7 @@ export default function DevicesPage() {
         title="Device Monitor"
         subtitle={`${devices.length} device${devices.length !== 1 ? 's' : ''} · ${agentsOnline} agent${agentsOnline !== 1 ? 's' : ''} online — hardware · software · licenses`}
       />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-4xl mx-auto space-y-6">
 
           <div className="flex items-center justify-between gap-3 flex-wrap">

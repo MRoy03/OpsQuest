@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Bell, Wifi, Sun, Moon } from 'lucide-react'
+import { Menu, Wifi, Sun, Moon } from 'lucide-react'
 import GlobalSearch from '@/components/ui/GlobalSearch'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useSidebar } from '@/contexts/SidebarContext'
 
 function LiveClock({ isLight }: { isLight: boolean }) {
   const [time, setTime] = useState('')
@@ -31,6 +32,7 @@ function LiveClock({ isLight }: { isLight: boolean }) {
 export default function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
   const { theme, toggle } = useTheme()
   const isLight = theme === 'light'
+  const { open } = useSidebar()
 
   return (
     <motion.header
@@ -38,12 +40,24 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={[
-        'h-14 border-b flex items-center px-6 gap-4 sticky top-0 z-10 backdrop-blur-sm transition-colors duration-300',
+        'h-14 border-b flex items-center px-4 lg:px-6 gap-3 lg:gap-4 sticky top-0 z-10 backdrop-blur-sm transition-colors duration-300 topbar-shadow',
         isLight
           ? 'border-[#c4b0e8] bg-[#ece6ff]/90'
           : 'border-[#1a2f4a] bg-[#0a1525]/90',
       ].join(' ')}
     >
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={open}
+        aria-label="Open sidebar"
+        className={[
+          'lg:hidden p-2 rounded-lg transition-colors shrink-0',
+          isLight ? 'text-[#5c3595] hover:bg-[#b8a4e033]' : 'text-[#64748b] hover:bg-[#ffffff08]',
+        ].join(' ')}
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
       {/* Page title */}
       <div className="flex-1 min-w-0">
         <h2 className={[
@@ -62,7 +76,9 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
         )}
       </div>
 
-      <GlobalSearch />
+      <div className="hidden sm:block shrink-0">
+        <GlobalSearch />
+      </div>
 
       <LiveClock isLight={isLight} />
 
@@ -102,26 +118,6 @@ export default function TopBar({ title, subtitle }: { title: string; subtitle?: 
           'w-4 h-4 transition-all duration-300',
           isLight ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100',
         ].join(' ')} />
-      </motion.button>
-
-      {/* Bell / notifications */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        className={[
-          'relative p-2 rounded-lg transition-colors',
-          isLight ? 'hover:bg-[#b8a4e033]' : 'hover:bg-[#ffffff08]',
-        ].join(' ')}
-      >
-        <Bell className={`w-4 h-4 ${isLight ? 'text-[#5c3595]' : 'text-[#64748b]'}`} />
-        <motion.span
-          animate={{ scale: [1, 1.4, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className={[
-            'absolute top-1 right-1 w-2 h-2 rounded-full bg-[#ef4444] border',
-            isLight ? 'border-[#ece6ff]' : 'border-[#0a1525]',
-          ].join(' ')}
-        />
       </motion.button>
 
       {/* LIVE badge */}

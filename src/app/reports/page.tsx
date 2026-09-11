@@ -562,7 +562,7 @@ export default function ReportsPage() {
   return (
     <>
       <TopBar title="Reports" subtitle="Fleet-wide inventory, security and compliance reports" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-4">
 
           {/* Tab bar */}

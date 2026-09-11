@@ -2072,27 +2072,29 @@ export default function GovernancePage() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0 bg-[#060b18]">
-      {/* Left sidebar nav */}
-      <aside className="w-44 shrink-0 bg-[#0a1525] border-r border-[#1a2f4a] flex flex-col overflow-y-auto">
-        <div className="px-3 py-3 border-b border-[#1a2f4a]">
+    <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-[#060b18]">
+      {/* Sidebar nav — vertical on desktop, horizontal scroll strip on mobile */}
+      <aside className="w-full lg:w-44 shrink-0 bg-[#0a1525] border-b lg:border-b-0 border-r-0 lg:border-r border-[#1a2f4a] flex flex-col lg:flex-col overflow-y-visible lg:overflow-y-auto">
+        <div className="px-3 py-2 lg:py-3 border-b border-[#1a2f4a] hidden lg:block">
           <p className="text-[10px] font-bold text-[#00d4ff] tracking-widest uppercase">Governance</p>
           <p className="text-[9px] text-[#334155] mt-0.5">Microsoft Entra ID</p>
         </div>
-        <nav className="flex-1 py-1">
+        <nav className="flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible scrollbar-thin py-1.5 lg:py-1 gap-0.5 lg:gap-0 px-2 lg:px-0">
           {NAV_GROUPS.map(group => (
-            <div key={group.label} className="mb-0.5">
-              <p className="px-2.5 pt-3 pb-1 text-[9px] font-bold text-[#1e3352] tracking-widest uppercase">{group.label}</p>
+            <div key={group.label} className="flex flex-row lg:flex-col lg:mb-0.5 shrink-0 lg:shrink items-center lg:items-stretch">
+              <p className="hidden lg:block px-2.5 pt-3 pb-1 text-[9px] font-bold text-[#1e3352] tracking-widest uppercase">{group.label}</p>
               {group.items.map(item => {
                 const Icon = item.icon
                 const active = activeFeature === item.key
                 return (
                   <button key={item.key} onClick={() => { setActiveFeature(item.key); setError(null) }}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-all ${
-                      active ? 'bg-[#00d4ff12] border-r-2 border-[#00d4ff] text-[#00d4ff]' : 'text-[#64748b] hover:text-[#94a3b8] hover:bg-[#ffffff05]'
+                    className={`shrink-0 flex items-center gap-1.5 lg:gap-2 px-3 py-1.5 rounded-lg lg:rounded-none text-left whitespace-nowrap transition-all ${
+                      active
+                        ? 'bg-[#00d4ff12] text-[#00d4ff] lg:border-r-2 lg:border-[#00d4ff] border-b-2 lg:border-b-0 border-[#00d4ff]'
+                        : 'text-[#64748b] hover:text-[#94a3b8] hover:bg-[#ffffff05]'
                     }`}>
                     <Icon className={`w-3 h-3 shrink-0 ${active ? 'text-[#00d4ff]' : 'text-[#334155]'}`} />
-                    <span className="text-[11px] truncate">{item.label}</span>
+                    <span className="text-[11px]">{item.label}</span>
                   </button>
                 )
               })}
@@ -2102,7 +2104,7 @@ export default function GovernancePage() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-4 min-w-0">
+      <main className="flex-1 overflow-auto p-3 lg:p-4 min-w-0">
         {error && !!data[activeFeature] && <div className="mb-3"><ErrorView message={error} /></div>}
         {renderFeature()}
       </main>

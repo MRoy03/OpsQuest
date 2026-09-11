@@ -134,7 +134,7 @@ export default function ProfilesPage() {
   return (
     <>
       <TopBar title="Config Profiles" subtitle="Define and push configuration settings to managed Windows devices" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-6xl mx-auto space-y-5">
 
           {/* Stats */}

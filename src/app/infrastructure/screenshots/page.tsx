@@ -182,7 +182,7 @@ export default function ScreenshotsPage() {
   return (
     <>
       <TopBar title="Screenshots" subtitle="Remote screen capture — one snapshot per request" />
-      <div className="flex-1 p-6 grid-bg overflow-y-auto">
+      <div className="page-content grid-bg">
         <div className="max-w-7xl mx-auto space-y-4">
 
           {/* Capture buttons per device */}
