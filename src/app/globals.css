@@ -93,42 +93,93 @@ body {
   box-shadow: 0 1px 0 #1a2f4a, 0 4px 20px rgba(0,0,0,0.45);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   UNIVERSAL CARD ELEVATION
+   Compound selectors: requires BOTH a rounded class AND the border-color
+   class. Catches all 200+ content panels/cards across the app without
+   touching individual page files.
+
+   WHY large, soft, high-opacity shadows?
+   Dark shadows on near-black backgrounds (#060b18) need to be very wide
+   and high-opacity to create visible contrast. A 0 20px 60px rgba(0,0,0,0.75)
+   shadow reads as pure black on the page, while the card (#0d1f35) is
+   perceptibly lighter — creating the illusion of elevation.
+
+   Specificity (0,2,0) — same as .card-hover:hover.
+   Placed BEFORE .card-hover so hover rules (declared later) still win.
+   ───────────────────────────────────────────────────────────────────────── */
+.rounded-xl.border-\[\#1a2f4a\],
+.rounded-xl.border-\[\#0d1e35\],
+.rounded-xl.border-\[\#2a3f5a\],
+.rounded-xl.border-\[\#334155\],
+.rounded-2xl.border-\[\#1a2f4a\],
+.rounded-2xl.border-\[\#0d1e35\],
+.rounded-2xl.border-\[\#334155\],
+.rounded-lg.border-\[\#1a2f4a\],
+.rounded-lg.border-\[\#0d1e35\],
+.rounded-lg.border-\[\#2a3f5a\] {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.05),   /* crisp white edge — separates card from bg */
+    0 2px 4px rgba(0,0,0,0.80),          /* tight shadow: immediate depth underside */
+    0 8px 24px rgba(0,0,0,0.70),         /* mid spread: card floats above background */
+    0 20px 60px rgba(0,0,0,0.55),        /* wide ambient: dark halo below card */
+    inset 0 1px 0 rgba(255,255,255,0.09); /* top catch-light: surface faces viewer */
+}
+
+/* Accent-bordered cards also get depth (cyan, purple, green, amber) */
+.rounded-xl.border-\[\#00d4ff22\],
+.rounded-xl.border-\[\#00d4ff33\],
+.rounded-xl.border-\[\#7c3aed22\],
+.rounded-xl.border-\[\#7c3aed33\],
+.rounded-xl.border-\[\#10b98122\],
+.rounded-xl.border-\[\#10b98133\],
+.rounded-xl.border-\[\#a78bfa33\],
+.rounded-lg.border-\[\#00d4ff22\],
+.rounded-lg.border-\[\#00d4ff33\],
+.rounded-lg.border-\[\#7c3aed22\],
+.rounded-lg.border-\[\#a78bfa33\] {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.75),
+    0 8px 24px rgba(0,0,0,0.60),
+    0 20px 56px rgba(0,0,0,0.50),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
 /* ── Card hover ────────────────────────────────── */
 .card-hover {
-  /* Resting depth — cards feel elevated above the background */
-  box-shadow:
-    0 1px 2px rgba(0,0,0,0.55),
-    0 3px 10px rgba(0,0,0,0.38),
-    inset 0 1px 0 rgba(255,255,255,0.03);
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  /* Interactive cards: inherits universal depth above, adds transition */
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
 }
 .card-hover:hover {
   border-color: #00d4ff44;
   box-shadow:
-    0 0 0 1px #00d4ff22,
-    0 12px 40px rgba(0,212,255,0.12),
-    0 4px 16px rgba(0,0,0,0.6),
-    0 1px 3px rgba(0,0,0,0.8),
-    inset 0 1px 0 rgba(255,255,255,0.06);
-  transform: translateY(-3px);
+    0 0 0 1px #00d4ff33,
+    0 0 0 2px rgba(255,255,255,0.07),
+    0 20px 60px rgba(0,212,255,0.18),
+    0 8px 24px rgba(0,0,0,0.80),
+    0 2px 6px rgba(0,0,0,0.95),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+  transform: translateY(-6px);
 }
 .card-hover-purple:hover {
   border-color: #7c3aed55;
   box-shadow:
-    0 0 0 1px #7c3aed22,
-    0 12px 40px rgba(124,58,237,0.12),
-    0 4px 16px rgba(0,0,0,0.6),
-    0 1px 3px rgba(0,0,0,0.8);
-  transform: translateY(-3px);
+    0 0 0 1px #7c3aed33,
+    0 20px 60px rgba(124,58,237,0.18),
+    0 8px 24px rgba(0,0,0,0.80),
+    0 2px 6px rgba(0,0,0,0.95),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+  transform: translateY(-6px);
 }
 .card-hover-green:hover {
   border-color: #10b98155;
   box-shadow:
-    0 0 0 1px #10b98122,
-    0 12px 40px rgba(16,185,129,0.10),
-    0 4px 16px rgba(0,0,0,0.6),
-    0 1px 3px rgba(0,0,0,0.8);
-  transform: translateY(-3px);
+    0 0 0 1px #10b98133,
+    0 20px 60px rgba(16,185,129,0.14),
+    0 8px 24px rgba(0,0,0,0.80),
+    0 2px 6px rgba(0,0,0,0.95),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+  transform: translateY(-6px);
 }
 
 /* ── Animations ────────────────────────────────── */
@@ -441,29 +492,65 @@ html[data-theme="light"] .text-glow-purple { text-shadow: 0 0 10px rgba(124,58,2
 html[data-theme="light"] .text-glow-green  { text-shadow: 0 0 10px rgba(4,120,87,0.60),   0 0 24px rgba(4,120,87,0.30); }
 html[data-theme="light"] .text-glow-amber  { text-shadow: 0 0 10px rgba(180,83,9,0.60),   0 0 24px rgba(180,83,9,0.30); }
 
+/* ── Universal card elevation (light mode override) ─────────────────────── */
+/* In light mode, borders are #b8a4e0 (lavender), so the compound selectors */
+/* in the dark-mode section still fire BUT their box-shadows look wrong on   */
+/* a near-white background. Override with subtle purple-tinted shadows.      */
+html[data-theme="light"] .rounded-xl.border-\[\#1a2f4a\],
+html[data-theme="light"] .rounded-xl.border-\[\#0d1e35\],
+html[data-theme="light"] .rounded-xl.border-\[\#2a3f5a\],
+html[data-theme="light"] .rounded-xl.border-\[\#334155\],
+html[data-theme="light"] .rounded-2xl.border-\[\#1a2f4a\],
+html[data-theme="light"] .rounded-2xl.border-\[\#0d1e35\],
+html[data-theme="light"] .rounded-2xl.border-\[\#334155\],
+html[data-theme="light"] .rounded-lg.border-\[\#1a2f4a\],
+html[data-theme="light"] .rounded-lg.border-\[\#0d1e35\],
+html[data-theme="light"] .rounded-lg.border-\[\#2a3f5a\] {
+  box-shadow:
+    0 0 0 1px rgba(124,58,237,0.06),
+    0 2px 4px rgba(100,80,180,0.14),
+    0 8px 24px rgba(100,80,180,0.12),
+    0 20px 52px rgba(100,80,180,0.07),
+    inset 0 1px 0 rgba(255,255,255,0.90);
+}
+html[data-theme="light"] .rounded-xl.border-\[\#00d4ff22\],
+html[data-theme="light"] .rounded-xl.border-\[\#00d4ff33\],
+html[data-theme="light"] .rounded-xl.border-\[\#7c3aed22\],
+html[data-theme="light"] .rounded-xl.border-\[\#7c3aed33\],
+html[data-theme="light"] .rounded-xl.border-\[\#10b98122\],
+html[data-theme="light"] .rounded-xl.border-\[\#10b98133\],
+html[data-theme="light"] .rounded-xl.border-\[\#a78bfa33\],
+html[data-theme="light"] .rounded-lg.border-\[\#00d4ff22\],
+html[data-theme="light"] .rounded-lg.border-\[\#7c3aed22\],
+html[data-theme="light"] .rounded-lg.border-\[\#a78bfa33\] {
+  box-shadow:
+    0 2px 4px rgba(100,80,180,0.12),
+    0 8px 20px rgba(100,80,180,0.09),
+    inset 0 1px 0 rgba(255,255,255,0.85);
+}
+
 /* ── Card hover ─────────────────────────────────────────────────────────── */
 html[data-theme="light"] .card-hover {
-  box-shadow:
-    0 1px 3px rgba(100,80,180,0.14),
-    0 4px 12px rgba(100,80,180,0.09),
-    inset 0 1px 0 rgba(255,255,255,0.80);
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
 }
 html[data-theme="light"] .card-hover:hover {
   border-color: rgba(124,58,237,0.45) !important;
   box-shadow:
     0 0 0 1px rgba(124,58,237,0.22),
-    0 12px 32px rgba(124,58,237,0.18),
-    0 3px 10px rgba(0,0,0,0.10),
-    inset 0 1px 0 rgba(255,255,255,0.90);
-  transform: translateY(-3px);
+    0 20px 52px rgba(124,58,237,0.22),
+    0 8px 20px rgba(100,80,180,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.95);
+  transform: translateY(-6px);
 }
 html[data-theme="light"] .card-hover-purple:hover {
   border-color: rgba(124,58,237,0.55) !important;
-  box-shadow: 0 0 0 1px rgba(124,58,237,0.30), 0 12px 32px rgba(124,58,237,0.22), 0 3px 10px rgba(0,0,0,0.10);
+  box-shadow: 0 0 0 1px rgba(124,58,237,0.30), 0 20px 52px rgba(124,58,237,0.26), 0 8px 20px rgba(100,80,180,0.18), inset 0 1px 0 rgba(255,255,255,0.92);
+  transform: translateY(-6px);
 }
 html[data-theme="light"] .card-hover-green:hover {
   border-color: rgba(4,120,87,0.45) !important;
-  box-shadow: 0 0 0 1px rgba(4,120,87,0.22), 0 12px 32px rgba(4,120,87,0.15), 0 3px 10px rgba(0,0,0,0.10);
+  box-shadow: 0 0 0 1px rgba(4,120,87,0.22), 0 20px 52px rgba(4,120,87,0.18), 0 8px 20px rgba(100,80,180,0.14), inset 0 1px 0 rgba(255,255,255,0.92);
+  transform: translateY(-6px);
 }
 
 /* ── Structural shadows (light mode) ─────────────────────────────────────── */
