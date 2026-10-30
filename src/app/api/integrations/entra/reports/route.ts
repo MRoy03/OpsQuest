@@ -116,6 +116,25 @@ const CSV_COL: Record<string, string> = {
   'Owner Display Name': 'ownerDisplayName',
   'Site URL': 'siteUrl',
   'Owner Principal Name': 'ownerPrincipalName',
+  // Teams device usage CSV columns (getTeamsDeviceUsageUserDetail)
+  'Used Web': 'usedWeb',
+  'Used Windows Phone': 'usedWindowsPhone',
+  'Used iOS': 'usedIOS',
+  'Used Mac': 'usedMac',
+  'Used Android Phone': 'usedAndroidPhone',
+  'Used Windows': 'usedWindows',
+  'Used Chrome OS': 'usedChromeOS',
+  'Used Linux': 'usedLinux',
+  // Email app usage CSV columns (getEmailAppUsageUserDetail)
+  'Mail For Mac': 'mailForMac',
+  'Outlook For Mac': 'outlookForMac',
+  'Outlook For Windows': 'outlookForWindows',
+  'Outlook For Mobile': 'outlookForMobile',
+  'Other For Mobile': 'otherForMobile',
+  'Outlook For Web': 'outlookForWeb',
+  'POP3 App': 'pop3App',
+  'IMAP4 App': 'imap4App',
+  'SMTP App': 'smtpApp',
 }
 
 function parseCsvToJson(csv: string): { value: any[] } {
@@ -160,6 +179,14 @@ async function graphGetReport(path: string, token: string): Promise<any> {
     return parseCsvToJson(text)
   }
   return resp.json()
+}
+
+// skuId (GUID) → skuPartNumber, used to resolve assignedLicenses on usage reports
+async function getSkuPartNumberMap(token: string): Promise<Record<string, string>> {
+  const resp = await graphGetSafe('/subscribedSkus?$select=skuId,skuPartNumber', token, { value: [] })
+  const map: Record<string, string> = {}
+  for (const s of (resp?.value ?? [])) map[s.skuId] = s.skuPartNumber
+  return map
 }
 
 // ── Report handlers ────────────────────────────────────────────────────────
@@ -273,9 +300,11 @@ async function handleUserActivity(token: string) {
 
 // scope=mail_usage – Mail usage per licensed user (requires Reports.Read.All)
 async function handleMailUsage(token: string) {
-  const [reportResp, usersResp] = await Promise.allSettled([
+  const [reportResp, usersResp, skuMap, appUsageResp] = await Promise.allSettled([
     graphGetReport("/reports/getMailboxUsageDetail(period='D30')", token),
     graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    getSkuPartNumberMap(token),
+    graphGetReport("/reports/getEmailAppUsageUserDetail(period='D30')", token),
   ])
 
   let mailboxData: any[] = []
@@ -288,26 +317,53 @@ async function handleMailUsage(token: string) {
   }
 
   const users = usersResp.status === 'fulfilled' ? (usersResp.value?.value ?? []) : []
+  const skus = skuMap.status === 'fulfilled' ? skuMap.value : {}
 
-  // Build user map
+  // Build user map (includes assigned license SKUs, resolved to part numbers)
   const userMap: Record<string, any> = {}
   for (const u of users) {
     const key = (u.mail ?? '').toLowerCase()
-    userMap[key] = { id: u.id, displayName: u.displayName, department: u.department }
+    userMap[key] = {
+      id: u.id, displayName: u.displayName, department: u.department,
+      licenses: (u.assignedLicenses ?? []).map((l: any) => skus[l.skuId] ?? l.skuId),
+    }
   }
 
-  const rows = mailboxData.map((mb: any) => ({
+  // Build email-app-usage map (which client/device each mailbox was used from)
+  const appMap: Record<string, any> = {}
+  if (appUsageResp.status === 'fulfilled') {
+    for (const a of (appUsageResp.value?.value ?? [])) {
+      const key = (a.userPrincipalName ?? '').toLowerCase()
+      if (key) appMap[key] = a
+    }
+  }
+
+  const rows = mailboxData.map((mb: any) => {
+    const key = (mb.userPrincipalName ?? '').toLowerCase()
+    const app = appMap[key] ?? {}
+    return {
     userPrincipalName: mb.userPrincipalName,
-    displayName: mb.displayName || userMap[(mb.userPrincipalName ?? '').toLowerCase()]?.displayName || mb.userPrincipalName,
-    department: userMap[(mb.userPrincipalName ?? '').toLowerCase()]?.department || '—',
+    displayName: mb.displayName || userMap[key]?.displayName || mb.userPrincipalName,
+    department: userMap[key]?.department || '—',
+    licenses: userMap[key]?.licenses ?? [],
     itemCount: mb.itemCount ?? 0,
     storageUsedGB: mb.storageUsedInBytes ? +(mb.storageUsedInBytes / 1073741824).toFixed(2) : 0,
     issueWarningGB: mb.issueWarningQuotaInBytes ? +(mb.issueWarningQuotaInBytes / 1073741824).toFixed(0) : 50,
     prohibitSendGB: mb.prohibitSendQuotaInBytes ? +(mb.prohibitSendQuotaInBytes / 1073741824).toFixed(0) : 50,
+    outlookForWindows: !!app.outlookForWindows,
+    outlookForMac: !!app.outlookForMac,
+    outlookForMobile: !!app.outlookForMobile,
+    outlookForWeb: !!app.outlookForWeb,
+    mailForMac: !!app.mailForMac,
+    pop3App: !!app.pop3App,
+    imap4App: !!app.imap4App,
+    smtpApp: !!app.smtpApp,
+    otherForMobile: !!app.otherForMobile,
     usagePct: mb.issueWarningQuotaInBytes && mb.storageUsedInBytes
       ? Math.round((mb.storageUsedInBytes / mb.issueWarningQuotaInBytes) * 100) : 0,
     lastActivity: mb.lastActivityDate,
-  }))
+    }
+  })
 
   const totalGB = rows.reduce((s: number, r: any) => s + r.storageUsedGB, 0)
   const nearQuota = rows.filter((r: any) => r.usagePct >= 80).length
@@ -323,9 +379,11 @@ async function handleMailUsage(token: string) {
 
 // scope=teams_usage – Teams activity report (requires Reports.Read.All)
 async function handleTeamsUsage(token: string) {
-  const [teamsResp, usersResp] = await Promise.allSettled([
+  const [teamsResp, usersResp, skuMap, deviceResp] = await Promise.allSettled([
     graphGetReport("/reports/getTeamsUserActivityUserDetail(period='D30')", token),
     graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    getSkuPartNumberMap(token),
+    graphGetReport("/reports/getTeamsDeviceUsageUserDetail(period='D30')", token),
   ])
 
   let teamsData: any[] = []
@@ -338,16 +396,33 @@ async function handleTeamsUsage(token: string) {
   }
 
   const users = usersResp.status === 'fulfilled' ? (usersResp.value?.value ?? []) : []
+  const skus = skuMap.status === 'fulfilled' ? skuMap.value : {}
   const userMap: Record<string, any> = {}
   for (const u of users) {
     const key = (u.mail ?? '').toLowerCase()
-    userMap[key] = { id: u.id, displayName: u.displayName, department: u.department }
+    userMap[key] = {
+      id: u.id, displayName: u.displayName, department: u.department,
+      licenses: (u.assignedLicenses ?? []).map((l: any) => skus[l.skuId] ?? l.skuId),
+    }
   }
 
-  const rows = teamsData.map((t: any) => ({
+  // Build device-usage map (which platforms each user accessed Teams from)
+  const deviceMap: Record<string, any> = {}
+  if (deviceResp.status === 'fulfilled') {
+    for (const d of (deviceResp.value?.value ?? [])) {
+      const key = (d.userPrincipalName ?? '').toLowerCase()
+      if (key) deviceMap[key] = d
+    }
+  }
+
+  const rows = teamsData.map((t: any) => {
+    const key = (t.userPrincipalName ?? '').toLowerCase()
+    const dev = deviceMap[key] ?? {}
+    return {
     userPrincipalName: t.userPrincipalName,
-    displayName: t.displayName || userMap[(t.userPrincipalName ?? '').toLowerCase()]?.displayName || t.userPrincipalName,
-    department: userMap[(t.userPrincipalName ?? '').toLowerCase()]?.department || '—',
+    displayName: t.displayName || userMap[key]?.displayName || t.userPrincipalName,
+    department: userMap[key]?.department || '—',
+    licenses: userMap[key]?.licenses ?? [],
     lastActivity: t.lastActivityDate,
     teamChatMessages: t.teamChatMessageCount ?? 0,
     privateChatMessages: t.privateChatMessageCount ?? 0,
@@ -357,7 +432,16 @@ async function handleTeamsUsage(token: string) {
     meetingsAttended: t.meetingsAttendedCount ?? 0,
     isLicensed: t.isLicensed ?? false,
     isDeleted: t.isDeleted ?? false,
-  }))
+    usedWeb: !!dev.usedWeb,
+    usedWindows: !!dev.usedWindows,
+    usedMac: !!dev.usedMac,
+    usedIOS: !!dev.usedIOS,
+    usedAndroidPhone: !!dev.usedAndroidPhone,
+    usedWindowsPhone: !!dev.usedWindowsPhone,
+    usedChromeOS: !!dev.usedChromeOS,
+    usedLinux: !!dev.usedLinux,
+    }
+  })
 
   const activeUsers = rows.filter((r: any) => r.lastActivity).length
   const totalMessages = rows.reduce((s: number, r: any) => s + r.teamChatMessages + r.privateChatMessages, 0)
@@ -368,9 +452,10 @@ async function handleTeamsUsage(token: string) {
 
 // scope=onedrive_usage – OneDrive storage report (requires Reports.Read.All)
 async function handleOneDriveUsage(token: string) {
-  const [reportResp, usersResp] = await Promise.allSettled([
+  const [reportResp, usersResp, skuMap] = await Promise.allSettled([
     graphGetReport("/reports/getOneDriveUsageAccountDetail(period='D30')", token),
     graphGetConsistency('/users?$select=id,displayName,mail,department,assignedLicenses&$filter=assignedLicenses/$count ne 0&$count=true&$top=999', token),
+    getSkuPartNumberMap(token),
   ])
 
   let oneDriveData: any[] = []
@@ -383,10 +468,14 @@ async function handleOneDriveUsage(token: string) {
   }
 
   const users = usersResp.status === 'fulfilled' ? (usersResp.value?.value ?? []) : []
+  const skus = skuMap.status === 'fulfilled' ? skuMap.value : {}
   const userMap: Record<string, any> = {}
   for (const u of users) {
     const key = (u.mail ?? '').toLowerCase()
-    userMap[key] = { id: u.id, displayName: u.displayName, department: u.department }
+    userMap[key] = {
+      id: u.id, displayName: u.displayName, department: u.department,
+      licenses: (u.assignedLicenses ?? []).map((l: any) => skus[l.skuId] ?? l.skuId),
+    }
   }
 
   const rows = oneDriveData
@@ -400,6 +489,7 @@ async function handleOneDriveUsage(token: string) {
         userPrincipalName: r.userPrincipalName ?? r.ownerPrincipalName ?? '',
         displayName: r.displayName ?? enriched.displayName ?? r.ownerDisplayName ?? upn,
         department: enriched.department ?? '—',
+        licenses: enriched.licenses ?? [],
         siteUrl: r.siteUrl ?? '—',
         fileCount: r.fileCount ?? 0,
         activeFileCount: r.activeFileCount ?? 0,

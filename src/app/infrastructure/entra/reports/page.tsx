@@ -23,20 +23,25 @@ interface ActivityUser {
 }
 
 interface MailRow {
-  userPrincipalName: string; displayName: string; department: string
+  userPrincipalName: string; displayName: string; department: string; licenses: string[]
   itemCount: number; storageUsedGB: number; issueWarningGB: number
   prohibitSendGB: number; usagePct: number; lastActivity: string | null
+  outlookForWindows: boolean; outlookForMac: boolean; outlookForMobile: boolean
+  outlookForWeb: boolean; mailForMac: boolean; pop3App: boolean; imap4App: boolean
+  smtpApp: boolean; otherForMobile: boolean
 }
 
 interface TeamsRow {
-  userPrincipalName: string; displayName: string; department: string
+  userPrincipalName: string; displayName: string; department: string; licenses: string[]
   lastActivity: string | null; teamChatMessages: number; privateChatMessages: number
   calls: number; meetings: number; meetingsOrganized: number; meetingsAttended: number
   isLicensed: boolean; isDeleted: boolean
+  usedWeb: boolean; usedWindows: boolean; usedMac: boolean; usedIOS: boolean
+  usedAndroidPhone: boolean; usedWindowsPhone: boolean; usedChromeOS: boolean; usedLinux: boolean
 }
 
 interface OneDriveRow {
-  userPrincipalName: string; displayName: string; department: string
+  userPrincipalName: string; displayName: string; department: string; licenses: string[]
   siteUrl: string; fileCount: number; activeFileCount: number
   storageUsedGB: number; storageAllocatedGB: number
   usagePct: number; lastActivity: string | null; isLicensed: boolean
@@ -68,6 +73,23 @@ function skuName(p: string) { return SKU_NAMES[p] ?? p }
 function fmt(dt: string | null) {
   if (!dt) return '—'
   return new Date(dt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+function licenseBadges(licenses: string[]) {
+  if (!licenses.length) return <span className="text-[9px] text-[#1e3352]">—</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {licenses.map((l, i) => (
+        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#94a3b8] whitespace-nowrap">{skuName(l)}</span>
+      ))}
+    </div>
+  )
+}
+function boolBadge(v: boolean) {
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[10px] ${v ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#1a2f4a] text-[#475569]'}`}>
+      {v ? 'Yes' : 'No'}
+    </span>
+  )
 }
 function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return
@@ -487,6 +509,26 @@ const MAIL_USAGE_COLUMNS: ColumnDef<MailRow>[] = [
     render: r => `${r.issueWarningGB} GB`, csv: r => r.issueWarningGB },
   { key: 'prohibitSendGB', label: 'Prohibit Send Quota', defaultVisible: false, className: 'font-mono text-[#64748b]',
     render: r => `${r.prohibitSendGB} GB`, csv: r => r.prohibitSendGB },
+  { key: 'licenses', label: 'Licenses Assigned', defaultVisible: false,
+    render: r => licenseBadges(r.licenses), csv: r => r.licenses.map(skuName).join('; ') },
+  { key: 'outlookForWindows', label: 'Outlook for Windows', defaultVisible: false,
+    render: r => boolBadge(r.outlookForWindows), csv: r => r.outlookForWindows ? 'Yes' : 'No' },
+  { key: 'outlookForMac', label: 'Outlook for Mac', defaultVisible: false,
+    render: r => boolBadge(r.outlookForMac), csv: r => r.outlookForMac ? 'Yes' : 'No' },
+  { key: 'outlookForMobile', label: 'Outlook for Mobile', defaultVisible: false,
+    render: r => boolBadge(r.outlookForMobile), csv: r => r.outlookForMobile ? 'Yes' : 'No' },
+  { key: 'outlookForWeb', label: 'Outlook for Web', defaultVisible: false,
+    render: r => boolBadge(r.outlookForWeb), csv: r => r.outlookForWeb ? 'Yes' : 'No' },
+  { key: 'mailForMac', label: 'Mail for Mac', defaultVisible: false,
+    render: r => boolBadge(r.mailForMac), csv: r => r.mailForMac ? 'Yes' : 'No' },
+  { key: 'pop3App', label: 'POP3 App', defaultVisible: false,
+    render: r => boolBadge(r.pop3App), csv: r => r.pop3App ? 'Yes' : 'No' },
+  { key: 'imap4App', label: 'IMAP4 App', defaultVisible: false,
+    render: r => boolBadge(r.imap4App), csv: r => r.imap4App ? 'Yes' : 'No' },
+  { key: 'smtpApp', label: 'SMTP App', defaultVisible: false,
+    render: r => boolBadge(r.smtpApp), csv: r => r.smtpApp ? 'Yes' : 'No' },
+  { key: 'otherForMobile', label: 'Other Mobile App', defaultVisible: false,
+    render: r => boolBadge(r.otherForMobile), csv: r => r.otherForMobile ? 'Yes' : 'No' },
 ]
 
 function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
@@ -582,11 +624,25 @@ const TEAMS_USAGE_COLUMNS: ColumnDef<TeamsRow>[] = [
   { key: 'meetingsAttended', label: 'Meetings Attended', defaultVisible: false, className: 'font-mono text-[#64748b]',
     render: r => r.meetingsAttended, csv: r => r.meetingsAttended },
   { key: 'isLicensed', label: 'Licensed', defaultVisible: false,
-    render: r => (
-      <span className={`px-1.5 py-0.5 rounded text-[10px] ${r.isLicensed ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#1a2f4a] text-[#475569]'}`}>
-        {r.isLicensed ? 'Yes' : 'No'}
-      </span>
-    ), csv: r => r.isLicensed ? 'Yes' : 'No' },
+    render: r => boolBadge(r.isLicensed), csv: r => r.isLicensed ? 'Yes' : 'No' },
+  { key: 'licenses', label: 'Licenses Assigned', defaultVisible: false,
+    render: r => licenseBadges(r.licenses), csv: r => r.licenses.map(skuName).join('; ') },
+  { key: 'usedWeb', label: 'Used Web', defaultVisible: false,
+    render: r => boolBadge(r.usedWeb), csv: r => r.usedWeb ? 'Yes' : 'No' },
+  { key: 'usedWindows', label: 'Used Windows', defaultVisible: false,
+    render: r => boolBadge(r.usedWindows), csv: r => r.usedWindows ? 'Yes' : 'No' },
+  { key: 'usedMac', label: 'Used Mac', defaultVisible: false,
+    render: r => boolBadge(r.usedMac), csv: r => r.usedMac ? 'Yes' : 'No' },
+  { key: 'usedIOS', label: 'Used iOS', defaultVisible: false,
+    render: r => boolBadge(r.usedIOS), csv: r => r.usedIOS ? 'Yes' : 'No' },
+  { key: 'usedAndroidPhone', label: 'Used Android Phone', defaultVisible: false,
+    render: r => boolBadge(r.usedAndroidPhone), csv: r => r.usedAndroidPhone ? 'Yes' : 'No' },
+  { key: 'usedWindowsPhone', label: 'Used Windows Phone', defaultVisible: false,
+    render: r => boolBadge(r.usedWindowsPhone), csv: r => r.usedWindowsPhone ? 'Yes' : 'No' },
+  { key: 'usedChromeOS', label: 'Used Chrome OS', defaultVisible: false,
+    render: r => boolBadge(r.usedChromeOS), csv: r => r.usedChromeOS ? 'Yes' : 'No' },
+  { key: 'usedLinux', label: 'Used Linux', defaultVisible: false,
+    render: r => boolBadge(r.usedLinux), csv: r => r.usedLinux ? 'Yes' : 'No' },
 ]
 
 function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
@@ -670,11 +726,9 @@ const ONEDRIVE_USAGE_COLUMNS: ColumnDef<OneDriveRow>[] = [
   { key: 'siteUrl', label: 'Site URL', defaultVisible: false, className: 'font-mono text-[#64748b] text-[10px] max-w-[220px] truncate',
     render: r => r.siteUrl, csv: r => r.siteUrl },
   { key: 'isLicensed', label: 'Licensed', defaultVisible: false,
-    render: r => (
-      <span className={`px-1.5 py-0.5 rounded text-[10px] ${r.isLicensed ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#1a2f4a] text-[#475569]'}`}>
-        {r.isLicensed ? 'Yes' : 'No'}
-      </span>
-    ), csv: r => r.isLicensed ? 'Yes' : 'No' },
+    render: r => boolBadge(r.isLicensed), csv: r => r.isLicensed ? 'Yes' : 'No' },
+  { key: 'licenses', label: 'Licenses Assigned', defaultVisible: false,
+    render: r => licenseBadges(r.licenses), csv: r => r.licenses.map(skuName).join('; ') },
 ]
 
 function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
