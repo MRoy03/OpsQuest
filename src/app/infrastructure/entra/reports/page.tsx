@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, type ReactNode } from 'react'
 import {
   Package, Activity, Mail, Users, RefreshCw, AlertTriangle,
   CheckCircle, Search, BarChart2, MessageSquare, Video, Phone,
-  TrendingUp, TrendingDown, Minus, Download, Info, HardDrive,
+  TrendingUp, TrendingDown, Minus, Download, Info, HardDrive, Columns3,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ interface ActivityUser {
 interface MailRow {
   userPrincipalName: string; displayName: string; department: string
   itemCount: number; storageUsedGB: number; issueWarningGB: number
-  usagePct: number; lastActivity: string | null
+  prohibitSendGB: number; usagePct: number; lastActivity: string | null
 }
 
 interface TeamsRow {
@@ -110,11 +110,98 @@ function LoadingOverlay() {
   )
 }
 
-function TableHeader({ headers }: { headers: string[] }) {
+// ── Customizable columns (Microsoft 365 admin center style) ────────────────
+
+interface ColumnDef<T> {
+  key: string
+  label: string
+  required?: boolean
+  defaultVisible: boolean
+  className?: string
+  render: (row: T) => ReactNode
+  csv: (row: T) => string | number
+}
+
+function useColumnPrefs<T>(storageKey: string, columns: ColumnDef<T>[]) {
+  const defaultKeys = useMemo(
+    () => columns.filter(c => c.required || c.defaultVisible).map(c => c.key),
+    [columns]
+  )
+
+  const [visible, setVisible] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return defaultKeys
+      const saved: string[] = JSON.parse(raw)
+      const requiredKeys = columns.filter(c => c.required).map(c => c.key)
+      const valid = saved.filter(k => columns.some(c => c.key === k))
+      const merged = Array.from(new Set([...valid, ...requiredKeys]))
+      return merged.length ? merged : defaultKeys
+    } catch {
+      return defaultKeys
+    }
+  })
+
+  function toggle(key: string) {
+    setVisible(prev => {
+      const col = columns.find(c => c.key === key)
+      if (!col || col.required) return prev
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* storage unavailable */ }
+      return next
+    })
+  }
+
+  function reset() {
+    setVisible(defaultKeys)
+    try { localStorage.setItem(storageKey, JSON.stringify(defaultKeys)) } catch { /* storage unavailable */ }
+  }
+
+  const activeColumns = columns.filter(c => visible.includes(c.key))
+  return { visible, toggle, reset, activeColumns }
+}
+
+function ColumnPicker<T>({ columns, visible, onToggle, onReset }: {
+  columns: ColumnDef<T>[]; visible: string[]; onToggle: (key: string) => void; onReset: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded border text-[10px] transition-all ${open ? 'border-[#00d4ff30] text-[#00d4ff]' : 'border-[#1a2f4a] text-[#475569] hover:text-[#00d4ff] hover:border-[#00d4ff30]'}`}>
+        <Columns3 className="w-3 h-3" /> Columns
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 w-60 rounded-lg border border-[#1a2f4a] bg-[#0a1525] shadow-xl p-2">
+            <div className="flex items-center justify-between px-1 pb-1.5 mb-1 border-b border-[#1a2f4a]">
+              <span className="text-[10px] font-semibold text-[#334155] uppercase tracking-wider">Customize Columns</span>
+              <button onClick={onReset} className="text-[10px] text-[#00d4ff] hover:underline">Reset</button>
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-0.5">
+              {columns.map(c => (
+                <label key={c.key}
+                  className={`flex items-center gap-2 px-1.5 py-1 rounded text-[11px] ${c.required ? 'text-[#334155] cursor-not-allowed' : 'text-[#94a3b8] hover:bg-[#0d1e35] cursor-pointer'}`}>
+                  <input type="checkbox" checked={visible.includes(c.key)} disabled={c.required} onChange={() => onToggle(c.key)}
+                    className="accent-[#00d4ff] w-3 h-3 shrink-0" />
+                  <span className="truncate">{c.label}</span>
+                  {c.required && <span className="text-[9px] text-[#1e3352] ml-auto shrink-0">required</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function DynamicTableHeader<T>({ columns }: { columns: ColumnDef<T>[] }) {
   return (
     <tr className="bg-[#080f1d] border-b border-[#1a2f4a]">
-      {headers.map(h => (
-        <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-[#334155] uppercase tracking-wider whitespace-nowrap">{h}</th>
+      {columns.map(c => (
+        <th key={c.key} className="text-left px-3 py-2 text-[10px] font-semibold text-[#334155] uppercase tracking-wider whitespace-nowrap">{c.label}</th>
       ))}
     </tr>
   )
@@ -122,9 +209,27 @@ function TableHeader({ headers }: { headers: string[] }) {
 
 // ── License SKU View ───────────────────────────────────────────────────────
 
+const LICENSE_SKU_COLUMNS: ColumnDef<UserRef>[] = [
+  { key: 'name', label: 'Name', required: true, defaultVisible: true, className: 'text-[#e2e8f0]',
+    render: u => u.displayName, csv: u => u.displayName },
+  { key: 'email', label: 'Email', required: true, defaultVisible: true, className: 'font-mono',
+    render: u => u.mail, csv: u => u.mail },
+  { key: 'department', label: 'Department', defaultVisible: true,
+    render: u => u.department || '—', csv: u => u.department || '—' },
+  { key: 'status', label: 'Status', defaultVisible: true,
+    render: u => (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] ${u.accountEnabled ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#ef444418] text-[#ef4444]'}`}>
+        {u.accountEnabled ? 'Active' : 'Disabled'}
+      </span>
+    ), csv: u => u.accountEnabled ? 'Active' : 'Disabled' },
+  { key: 'userId', label: 'User ID', defaultVisible: false, className: 'font-mono text-[10px]',
+    render: u => u.id, csv: u => u.id },
+]
+
 function LicenseSkuView({ data, loading }: { data: { skus: SkuRow[]; subsError: string | null }; loading: boolean }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const { visible, toggle, reset, activeColumns } = useColumnPrefs('opsquest-report-cols-license-sku', LICENSE_SKU_COLUMNS)
   const skus = data.skus ?? []
   const selectedSku = skus.find(s => s.skuId === selected)
 
@@ -189,25 +294,21 @@ function LicenseSkuView({ data, loading }: { data: { skus: SkuRow[]; subsError: 
               <input type="text" placeholder="Filter users…" value={search} onChange={e => setSearch(e.target.value)}
                 className="bg-[#060b18] border border-[#1a2f4a] rounded pl-6 pr-2.5 py-1 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44] w-40" />
             </div>
-            <button onClick={() => exportCsv(`sku-${selectedSku.skuPartNumber}.csv`, filteredUsers.map(u => ({ Name: u.displayName, Email: u.mail, Department: u.department, Status: u.accountEnabled ? 'Active' : 'Disabled' })))}
+            <button onClick={() => exportCsv(`sku-${selectedSku.skuPartNumber}.csv`, filteredUsers.map(u => Object.fromEntries(activeColumns.map(c => [c.label, c.csv(u)]))))}
               className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">
               <Download className="w-3 h-3" /> CSV
             </button>
+            <ColumnPicker columns={LICENSE_SKU_COLUMNS} visible={visible} onToggle={toggle} onReset={reset} />
           </div>
           <div className="max-h-64 overflow-y-auto">
             <table className="w-full text-[11px]">
-              <thead><TableHeader headers={['Name', 'Email', 'Department', 'Status']} /></thead>
+              <thead><DynamicTableHeader columns={activeColumns} /></thead>
               <tbody className="divide-y divide-[#0d1e35]">
                 {filteredUsers.map((u, i) => (
                   <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                    <td className="px-3 py-1.5 text-[#e2e8f0]">{u.displayName}</td>
-                    <td className="px-3 py-1.5 text-[#64748b] font-mono">{u.mail}</td>
-                    <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
-                    <td className="px-3 py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${u.accountEnabled ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#ef444418] text-[#ef4444]'}`}>
-                        {u.accountEnabled ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
+                    {activeColumns.map(c => (
+                      <td key={c.key} className={`px-3 py-1.5 ${c.className ?? 'text-[#64748b]'}`}>{c.render(u)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -221,10 +322,59 @@ function LicenseSkuView({ data, loading }: { data: { skus: SkuRow[]; subsError: 
 
 // ── User Activity View ─────────────────────────────────────────────────────
 
+function daysBadge(d: number | null) {
+  if (d === null) return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1a2f4a] text-[#475569]">No log</span>
+  if (d <= 7)   return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#10b98118] text-[#10b981]">{d}d ago</span>
+  if (d <= 30)  return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#3b82f618] text-[#60a5fa]">{d}d ago</span>
+  if (d <= 90)  return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#f59e0b18] text-[#f59e0b]">{d}d ago</span>
+  return               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#ef444418] text-[#ef4444]">{d}d ago</span>
+}
+
+const USER_ACTIVITY_COLUMNS: ColumnDef<ActivityUser>[] = [
+  { key: 'name', label: 'User', required: true, defaultVisible: true, className: 'text-[#e2e8f0] font-medium',
+    render: u => (
+      <div className="flex items-center gap-1.5">
+        {!u.accountEnabled && <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] shrink-0" title="Disabled" />}
+        {u.displayName}
+      </div>
+    ), csv: u => u.displayName },
+  { key: 'email', label: 'Email', required: true, defaultVisible: true, className: 'font-mono',
+    render: u => u.mail, csv: u => u.mail },
+  { key: 'department', label: 'Department', defaultVisible: true,
+    render: u => u.department || '—', csv: u => u.department || '—' },
+  { key: 'lastSignIn', label: 'Last Sign-In', defaultVisible: true,
+    render: u => daysBadge(u.daysSinceSignIn), csv: u => u.lastSignIn ?? 'None' },
+  { key: 'signIns', label: 'Sign-Ins', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: u => u.signInCount > 0 ? u.signInCount : '—', csv: u => u.signInCount },
+  { key: 'recentApps', label: 'Recent Apps', defaultVisible: true,
+    render: u => (
+      <div className="flex flex-wrap gap-1">
+        {u.recentApps.slice(0, 2).map((app, j) => (
+          <span key={j} className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#475569]">{app}</span>
+        ))}
+        {u.recentApps.length > 2 && <span className="text-[9px] text-[#334155]">+{u.recentApps.length - 2}</span>}
+        {u.recentApps.length === 0 && <span className="text-[9px] text-[#1e3352]">—</span>}
+      </div>
+    ), csv: u => u.recentApps.join('; ') },
+  { key: 'licenses', label: 'Licenses', defaultVisible: true, className: 'font-mono text-[#64748b]',
+    render: u => u.licenseCount, csv: u => u.licenseCount },
+  { key: 'accountStatus', label: 'Account Status', defaultVisible: false,
+    render: u => (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] ${u.accountEnabled ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#ef444418] text-[#ef4444]'}`}>
+        {u.accountEnabled ? 'Active' : 'Disabled'}
+      </span>
+    ), csv: u => u.accountEnabled ? 'Active' : 'Disabled' },
+  { key: 'createdDate', label: 'Created Date', defaultVisible: false, className: 'text-[#64748b]',
+    render: u => fmt(u.createdDateTime), csv: u => u.createdDateTime ?? '' },
+  { key: 'daysSince', label: 'Days Since Sign-In', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: u => u.daysSinceSignIn ?? '—', csv: u => u.daysSinceSignIn ?? 'N/A' },
+]
+
 function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'days' | 'dept'>('days')
   const [filter, setFilter] = useState<'all' | 'inactive' | 'active'>('all')
+  const { visible, toggle, reset, activeColumns } = useColumnPrefs('opsquest-report-cols-user-activity', USER_ACTIVITY_COLUMNS)
 
   const users: ActivityUser[] = data.users ?? []
   const sorted = useMemo(() => {
@@ -240,14 +390,6 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
     if (sortBy === 'dept') list.sort((a, b) => (a.department ?? '').localeCompare(b.department ?? ''))
     return list
   }, [users, search, sortBy, filter])
-
-  function daysBadge(d: number | null) {
-    if (d === null) return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1a2f4a] text-[#475569]">No log</span>
-    if (d <= 7)   return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#10b98118] text-[#10b981]">{d}d ago</span>
-    if (d <= 30)  return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#3b82f618] text-[#60a5fa]">{d}d ago</span>
-    if (d <= 90)  return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#f59e0b18] text-[#f59e0b]">{d}d ago</span>
-    return               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#ef444418] text-[#ef4444]">{d}d ago</span>
-  }
 
   return (
     <div className="space-y-3">
@@ -284,46 +426,26 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
           <option value="name">Sort: Name</option>
           <option value="dept">Sort: Department</option>
         </select>
-        <button onClick={() => exportCsv('user-activity.csv', sorted.map(u => ({
-          Name: u.displayName, Email: u.mail, Department: u.department,
-          LastSignIn: u.lastSignIn ?? 'None', DaysSince: u.daysSinceSignIn ?? 'N/A',
-          SignIns: u.signInCount, Licenses: u.licenseCount,
-        })))}
+        <button onClick={() => exportCsv('user-activity.csv', sorted.map(u => Object.fromEntries(activeColumns.map(c => [c.label, c.csv(u)]))))}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">
           <Download className="w-3 h-3" /> CSV
         </button>
+        <ColumnPicker columns={USER_ACTIVITY_COLUMNS} visible={visible} onToggle={toggle} onReset={reset} />
       </div>
 
       <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
         <table className="w-full text-[11px]">
-          <thead><TableHeader headers={['User', 'Email', 'Department', 'Last Sign-In', 'Sign-Ins', 'Recent Apps', 'Licenses']} /></thead>
+          <thead><DynamicTableHeader columns={activeColumns} /></thead>
           <tbody className="divide-y divide-[#0d1e35]">
             {sorted.map((u, i) => (
               <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">
-                  <div className="flex items-center gap-1.5">
-                    {!u.accountEnabled && <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] shrink-0" title="Disabled" />}
-                    {u.displayName}
-                  </div>
-                </td>
-                <td className="px-3 py-1.5 font-mono text-[#64748b]">{u.mail}</td>
-                <td className="px-3 py-1.5 text-[#64748b]">{u.department || '—'}</td>
-                <td className="px-3 py-1.5">{daysBadge(u.daysSinceSignIn)}</td>
-                <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{u.signInCount > 0 ? u.signInCount : '—'}</td>
-                <td className="px-3 py-1.5">
-                  <div className="flex flex-wrap gap-1">
-                    {u.recentApps.slice(0, 2).map((app, j) => (
-                      <span key={j} className="text-[9px] px-1.5 py-0.5 rounded bg-[#1a2f4a] text-[#475569]">{app}</span>
-                    ))}
-                    {u.recentApps.length > 2 && <span className="text-[9px] text-[#334155]">+{u.recentApps.length - 2}</span>}
-                    {u.recentApps.length === 0 && <span className="text-[9px] text-[#1e3352]">—</span>}
-                  </div>
-                </td>
-                <td className="px-3 py-1.5 font-mono text-[#64748b]">{u.licenseCount}</td>
+                {activeColumns.map(c => (
+                  <td key={c.key} className={`px-3 py-1.5 ${c.className ?? 'text-[#64748b]'}`}>{c.render(u)}</td>
+                ))}
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-[11px] text-[#334155]">No users match</td></tr>
+              <tr><td colSpan={activeColumns.length} className="text-center py-8 text-[11px] text-[#334155]">No users match</td></tr>
             )}
           </tbody>
         </table>
@@ -334,8 +456,42 @@ function UserActivityView({ data, loading }: { data: any; loading: boolean }) {
 
 // ── Mail Usage View ────────────────────────────────────────────────────────
 
+function usageBar(pct: number) {
+  const bc = pct >= 90 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#10b981'
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-16 h-1 bg-[#1a2f4a] rounded-full">
+        <div className="h-1 rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: bc }} />
+      </div>
+      <span className="font-mono text-[10px] font-bold" style={{ color: bc }}>{pct}%</span>
+    </div>
+  )
+}
+
+const MAIL_USAGE_COLUMNS: ColumnDef<MailRow>[] = [
+  { key: 'name', label: 'User', required: true, defaultVisible: true, className: 'text-[#e2e8f0] font-medium',
+    render: r => r.displayName, csv: r => r.displayName },
+  { key: 'email', label: 'Email', required: true, defaultVisible: true, className: 'font-mono text-[#64748b] text-[10px]',
+    render: r => r.userPrincipalName, csv: r => r.userPrincipalName },
+  { key: 'department', label: 'Department', defaultVisible: true,
+    render: r => r.department, csv: r => r.department },
+  { key: 'items', label: 'Items', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: r => r.itemCount.toLocaleString(), csv: r => r.itemCount },
+  { key: 'storage', label: 'Storage', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: r => `${r.storageUsedGB} GB`, csv: r => r.storageUsedGB },
+  { key: 'usage', label: 'Usage', defaultVisible: true,
+    render: r => usageBar(r.usagePct), csv: r => `${r.usagePct}%` },
+  { key: 'lastActivity', label: 'Last Activity', defaultVisible: true,
+    render: r => fmt(r.lastActivity), csv: r => r.lastActivity ?? 'None' },
+  { key: 'issueWarningGB', label: 'Issue Warning Quota', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: r => `${r.issueWarningGB} GB`, csv: r => r.issueWarningGB },
+  { key: 'prohibitSendGB', label: 'Prohibit Send Quota', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: r => `${r.prohibitSendGB} GB`, csv: r => r.prohibitSendGB },
+]
+
 function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
   const [search, setSearch] = useState('')
+  const { visible, toggle, reset, activeColumns } = useColumnPrefs('opsquest-report-cols-mail-usage', MAIL_USAGE_COLUMNS)
   const rows: MailRow[] = data.rows ?? []
   const filtered = search ? rows.filter(r => r.displayName?.toLowerCase().includes(search.toLowerCase()) || r.userPrincipalName?.toLowerCase().includes(search.toLowerCase())) : rows
   const sorted = [...filtered].sort((a, b) => b.storageUsedGB - a.storageUsedGB)
@@ -355,13 +511,11 @@ function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
           <input type="text" placeholder="Search mailboxes…" value={search} onChange={e => setSearch(e.target.value)}
             className="bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-7 pr-3 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44] w-48" />
         </div>
-        <button onClick={() => exportCsv('mail-usage.csv', sorted.map(r => ({
-          User: r.displayName, Email: r.userPrincipalName, Department: r.department,
-          Items: r.itemCount, StorageGB: r.storageUsedGB, UsagePct: `${r.usagePct}%`, LastActivity: r.lastActivity ?? 'None',
-        })))}
+        <button onClick={() => exportCsv('mail-usage.csv', sorted.map(r => Object.fromEntries(activeColumns.map(c => [c.label, c.csv(r)]))))}
           className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">
           <Download className="w-3 h-3" /> CSV
         </button>
+        <ColumnPicker columns={MAIL_USAGE_COLUMNS} visible={visible} onToggle={toggle} onReset={reset} />
       </div>
 
       {rows.length === 0 ? (
@@ -372,29 +526,15 @@ function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
       ) : (
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
           <table className="w-full text-[11px]">
-            <thead><TableHeader headers={['User', 'Email', 'Department', 'Items', 'Storage', 'Usage', 'Last Activity']} /></thead>
+            <thead><DynamicTableHeader columns={activeColumns} /></thead>
             <tbody className="divide-y divide-[#0d1e35]">
-              {sorted.map((r, i) => {
-                const bc = r.usagePct >= 90 ? '#ef4444' : r.usagePct >= 80 ? '#f59e0b' : '#10b981'
-                return (
-                  <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                    <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{r.displayName}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{r.userPrincipalName}</td>
-                    <td className="px-3 py-1.5 text-[#64748b]">{r.department}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.itemCount.toLocaleString()}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.storageUsedGB} GB</td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-16 h-1 bg-[#1a2f4a] rounded-full">
-                          <div className="h-1 rounded-full" style={{ width: `${Math.min(r.usagePct, 100)}%`, background: bc }} />
-                        </div>
-                        <span className="font-mono text-[10px] font-bold" style={{ color: bc }}>{r.usagePct}%</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-[#64748b]">{fmt(r.lastActivity)}</td>
-                  </tr>
-                )
-              })}
+              {sorted.map((r, i) => (
+                <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+                  {activeColumns.map(c => (
+                    <td key={c.key} className={`px-3 py-1.5 ${c.className ?? 'text-[#64748b]'}`}>{c.render(r)}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -405,8 +545,53 @@ function MailUsageView({ data, loading }: { data: any; loading: boolean }) {
 
 // ── Teams Usage View ───────────────────────────────────────────────────────
 
+const TEAMS_USAGE_COLUMNS: ColumnDef<TeamsRow>[] = [
+  { key: 'name', label: 'User', required: true, defaultVisible: true, className: 'text-[#e2e8f0] font-medium whitespace-nowrap',
+    render: r => r.displayName, csv: r => r.displayName },
+  { key: 'email', label: 'Email', required: true, defaultVisible: true, className: 'font-mono text-[#64748b] text-[10px] whitespace-nowrap',
+    render: r => r.userPrincipalName, csv: r => r.userPrincipalName },
+  { key: 'department', label: 'Dept', defaultVisible: true, className: 'text-[#64748b] whitespace-nowrap',
+    render: r => r.department, csv: r => r.department },
+  { key: 'teamChats', label: 'Team Chats', defaultVisible: true,
+    render: r => (
+      <div className="flex items-center gap-1">
+        <MessageSquare className="w-3 h-3 text-[#334155] shrink-0" />
+        <span className="font-mono text-[#94a3b8]">{r.teamChatMessages.toLocaleString()}</span>
+      </div>
+    ), csv: r => r.teamChatMessages },
+  { key: 'privateChats', label: 'Private', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: r => r.privateChatMessages.toLocaleString(), csv: r => r.privateChatMessages },
+  { key: 'calls', label: 'Calls', defaultVisible: true,
+    render: r => (
+      <div className="flex items-center gap-1">
+        <Phone className="w-3 h-3 text-[#334155] shrink-0" />
+        <span className="font-mono text-[#94a3b8]">{r.calls}</span>
+      </div>
+    ), csv: r => r.calls },
+  { key: 'meetings', label: 'Meetings', defaultVisible: true,
+    render: r => (
+      <div className="flex items-center gap-1">
+        <Video className="w-3 h-3 text-[#334155] shrink-0" />
+        <span className="font-mono text-[#94a3b8]">{r.meetings}</span>
+      </div>
+    ), csv: r => r.meetings },
+  { key: 'lastActivity', label: 'Last Activity', defaultVisible: true, className: 'text-[#64748b] whitespace-nowrap',
+    render: r => fmt(r.lastActivity), csv: r => r.lastActivity ?? 'None' },
+  { key: 'meetingsOrganized', label: 'Meetings Organized', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: r => r.meetingsOrganized, csv: r => r.meetingsOrganized },
+  { key: 'meetingsAttended', label: 'Meetings Attended', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: r => r.meetingsAttended, csv: r => r.meetingsAttended },
+  { key: 'isLicensed', label: 'Licensed', defaultVisible: false,
+    render: r => (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] ${r.isLicensed ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#1a2f4a] text-[#475569]'}`}>
+        {r.isLicensed ? 'Yes' : 'No'}
+      </span>
+    ), csv: r => r.isLicensed ? 'Yes' : 'No' },
+]
+
 function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
   const [search, setSearch] = useState('')
+  const { visible, toggle, reset, activeColumns } = useColumnPrefs('opsquest-report-cols-teams-usage', TEAMS_USAGE_COLUMNS)
   const rows: TeamsRow[] = (data.rows ?? []).filter((r: TeamsRow) => !r.isDeleted)
   const filtered = search ? rows.filter(r => r.displayName?.toLowerCase().includes(search.toLowerCase()) || r.userPrincipalName?.toLowerCase().includes(search.toLowerCase())) : rows
   const sorted = [...filtered].sort((a, b) => (b.teamChatMessages + b.privateChatMessages) - (a.teamChatMessages + a.privateChatMessages))
@@ -427,14 +612,11 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
           <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)}
             className="bg-[#0a1525] border border-[#1a2f4a] rounded-lg pl-7 pr-3 py-1.5 text-[11px] text-[#e2e8f0] placeholder-[#1e3352] outline-none focus:border-[#00d4ff44] w-48" />
         </div>
-        <button onClick={() => exportCsv('teams-usage.csv', sorted.map(r => ({
-          User: r.displayName, Email: r.userPrincipalName, Department: r.department,
-          TeamChats: r.teamChatMessages, PrivateChats: r.privateChatMessages,
-          Calls: r.calls, Meetings: r.meetings, LastActivity: r.lastActivity ?? 'None',
-        })))}
+        <button onClick={() => exportCsv('teams-usage.csv', sorted.map(r => Object.fromEntries(activeColumns.map(c => [c.label, c.csv(r)]))))}
           className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all">
           <Download className="w-3 h-3" /> CSV
         </button>
+        <ColumnPicker columns={TEAMS_USAGE_COLUMNS} visible={visible} onToggle={toggle} onReset={reset} />
       </div>
 
       {rows.length === 0 ? (
@@ -446,33 +628,13 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
-              <thead><TableHeader headers={['User', 'Email', 'Dept', 'Team Chats', 'Private', 'Calls', 'Meetings', 'Last Activity']} /></thead>
+              <thead><DynamicTableHeader columns={activeColumns} /></thead>
               <tbody className="divide-y divide-[#0d1e35]">
                 {sorted.map((r, i) => (
                   <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                    <td className="px-3 py-1.5 text-[#e2e8f0] font-medium whitespace-nowrap">{r.displayName}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px] whitespace-nowrap">{r.userPrincipalName}</td>
-                    <td className="px-3 py-1.5 text-[#64748b] whitespace-nowrap">{r.department}</td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="w-3 h-3 text-[#334155] shrink-0" />
-                        <span className="font-mono text-[#94a3b8]">{r.teamChatMessages.toLocaleString()}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.privateChatMessages.toLocaleString()}</td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-[#334155] shrink-0" />
-                        <span className="font-mono text-[#94a3b8]">{r.calls}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <Video className="w-3 h-3 text-[#334155] shrink-0" />
-                        <span className="font-mono text-[#94a3b8]">{r.meetings}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-[#64748b] whitespace-nowrap">{fmt(r.lastActivity)}</td>
+                    {activeColumns.map(c => (
+                      <td key={c.key} className={`px-3 py-1.5 ${c.className ?? 'text-[#64748b]'}`}>{c.render(r)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -486,9 +648,39 @@ function TeamsUsageView({ data, loading }: { data: any; loading: boolean }) {
 
 // ── OneDrive Usage View ────────────────────────────────────────────────────
 
+const ONEDRIVE_USAGE_COLUMNS: ColumnDef<OneDriveRow>[] = [
+  { key: 'name', label: 'User', required: true, defaultVisible: true, className: 'text-[#e2e8f0] font-medium',
+    render: r => r.displayName, csv: r => r.displayName },
+  { key: 'email', label: 'Email', required: true, defaultVisible: true, className: 'font-mono text-[#64748b] text-[10px]',
+    render: r => r.userPrincipalName, csv: r => r.userPrincipalName },
+  { key: 'department', label: 'Dept', defaultVisible: true,
+    render: r => r.department, csv: r => r.department },
+  { key: 'files', label: 'Files', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: r => r.fileCount.toLocaleString(), csv: r => r.fileCount },
+  { key: 'activeFiles', label: 'Active Files', defaultVisible: true, className: 'font-mono text-[#64748b]',
+    render: r => r.activeFileCount.toLocaleString(), csv: r => r.activeFileCount },
+  { key: 'storage', label: 'Storage', defaultVisible: true, className: 'font-mono text-[#94a3b8]',
+    render: r => `${r.storageUsedGB} GB`, csv: r => r.storageUsedGB },
+  { key: 'usage', label: 'Usage', defaultVisible: true,
+    render: r => usageBar(r.usagePct), csv: r => `${r.usagePct}%` },
+  { key: 'lastActivity', label: 'Last Activity', defaultVisible: true,
+    render: r => fmt(r.lastActivity), csv: r => r.lastActivity ?? 'None' },
+  { key: 'allocatedGB', label: 'Allocated Storage', defaultVisible: false, className: 'font-mono text-[#64748b]',
+    render: r => `${r.storageAllocatedGB} GB`, csv: r => r.storageAllocatedGB },
+  { key: 'siteUrl', label: 'Site URL', defaultVisible: false, className: 'font-mono text-[#64748b] text-[10px] max-w-[220px] truncate',
+    render: r => r.siteUrl, csv: r => r.siteUrl },
+  { key: 'isLicensed', label: 'Licensed', defaultVisible: false,
+    render: r => (
+      <span className={`px-1.5 py-0.5 rounded text-[10px] ${r.isLicensed ? 'bg-[#10b98118] text-[#10b981]' : 'bg-[#1a2f4a] text-[#475569]'}`}>
+        {r.isLicensed ? 'Yes' : 'No'}
+      </span>
+    ), csv: r => r.isLicensed ? 'Yes' : 'No' },
+]
+
 function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'storage' | 'name' | 'files'>('storage')
+  const { visible, toggle, reset, activeColumns } = useColumnPrefs('opsquest-report-cols-onedrive-usage', ONEDRIVE_USAGE_COLUMNS)
   const rows: OneDriveRow[] = data.rows ?? []
 
   const filtered = useMemo(() => {
@@ -538,16 +730,12 @@ function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
           <option value="files">Sort: File Count</option>
         </select>
         <button
-          onClick={() => exportCsv('onedrive-usage.csv', filtered.map(r => ({
-            User: r.displayName, Email: r.userPrincipalName, Department: r.department,
-            Files: r.fileCount, ActiveFiles: r.activeFileCount,
-            StorageGB: r.storageUsedGB, AllocatedGB: r.storageAllocatedGB,
-            UsagePct: `${r.usagePct}%`, LastActivity: r.lastActivity ?? 'None',
-          })))}
+          onClick={() => exportCsv('onedrive-usage.csv', filtered.map(r => Object.fromEntries(activeColumns.map(c => [c.label, c.csv(r)]))))}
           className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded border border-[#1a2f4a] text-[#475569] text-[10px] hover:text-[#00d4ff] hover:border-[#00d4ff30] transition-all"
         >
           <Download className="w-3 h-3" /> CSV
         </button>
+        <ColumnPicker columns={ONEDRIVE_USAGE_COLUMNS} visible={visible} onToggle={toggle} onReset={reset} />
       </div>
 
       {rows.length === 0 ? (
@@ -562,31 +750,16 @@ function OneDriveUsageView({ data, loading }: { data: any; loading: boolean }) {
         <div className="rounded-lg border border-[#1a2f4a] overflow-hidden">
           <table className="w-full text-[11px]">
             <thead>
-              <TableHeader headers={['User', 'Email', 'Dept', 'Files', 'Active Files', 'Storage', 'Usage', 'Last Activity']} />
+              <DynamicTableHeader columns={activeColumns} />
             </thead>
             <tbody className="divide-y divide-[#0d1e35]">
-              {filtered.map((r, i) => {
-                const bc = r.usagePct >= 90 ? '#ef4444' : r.usagePct >= 80 ? '#f59e0b' : '#10b981'
-                return (
-                  <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
-                    <td className="px-3 py-1.5 text-[#e2e8f0] font-medium">{r.displayName}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#64748b] text-[10px]">{r.userPrincipalName}</td>
-                    <td className="px-3 py-1.5 text-[#64748b]">{r.department}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.fileCount.toLocaleString()}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#64748b]">{r.activeFileCount.toLocaleString()}</td>
-                    <td className="px-3 py-1.5 font-mono text-[#94a3b8]">{r.storageUsedGB} GB</td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-16 h-1 bg-[#1a2f4a] rounded-full">
-                          <div className="h-1 rounded-full" style={{ width: `${Math.min(r.usagePct, 100)}%`, background: bc }} />
-                        </div>
-                        <span className="font-mono text-[10px] font-bold" style={{ color: bc }}>{r.usagePct}%</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-[#64748b]">{fmt(r.lastActivity)}</td>
-                  </tr>
-                )
-              })}
+              {filtered.map((r, i) => (
+                <tr key={i} className="hover:bg-[#0d1e35] transition-colors">
+                  {activeColumns.map(c => (
+                    <td key={c.key} className={`px-3 py-1.5 ${c.className ?? 'text-[#64748b]'}`}>{c.render(r)}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
